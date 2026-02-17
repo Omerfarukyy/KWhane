@@ -2,58 +2,240 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import toast from 'react-hot-toast'
+import { HiMail, HiLockClosed, HiUser, HiEye, HiEyeOff } from 'react-icons/hi'
+import '../styles/auth.css'
 
 export default function Register() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('') // Profil tablosu için
-  const [msg, setMsg] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [passwordStrength, setPasswordStrength] = useState(0)
   const { signUp } = useAuth()
+  const navigate = useNavigate()
+
+  // Password validation regex
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
+
+  // Calculate password strength
+  const calculatePasswordStrength = (pwd) => {
+    let strength = 0
+    if (pwd.length >= 8) strength++
+    if (/[a-z]/.test(pwd)) strength++
+    if (/[A-Z]/.test(pwd)) strength++
+    if (/\d/.test(pwd)) strength++
+    if (/[^a-zA-Z\d]/.test(pwd)) strength++
+    return Math.min(strength, 3) // Max 3 levels: weak, medium, strong
+  }
+
+  const handlePasswordChange = (pwd) => {
+    setPassword(pwd)
+    setPasswordStrength(calculatePasswordStrength(pwd))
+  }
+
+  const getStrengthClass = () => {
+    if (passwordStrength === 0) return ''
+    if (passwordStrength <= 2) return 'strength-weak'
+    if (passwordStrength === 3) return 'strength-medium'
+    return 'strength-strong'
+  }
+
+  const getStrengthText = () => {
+    if (passwordStrength === 0) return ''
+    if (passwordStrength <= 2) return 'Zayıf'
+    if (passwordStrength === 3) return 'Orta'
+    return 'Güçlü'
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setLoading(true)
+
+    // Validation
+    if (password !== confirmPassword) {
+      toast.error('Şifreler eşleşmiyor!', {
+        duration: 4000,
+        position: 'top-center',
+      })
+      setLoading(false)
+      return
+    }
+
+    if (!passwordRegex.test(password)) {
+      toast.error(
+        'Şifre en az 8 karakterden oluşmalı; bir büyük harf, bir küçük harf ve bir rakam içermelidir.',
+        {
+          duration: 5000,
+          position: 'top-center',
+        }
+      )
+      setLoading(false)
+      return
+    }
+
     try {
-      // options: metadata trigger ile profiles tablosuna gidecek
-      const { error } = await signUp({
+      const { data, error: signUpError } = await signUp({
+        fullName,
         email,
         password,
-        options: { data: { full_name: fullName } }
       })
-      if (error) throw error
-      setMsg('Kayıt başarılı! Lütfen mail kutunu kontrol et (veya giriş yap).')
+
+      if (signUpError) {
+        throw new Error(signUpError.message || 'Kayıt hatası')
+      }
+
+      toast.success('Kayıt başarılı! Hoş geldiniz! 🎉', {
+        duration: 3000,
+        position: 'top-center',
+      })
+
+      // Clear form
+      setEmail('')
+      setPassword('')
+      setConfirmPassword('')
+      setFullName('')
+      setPasswordStrength(0)
+
+      // Redirect after short delay
+      setTimeout(() => {
+        navigate('/')
+      }, 1000)
     } catch (err) {
-      setMsg('Hata: ' + err.message)
+      toast.error(err.message || 'Kayıt sırasında bir hata oluştu', {
+        duration: 4000,
+        position: 'top-center',
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900 text-white">
-      <div className="w-full max-w-md p-8 bg-gray-800 rounded-lg shadow-lg">
-        <h2 className="text-3xl font-bold text-center mb-6 text-emerald-400">Kwhane Kayıt</h2>
+    <>
+      <div className="auth-background" />
+      <div className="flex min-h-screen items-center justify-center px-4 py-8">
+        <div className="auth-card w-full max-w-md p-8 rounded-2xl">
+          <div className="text-center mb-8">
+            <h2 className="text-4xl font-bold text-white mb-2">
+              Hesap Oluştur ✨
+            </h2>
+            <p className="text-gray-400">Hemen başlamak için kayıt olun</p>
+          </div>
 
-        {msg && <div className="bg-blue-500/20 text-blue-200 p-3 rounded mb-4 text-sm">{msg}</div>}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Full Name Input */}
+            <div className="auth-input-group">
+              <HiUser className="auth-input-icon" size={20} />
+              <input
+                type="text"
+                required
+                value={fullName}
+                placeholder="Ad Soyad"
+                className="auth-input"
+                onChange={(e) => setFullName(e.target.value)}
+                disabled={loading}
+              />
+            </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Ad Soyad</label>
-            <input type="text" className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:border-emerald-500 outline-none" onChange={(e) => setFullName(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
-            <input type="email" className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:border-emerald-500 outline-none" onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Şifre</label>
-            <input type="password" className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:border-emerald-500 outline-none" onChange={(e) => setPassword(e.target.value)} />
-          </div>
-          <button type="submit" className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 rounded font-bold transition">
-            Kayıt Ol
-          </button>
-        </form>
-        <p className="mt-4 text-center text-sm text-gray-400">
-          Zaten hesabın var mı? <Link to="/login" className="text-emerald-400 hover:underline">Giriş Yap</Link>
-        </p>
+            {/* Email Input */}
+            <div className="auth-input-group">
+              <HiMail className="auth-input-icon" size={20} />
+              <input
+                type="email"
+                required
+                value={email}
+                placeholder="Email adresiniz"
+                className="auth-input"
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+
+            {/* Password Input */}
+            <div className="auth-input-group">
+              <HiLockClosed className="auth-input-icon" size={20} />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                placeholder="Şifre"
+                className="auth-input"
+                style={{ paddingRight: '3rem' }}
+                onChange={(e) => handlePasswordChange(e.target.value)}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+              >
+                {showPassword ? <HiEyeOff size={20} /> : <HiEye size={20} />}
+              </button>
+              {password && (
+                <>
+                  <div className="password-strength">
+                    <div className={`password-strength-bar ${getStrengthClass()}`} />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Şifre gücü: <span className="font-semibold">{getStrengthText()}</span>
+                  </p>
+                </>
+              )}
+              <p className="text-xs text-gray-400 mt-1">
+                En az 8 karakter, 1 büyük harf, 1 küçük harf, 1 rakam
+              </p>
+            </div>
+
+            {/* Confirm Password Input */}
+            <div className="auth-input-group">
+              <HiLockClosed className="auth-input-icon" size={20} />
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                required
+                value={confirmPassword}
+                placeholder="Şifre Tekrar"
+                className="auth-input"
+                style={{ paddingRight: '3rem' }}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? <HiEyeOff size={20} /> : <HiEye size={20} />}
+              </button>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              className="auth-button"
+              disabled={loading}
+            >
+              {loading && <span className="spinner" />}
+              {loading ? 'Kayıt yapılıyor...' : 'Kayıt Ol'}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-gray-400">
+            Zaten hesabın var mı?{' '}
+            <Link
+              to="/login"
+              className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors"
+            >
+              Giriş Yap
+            </Link>
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
