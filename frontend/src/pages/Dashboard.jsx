@@ -17,7 +17,7 @@ export default function Dashboard() {
         .single()
       setProfile(data)
     }
-    if(user) getProfile()
+    if (user) getProfile()
   }, [user])
 
   return (
