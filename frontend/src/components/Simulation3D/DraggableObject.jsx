@@ -63,6 +63,7 @@ const DraggableObject = ({
     const selectedId = useSceneStore((state) => state.selectedId);
     const setSelectedId = useSceneStore((state) => state.setSelectedId);
     const updateObjectPosition = useSceneStore((state) => state.updateObjectPosition);
+    const setIsDraggingStore = useSceneStore((state) => state.setIsDragging);
 
     const isSelected = selectedId === objectId;
 
@@ -86,8 +87,10 @@ const DraggableObject = ({
     // Pointer down — sürüklemeyi başlat
     const handlePointerDown = useCallback(
         (e) => {
+            // Sadece farenin sol tuşuna (veya dokunmaya) tepki ver, sağ tuş vb yoksay
             e.stopPropagation();
             setIsDragging(true);
+            setIsDraggingStore(true);
 
             gl.domElement.style.cursor = 'grabbing';
             (e.target ?? gl.domElement).setPointerCapture(e.pointerId);
@@ -160,6 +163,7 @@ const DraggableObject = ({
             if (!isDragging) return;
             e.stopPropagation();
             setIsDragging(false);
+            setIsDraggingStore(false);
             setIsColliding(false);
 
             gl.domElement.style.cursor = 'grab';

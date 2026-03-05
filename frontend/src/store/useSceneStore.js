@@ -23,6 +23,10 @@ const useSceneStore = create((set, get) => ({
     // Sahnede bulunan objeler (Mobilyalar, Cihazlar vb.)
     objects: [],
 
+    // Odanın/Objenin sürüklenip sürüklenmediğini takip eder (Kamera kilitlenmesi için)
+    isDragging: false,
+    setIsDragging: (status) => set({ isDragging: status }),
+
     // Şu anda seçili (tıklanmış) objenin veya odanın ID'si
     selectedId: null,
 
@@ -30,10 +34,9 @@ const useSceneStore = create((set, get) => ({
     setSelectedId: (id) => set({ selectedId: id }),
 
     /**
-     * YENİ ODA EKLE
-     * Yeni odayı mevcut odaların hemen yanına (+X yönünde) yerleştirir.
+     * YENİ ODA EKLE (Form üzerinden dinamik verilerle)
      */
-    addRoom: () =>
+    addRoom: (roomData) =>
         set((state) => {
             // En son odanın pozisyonunu bul
             const lastRoom = state.rooms[state.rooms.length - 1];
@@ -46,15 +49,30 @@ const useSceneStore = create((set, get) => ({
                 newZ = lastRoom.position[2];
             }
 
+            // Verilen isim veya ölçüler yoksa varsayılanları kullan
             const newRoom = {
                 id: uuidv4(),
-                name: `Oda ${state.rooms.length + 1}`,
+                name: roomData?.name || `Oda ${state.rooms.length + 1}`,
                 position: [newX, 0, newZ],
-                size: { width: 6, depth: 5, height: 3 },
+                size: {
+                    width: roomData?.width || 6,
+                    depth: roomData?.depth || 5,
+                    height: roomData?.height || 3
+                },
             };
 
             return { rooms: [...state.rooms, newRoom], selectedId: newRoom.id };
         }),
+
+    /**
+     * ODA POZİSYONUNU GÜNCELLE
+     */
+    updateRoomPosition: (id, newPosition) =>
+        set((state) => ({
+            rooms: state.rooms.map((room) =>
+                room.id === id ? { ...room, position: newPosition } : room
+            ),
+        })),
 
     /**
      * YENİ OBJE EKLE

@@ -1,4 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
+import { useThree } from '@react-three/fiber';
+import * as THREE from 'three';
 import useSceneStore from '../../store/useSceneStore';
 
 /**
@@ -26,12 +28,26 @@ const floorMatNormal = { color: '#e0e0e0', side: 2 };
 const floorMatSelected = { color: '#cbd5e1', side: 2 };
 
 const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0] }) => {
+    const groupRef = useRef();
+    const [isDragging, setIsDragging] = useState(false);
+
     const selectedId = useSceneStore((state) => state.selectedId);
     const setSelectedId = useSceneStore((state) => state.setSelectedId);
+    const setIsDraggingStore = useSceneStore((state) => state.setIsDragging);
+    const updateRoomPosition = useSceneStore((state) => state.updateRoomPosition);
+    const rooms = useSceneStore((state) => state.rooms);
 
     const isSelected = selectedId === id;
     const wallMaterialProps = isSelected ? wallMatSelected : wallMatNormal;
     const floorMaterialProps = isSelected ? floorMatSelected : floorMatNormal;
+
+    const { gl, raycaster } = useThree();
+
+    // Sürükleme düzlemi — Zemin sıfırda kabul ediliyor (Y ekseni = 0)
+    const dragPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
+    const intersection = useRef(new THREE.Vector3());
+    const offset = useRef(new THREE.Vector3());
+    const lastValidPos = useRef(new THREE.Vector3(...position));
     /**
      * Duvar pozisyonları ve boyutları hesaplanır.
      * Duvarlar oda sınırlarının dış kenarına yerleştirilir,
@@ -70,19 +86,127 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
         ];
     }, [width, depth, height]);
 
-    // Odaya tıklandığında seçimi (Selection) güncelle
-    const handlePointerDown = (e) => {
-        e.stopPropagation(); // Arkaya veya objeye tıklanmasını engelle
+    // Odanın diğer odalarla çarpışıp çarpışmadığını kontrol et (Basit AABB)
+    const checkRoomOverlap = useCallback((testX, testZ) => {
+        const halfW = width / 2;
+        const halfD = depth / 2;
+
+        // Yeni pozisyona göre kendi kutumuz
+        const minX1 = testX - halfW;
+        const maxX1 = testX + halfW;
+        const minZ1 = testZ - halfD;
+        const maxZ1 = testZ + halfD;
+
+        for (const other of rooms) {
+            if (other.id === id) continue; // Kendini atla
+
+            const oHW = other.size.width / 2;
+            const oHD = other.size.depth / 2;
+            const oX = other.position[0];
+            const oZ = other.position[2];
+
+            const minX2 = oX - oHW;
+            const maxX2 = oX + oHW;
+            const minZ2 = oZ - oHD;
+            const maxZ2 = oZ + oHD;
+
+            // Kapsamlı kesişim kontrolü zemin (X-Z) eksenleri için
+            // 0.1 birim tolerans bırakıldı
+            if (maxX1 - 0.1 > minX2 && minX1 + 0.1 < maxX2 && maxZ1 - 0.1 > minZ2 && minZ1 + 0.1 < maxZ2) {
+                return true; // Overlap var
+            }
+        }
+        return false;
+    }, [rooms, id, width, depth]);
+
+    // Odaya/Zemine tıklandığında sürükleme başlat
+    const handlePointerDown = useCallback((e) => {
+        // Objelere tıklanıp odanın da sürüklenmesini önlemek için:
+        if (e.object.name !== 'floor') return;
+
+        e.stopPropagation();
         setSelectedId(id);
-    };
+        setIsDragging(true);
+        setIsDraggingStore(true);
+
+        gl.domElement.style.cursor = 'grabbing';
+        (e.target ?? gl.domElement).setPointerCapture(e.pointerId);
+
+        // Raycast ile tıklanan noktayı bul
+        raycaster.ray.intersectPlane(dragPlane.current, intersection.current);
+
+        // Oda merkezi ile tıklama noktası arasındaki offset
+        offset.current.copy(groupRef.current.position).sub(intersection.current);
+        lastValidPos.current.copy(groupRef.current.position);
+    }, [gl, raycaster, id, setSelectedId, setIsDraggingStore]);
+
+    const handlePointerMove = useCallback((e) => {
+        if (!isDragging) return;
+        e.stopPropagation();
+
+        raycaster.ray.intersectPlane(dragPlane.current, intersection.current);
+
+        if (groupRef.current) {
+            let newX = intersection.current.x + offset.current.x;
+            let newZ = intersection.current.z + offset.current.z;
+
+            groupRef.current.position.x = newX;
+            groupRef.current.position.z = newZ;
+        }
+    }, [isDragging, raycaster]);
+
+    const handlePointerUp = useCallback((e) => {
+        if (!isDragging) return;
+        e.stopPropagation();
+        setIsDragging(false);
+        setIsDraggingStore(false);
+
+        gl.domElement.style.cursor = 'grab';
+
+        if (groupRef.current) {
+            // GRID_SNAP = 0.5
+            let snappedX = Math.round(groupRef.current.position.x / 0.5) * 0.5;
+            let snappedZ = Math.round(groupRef.current.position.z / 0.5) * 0.5;
+
+            // Çarpışma kontrolü
+            if (checkRoomOverlap(snappedX, snappedZ)) {
+                // Diğer odaya girdiyse rollback yap
+                groupRef.current.position.copy(lastValidPos.current);
+            } else {
+                groupRef.current.position.x = snappedX;
+                groupRef.current.position.z = snappedZ;
+                updateRoomPosition(id, [snappedX, 0, snappedZ]);
+            }
+        }
+    }, [isDragging, gl, checkRoomOverlap, updateRoomPosition, id, setIsDraggingStore]);
 
     return (
-        <group name={`room-${id}`} position={position} onPointerDown={handlePointerDown}>
+        <group
+            ref={groupRef}
+            name={`room-${id}`}
+            position={position}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerOver={(e) => {
+                if (!isDragging && e.object.name === 'floor') gl.domElement.style.cursor = 'grab';
+            }}
+            onPointerOut={(e) => {
+                if (!isDragging) gl.domElement.style.cursor = 'auto';
+            }}
+            onClick={(e) => {
+                if (e.object.name === 'floor' || e.object.name.startsWith('wall')) {
+                    e.stopPropagation();
+                    setSelectedId(id);
+                }
+            }}
+        >
             {/* ─── Zemin ─────────────────────────────────────────── */}
             <mesh
                 name="floor"
                 rotation={[-Math.PI / 2, 0, 0]}
-                position={[0, 0, 0]}
+                // Z-fighting'i önlemek için zemini (Grid'den) çok hafif yukarı alıyoruz
+                position={[0, 0.01, 0]}
                 receiveShadow
             >
                 <planeGeometry args={[width, depth]} />

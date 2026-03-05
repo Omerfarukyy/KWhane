@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import useSceneStore from '../../store/useSceneStore';
+import RoomCreationModal from './RoomCreationModal';
 
 /**
  * SceneControllerUI.jsx — 3D Sahne Kontrol Paneli
@@ -21,54 +22,64 @@ const SceneControllerUI = () => {
     const isRoomSelected = rooms.some(r => r.id === selectedId);
     const isObjectSelected = objects.some(o => o.id === selectedId);
 
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
     return (
-        <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 bg-gray-900/80 p-4 rounded-lg shadow-lg border border-gray-700 backdrop-blur-sm pointer-events-auto">
-            <h3 className="text-emerald-400 font-semibold mb-2 text-sm uppercase tracking-wide">3D Editör</h3>
+        <>
+            <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 bg-gray-900/80 p-4 rounded-lg shadow-lg border border-gray-700 backdrop-blur-sm pointer-events-auto">
+                <h3 className="text-emerald-400 font-semibold mb-2 text-sm uppercase tracking-wide">3D Editör</h3>
 
-            <div className="flex flex-col gap-2 border-b border-gray-700 pb-3 mb-1">
-                <button
-                    onClick={addRoom}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm py-1.5 px-3 rounded shadow transition-colors text-left"
-                >
-                    + Yeni Oda Ekle
-                </button>
-                <button
-                    onClick={() => addObject('box', '#f59e0b', [0.6, 1.0, 0.6])}
-                    className="bg-blue-600 hover:bg-blue-500 text-white text-sm py-1.5 px-3 rounded shadow transition-colors text-left"
-                >
-                    + Turuncu Kutu Ekle
-                </button>
-                <button
-                    onClick={() => addObject('box', '#3b82f6', [0.8, 1.5, 0.6])}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm py-1.5 px-3 rounded shadow transition-colors text-left"
-                >
-                    + Mavi Kutu Ekle
-                </button>
-            </div>
-
-            {/* Sadece bir şey seçiliyse görünen aksiyon paneli */}
-            <div className={`flex flex-col gap-2 transition-opacity ${selectedId ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                <p className="text-xs text-gray-400 font-medium">Seçili Öğeyi Düzenle:</p>
-
-                {isObjectSelected && (
+                <div className="flex flex-col gap-2 border-b border-gray-700 pb-3 mb-1">
                     <button
-                        onClick={rotateSelected}
-                        className="bg-gray-700 hover:bg-gray-600 text-white text-sm py-1.5 px-3 rounded shadow transition-colors text-left flex items-center gap-2"
+                        onClick={() => setIsModalOpen(true)}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm py-1.5 px-3 rounded shadow transition-colors text-left"
                     >
-                        <span>⟳</span> 90° Döndür
+                        + Yeni Oda Ekle
                     </button>
-                )}
+                    <button
+                        onClick={() => addObject('box', '#f59e0b', [0.6, 1.0, 0.6])}
+                        className="bg-blue-600 hover:bg-blue-500 text-white text-sm py-1.5 px-3 rounded shadow transition-colors text-left"
+                    >
+                        + Turuncu Kutu Ekle
+                    </button>
+                    <button
+                        onClick={() => addObject('box', '#3b82f6', [0.8, 1.5, 0.6])}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm py-1.5 px-3 rounded shadow transition-colors text-left"
+                    >
+                        + Mavi Kutu Ekle
+                    </button>
+                </div>
 
-                <button
-                    onClick={removeSelected}
-                    className="bg-red-900/80 hover:bg-red-700 text-red-200 text-sm py-1.5 px-3 rounded shadow transition-colors text-left"
-                >
-                    Sil (Kaldır)
-                </button>
+                {/* Sadece bir şey seçiliyse görünen aksiyon paneli */}
+                <div className={`flex flex-col gap-2 transition-opacity ${selectedId ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                    <p className="text-xs text-gray-400 font-medium">Seçili Öğeyi Düzenle:</p>
 
-                {!selectedId && <p className="text-xs text-gray-500 mt-1 italic">Objeye tıklayın.</p>}
+                    {isObjectSelected && (
+                        <button
+                            onClick={rotateSelected}
+                            className="bg-gray-700 hover:bg-gray-600 text-white text-sm py-1.5 px-3 rounded shadow transition-colors text-left flex items-center gap-2"
+                        >
+                            <span>⟳</span> 90° Döndür
+                        </button>
+                    )}
+
+                    <button
+                        onClick={removeSelected}
+                        className="bg-red-900/80 hover:bg-red-700 text-red-200 text-sm py-1.5 px-3 rounded shadow transition-colors text-left"
+                    >
+                        Sil (Kaldır)
+                    </button>
+
+                    {!selectedId && <p className="text-xs text-gray-500 mt-1 italic">Objeye tıklayın.</p>}
+                </div>
             </div>
-        </div>
+
+            <RoomCreationModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSave={addRoom}
+            />
+        </>
     );
 };
 

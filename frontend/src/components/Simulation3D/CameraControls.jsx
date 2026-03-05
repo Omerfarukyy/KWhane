@@ -1,4 +1,5 @@
 import { OrbitControls } from '@react-three/drei';
+import useSceneStore from '../../store/useSceneStore';
 
 /**
  * CameraControls.jsx — Kamera Kontrol Bileşeni
@@ -17,8 +18,13 @@ import { OrbitControls } from '@react-three/drei';
  *  - minDistance : Minimum zoom-in mesafesi (varsayılan: 2)
  */
 const CameraControls = ({ maxDistance = 25, minDistance = 2 }) => {
+    const isDragging = useSceneStore((state) => state.isDragging);
+
     return (
         <OrbitControls
+            // Sürükleme kilidi
+            enabled={!isDragging}
+
             // Orbit ayarları
             enableDamping
             dampingFactor={0.08}
