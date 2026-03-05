@@ -2,6 +2,7 @@
 import { useAuth } from '../contexts/AuthContext'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { SceneContainer } from '../components/Simulation3D'
 
 export default function Dashboard() {
   const { user, signOut } = useAuth()
@@ -43,12 +44,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Orta Panel: 3D Sahne (Gelecekteki Canvas) */}
-        <div className="lg:col-span-2 bg-black rounded-lg border border-gray-700 relative overflow-hidden flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-500">3D Digital Twin Alanı</h2>
-            <p className="text-gray-600 text-sm mt-2">React Three Fiber buraya yüklenecek.</p>
-          </div>
+        {/* Orta Panel: 3D Sahne — SceneContainer */}
+        <div className="lg:col-span-2">
+          <SceneContainer width={6} depth={5} height={3} />
         </div>
 
       </div>
