@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { SceneContainer } from '../components/Simulation3D'
+import SceneControllerUI from '../components/Simulation3D/SceneControllerUI'
 
 export default function Dashboard() {
   const { user, signOut } = useAuth()
@@ -45,8 +46,9 @@ export default function Dashboard() {
         </div>
 
         {/* Orta Panel: 3D Sahne — SceneContainer */}
-        <div className="lg:col-span-2">
-          <SceneContainer width={6} depth={5} height={3} />
+        <div className="lg:col-span-2 relative h-full min-h-[500px] border border-gray-700 rounded-lg overflow-hidden bg-gray-800">
+          <SceneControllerUI />
+          <SceneContainer />
         </div>
 
       </div>

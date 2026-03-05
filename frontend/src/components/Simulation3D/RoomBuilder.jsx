@@ -1,37 +1,37 @@
 import { useMemo } from 'react';
+import useSceneStore from '../../store/useSceneStore';
 
 /**
  * RoomBuilder.jsx — Dinamik Oda Oluşturucu
  *
  * Props:
- *  - width  : Oda genişliği (X ekseni, metre cinsinden)
- *  - depth  : Oda derinliği (Z ekseni, metre cinsinden)
- *  - height : Oda yüksekliği (Y ekseni, metre cinsinden)
+ *  - id     : Oda ID'si
+ *  - name   : Oda Adı
+ *  - width  : Oda genişliği (X ekseni, metre)
+ *  - depth  : Oda derinliği (Z ekseni, metre)
+ *  - height : Oda yüksekliği (Y ekseni, metre)
+ *  - position: [x, y, z] başlangıç pozisyonu
  *
  * Ölçü standardı: 1 Birim = 1 Metre
  * Duvar kalınlığı: 0.1 birim (10 cm)
- *
- * Oda merkezinin orijinde (0, 0, 0) olması sağlanır.
- * Zemin Y=0 düzleminde, duvarlar zeminden tavana uzanır.
  */
 
-const WALL_THICKNESS = 0.1; // 10 cm duvar kalınlığı
+const WALL_THICKNESS = 0.1;
 
-// Yarı-saydam duvar malzemesi
-const wallMaterialProps = {
-    color: '#8ecae6',
-    transparent: true,
-    opacity: 0.35,
-    side: 2, // DoubleSide — her iki yüzden de görünür
-};
+// Normal ve Seçili Durum Malzemeleri
+const wallMatNormal = { color: '#8ecae6', transparent: true, opacity: 0.35, side: 2 };
+const wallMatSelected = { color: '#0ea5e9', transparent: true, opacity: 0.6, side: 2 };
 
-// Mat zemin malzemesi
-const floorMaterialProps = {
-    color: '#e0e0e0',
-    side: 2,
-};
+const floorMatNormal = { color: '#e0e0e0', side: 2 };
+const floorMatSelected = { color: '#cbd5e1', side: 2 };
 
-const RoomBuilder = ({ width = 5, depth = 4, height = 3 }) => {
+const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0] }) => {
+    const selectedId = useSceneStore((state) => state.selectedId);
+    const setSelectedId = useSceneStore((state) => state.setSelectedId);
+
+    const isSelected = selectedId === id;
+    const wallMaterialProps = isSelected ? wallMatSelected : wallMatNormal;
+    const floorMaterialProps = isSelected ? floorMatSelected : floorMatNormal;
     /**
      * Duvar pozisyonları ve boyutları hesaplanır.
      * Duvarlar oda sınırlarının dış kenarına yerleştirilir,
@@ -70,12 +70,18 @@ const RoomBuilder = ({ width = 5, depth = 4, height = 3 }) => {
         ];
     }, [width, depth, height]);
 
+    // Odaya tıklandığında seçimi (Selection) güncelle
+    const handlePointerDown = (e) => {
+        e.stopPropagation(); // Arkaya veya objeye tıklanmasını engelle
+        setSelectedId(id);
+    };
+
     return (
-        <group name="room">
+        <group name={`room-${id}`} position={position} onPointerDown={handlePointerDown}>
             {/* ─── Zemin ─────────────────────────────────────────── */}
             <mesh
                 name="floor"
-                rotation={[-Math.PI / 2, 0, 0]} // PlaneGeometry varsayılan olarak XY düzleminde; -90° ile XZ'ye döndürüyoruz
+                rotation={[-Math.PI / 2, 0, 0]}
                 position={[0, 0, 0]}
                 receiveShadow
             >

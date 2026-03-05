@@ -6,6 +6,7 @@ import RoomBuilder from './RoomBuilder';
 import CameraControls from './CameraControls';
 import DraggableObject from './DraggableObject';
 import useCollision from './useCollision';
+import useSceneStore from '../../store/useSceneStore';
 import './SceneContainer.css';
 
 /**
@@ -13,23 +14,13 @@ import './SceneContainer.css';
  *
  * KWhane projesinin herhangi bir sayfasına bağımsız olarak
  * monte edilebilen ana 3D sahne konteyner bileşenidir.
- *
- * Props:
- *  - width    : Oda genişliği, metre (varsayılan: 5)
- *  - depth    : Oda derinliği, metre (varsayılan: 4)
- *  - height   : Oda yüksekliği, metre (varsayılan: 3)
- *  - children : Opsiyonel — sahneye ek 3D bileşenler eklemek için
- *
- * Kullanım:
- *  import { SceneContainer, DraggableObject, DeviceModel } from './components/Simulation3D';
- *
- *  <SceneContainer width={6} depth={5} height={3} />
  */
-const SceneContainer = ({ width = 5, depth = 4, height = 3, children }) => {
-    const cameraDistance = Math.max(width, depth) * 1.5;
+const SceneContainer = ({ children }) => {
+    // Uzak kamera mesafesi, çoklu odalar için daha geniş açıyla başlatıyoruz
+    const cameraDistance = 15;
 
     return (
-        <div className="scene-container">
+        <div className="scene-container relative">
             <Suspense
                 fallback={<div className="scene-container__loader">Sahne yükleniyor…</div>}
             >
@@ -45,8 +36,7 @@ const SceneContainer = ({ width = 5, depth = 4, height = 3, children }) => {
                         gl.setClearColor('#0f172a');
                     }}
                 >
-                    {/* ─── İç Sahne (Collision hook burada) ──── */}
-                    <SceneContent width={width} depth={depth} height={height}>
+                    <SceneContent>
                         {children}
                     </SceneContent>
                 </Canvas>
@@ -56,74 +46,86 @@ const SceneContainer = ({ width = 5, depth = 4, height = 3, children }) => {
 };
 
 /**
- * SceneContent — Canvas içindeki sahne içeriği
- *
- * useCollision hook'u R3F Canvas bağlamı içinde çağrılmalıdır,
- * bu yüzden ayrı bir iç bileşen olarak tanımlanmıştır.
+ * SceneContent — Canvas içindeki dinamik sahne içeriği
  */
-const SceneContent = ({ width, depth, height, children }) => {
+const SceneContent = ({ children }) => {
     const collision = useCollision();
-    const room = { width, depth };
+
+    // Zustand Store'dan dinamik verileri al
+    const rooms = useSceneStore((state) => state.rooms);
+    const objects = useSceneStore((state) => state.objects);
+    const setSelectedId = useSceneStore((state) => state.setSelectedId);
+
+    // Boşluğa (Grid'e veya Arka Plana) tıklanınca seçimi kaldır
+    const handlePointerMissed = () => {
+        setSelectedId(null);
+    };
 
     return (
-        <>
+        <group onPointerMissed={handlePointerMissed}>
             {/* ─── Kamera Kontrolleri ────────────────────── */}
-            <CameraControls maxDistance={Math.max(width, depth) * 3} minDistance={2} />
+            <CameraControls maxDistance={60} minDistance={2} />
 
             {/* ─── Aydınlatma ───────────────────────────── */}
             <Lights />
 
             {/* ─── Zemin Izgarası ───────────────────────── */}
             <Grid
-                args={[50, 50]}
+                args={[100, 100]}
                 cellSize={0.5}
                 cellThickness={0.5}
                 cellColor="#334155"
                 sectionSize={1}
                 sectionThickness={1}
                 sectionColor="#475569"
-                fadeDistance={30}
+                fadeDistance={50}
                 fadeStrength={1}
                 followCamera={false}
                 infiniteGrid={false}
                 position={[0, -0.001, 0]}
             />
 
-            {/* ─── Oda ─────────────────────────────────── */}
-            <RoomBuilder width={width} depth={depth} height={height} />
+            {/* ─── Dinamik Odalar ─────────────────────────────────── */}
+            {rooms.map((r) => (
+                <RoomBuilder
+                    key={r.id}
+                    id={r.id}
+                    position={r.position}
+                    width={r.size.width}
+                    depth={r.size.depth}
+                    height={r.size.height}
+                />
+            ))}
 
-            {/* ─── Demo: Sürüklenebilir + Çarpışmalı kutular ─ */}
-            <DraggableObject
-                position={[-1, 0.5, 0]}
-                gridSnap={0.5}
-                collision={collision}
-                objectId="demo-box-1"
-                objectSize={[0.6, 1.0, 0.6]}
-                room={room}
-            >
-                <mesh castShadow>
-                    <boxGeometry args={[0.6, 1.0, 0.6]} />
-                    <meshStandardMaterial color="#f59e0b" />
-                </mesh>
-            </DraggableObject>
+            {/* ─── Dinamik Objeler ─────────────────────────────────── */}
+            {objects.map((obj) => {
+                const room = rooms.find((r) => r.id === obj.roomId);
 
-            <DraggableObject
-                position={[1, 0.5, 1]}
-                gridSnap={0.5}
-                collision={collision}
-                objectId="demo-box-2"
-                objectSize={[0.8, 1.5, 0.6]}
-                room={room}
-            >
-                <mesh castShadow>
-                    <boxGeometry args={[0.8, 1.5, 0.6]} />
-                    <meshStandardMaterial color="#3b82f6" />
-                </mesh>
-            </DraggableObject>
+                return (
+                    <DraggableObject
+                        key={obj.id}
+                        objectId={obj.id}
+                        position={obj.position}
+                        rotation={obj.rotation}
+                        gridSnap={0.5}
+                        collision={collision}
+                        objectSize={obj.size}
+                        room={room}
+                    >
+                        {/* Demo Kutu */}
+                        {obj.type === 'box' && (
+                            <mesh castShadow position={[0, obj.size[1] / 2, 0]}>
+                                <boxGeometry args={obj.size} />
+                                <meshStandardMaterial color={obj.color} />
+                            </mesh>
+                        )}
+                    </DraggableObject>
+                );
+            })}
 
             {/* Dışarıdan eklenen ek 3D bileşenler */}
             {children}
-        </>
+        </group>
     );
 };
 

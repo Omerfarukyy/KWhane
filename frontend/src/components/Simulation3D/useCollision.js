@@ -101,27 +101,30 @@ const useCollision = () => {
     );
 
     /**
-     * Duvar sınır kontrolü — objenin oda sınırları içinde kalmasını sağlar
+     * Duvar sınır kontrolü — objenin ait olduğu odanın sınırları içinde kalmasını sağlar
      *
      * @param {[number,number,number]} position — Obje pozisyonu [x, y, z]
      * @param {[number,number,number]} size     — Obje boyutları [w, h, d]
-     * @param {{ width: number, depth: number }} room — Oda boyutları
-     * @returns {[number, number, number]} — Sınırlandırılmış pozisyon
+     * @param {{ size: {width, depth}, position: [x,y,z] }} room — Oda verisi
      */
     const checkWallCollision = useCallback((position, size, room) => {
+        if (!room) return position;
+
         const [x, y, z] = position;
-        const [w, , d] = size; // genişlik ve derinlik (yükseklik Y için önemsiz)
+        const [w, , d] = size;
         const halfW = w / 2;
         const halfD = d / 2;
-        const halfRoomW = room.width / 2;
-        const halfRoomD = room.depth / 2;
+        const halfRoomW = room.size.width / 2;
+        const halfRoomD = room.size.depth / 2;
 
-        // Duvar sınırları (duvar kalınlığı 0.1 metre)
+        const roomX = room.position ? room.position[0] : 0;
+        const roomZ = room.position ? room.position[2] : 0;
+
         const wallThickness = 0.1;
-        const minX = -halfRoomW + halfW + wallThickness;
-        const maxX = halfRoomW - halfW - wallThickness;
-        const minZ = -halfRoomD + halfD + wallThickness;
-        const maxZ = halfRoomD - halfD - wallThickness;
+        const minX = roomX - halfRoomW + halfW + wallThickness;
+        const maxX = roomX + halfRoomW - halfW - wallThickness;
+        const minZ = roomZ - halfRoomD + halfD + wallThickness;
+        const maxZ = roomZ + halfRoomD - halfD - wallThickness;
 
         return [
             Math.max(minX, Math.min(maxX, x)),

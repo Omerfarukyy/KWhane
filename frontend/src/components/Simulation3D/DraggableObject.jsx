@@ -1,15 +1,14 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import useSceneStore from '../../store/useSceneStore';
 
 /**
  * DraggableObject.jsx — Sürüklenebilir 3D Obje Sarmalayıcı
  *
- * Sahneye eklenen objelerin sadece zemin üzerinde (Y ekseni sabit)
- * hareket ettirilmesini sağlar. Obje bırakıldığında pozisyon
- * GRID_SNAP birimlik (varsayılan 0.5m) ızgara noktalarına hizalanır.
- *
- * Çarpışma Desteği (Aşama 3):
+ * Çarpışma Desteği (Aşama 3) & Seçim/Rotasyon (Aşama 2.5):
+ *  - rotation    : Y ekseninde radyan cinsinden dönüş (State'den gelir)
+ *  - isSelected  : Seçili durum efekti (State üzerinden kontrol)
  *  - collision   : useCollision hook referansı (opsiyonel)
  *  - objectId    : Çarpışma sistemindeki benzersiz kimlik
  *  - objectSize  : Obje boyutları [w, h, d] (duvar sınır kontrolü için)
@@ -28,18 +27,16 @@ import * as THREE from 'three';
  *
  * Kullanım:
  *  <DraggableObject
- *    position={[1, 0, 2]}
- *    gridSnap={0.5}
- *    collision={collisionHook}
- *    objectId="fridge-1"
- *    objectSize={[0.7, 1.8, 0.7]}
- *    room={{ width: 6, depth: 5 }}
- *  >
- *    <mesh>
- *      <boxGeometry args={[0.7, 1.8, 0.7]} />
- *      <meshStandardMaterial color="orange" />
- *    </mesh>
- *  </DraggableObject>
+ * Props:
+ *  - position   : [x, y, z] başlangıç pozisyonu
+ *  - rotation   : Y eksenindeki rotasyon açısı
+ *  - gridSnap   : Hizalama aralığı (varsayılan: 0.5 birim = 50 cm)
+ *  - floorY     : Zemin Y seviyesi (varsayılan: 0)
+ *  - collision  : useCollision hook referansı
+ *  - objectId   : Benzersiz obje kimliği (Store ve Collision için)
+ *  - objectSize : [w, h, d] obje boyutları (duvar kontrolü için)
+ *  - room       : { position, size } oda verisi (duvar/çarpışma offset için)
+ *  - children   : İçine konulacak 3D mesh/group
  */
 
 const DEFAULT_GRID_SNAP = 0.5;
@@ -49,9 +46,9 @@ const snapToGrid = (value, snap) => Math.round(value / snap) * snap;
 
 const DraggableObject = ({
     position = [0, 0, 0],
+    rotation = 0,
     gridSnap = DEFAULT_GRID_SNAP,
     floorY = 0,
-    onPositionChange,
     collision,
     objectId,
     objectSize = [1, 1, 1],
@@ -61,6 +58,14 @@ const DraggableObject = ({
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
     const [isColliding, setIsColliding] = useState(false);
+
+    // Zustand State
+    const selectedId = useSceneStore((state) => state.selectedId);
+    const setSelectedId = useSceneStore((state) => state.setSelectedId);
+    const updateObjectPosition = useSceneStore((state) => state.updateObjectPosition);
+
+    const isSelected = selectedId === objectId;
+
     const { camera, gl, raycaster } = useThree();
 
     // Sürükleme düzlemi — Y ekseni sabit, XZ düzleminde hareket
@@ -188,32 +193,60 @@ const DraggableObject = ({
 
                 groupRef.current.position.x = snappedX;
                 groupRef.current.position.z = snappedZ;
-                groupRef.current.position.y = floorY;
-
-                // Callback varsa yeni pozisyonu bildir
-                if (onPositionChange) {
-                    onPositionChange([snappedX, floorY, snappedZ]);
+                // Zustand Store'daki global pozisyonu güncelle
+                if (objectId) {
+                    updateObjectPosition(objectId, [snappedX, floorY, snappedZ]);
                 }
             }
         },
-        [isDragging, gl, gridSnap, floorY, onPositionChange, collision, objectId, objectSize, room]
+        [isDragging, gl, gridSnap, floorY, updateObjectPosition, collision, objectId, objectSize, room]
     );
+
+    /**
+     * Pürüzsüz Rotasyon Animasyonu
+     * State üzerinden gelen hedef `rotation` açısına doğru
+     * objenin Y eksenini yumuşak bir şekilde interpole eder.
+     */
+    useFrame((state, delta) => {
+        if (groupRef.current) {
+            groupRef.current.rotation.y = THREE.MathUtils.lerp(
+                groupRef.current.rotation.y,
+                rotation,
+                10 * delta
+            );
+        }
+    });
 
     return (
         <group
             ref={groupRef}
             position={position}
-            onPointerDown={handlePointerDown}
+            onPointerDown={(e) => {
+                setSelectedId(objectId);
+                handlePointerDown(e);
+            }}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerOver={() => {
+            onPointerOver={(e) => {
+                e.stopPropagation();
                 if (!isDragging) gl.domElement.style.cursor = 'grab';
             }}
-            onPointerOut={() => {
+            onPointerOut={(e) => {
                 if (!isDragging) gl.domElement.style.cursor = 'auto';
             }}
         >
-            {children}
+            {/* Seçim Vurgusu (Highlight Box) */}
+            {isSelected && (
+                <mesh position={[0, objectSize[1] / 2, 0]}>
+                    <boxGeometry args={[objectSize[0] + 0.05, objectSize[1] + 0.05, objectSize[2] + 0.05]} />
+                    <meshBasicMaterial color="#ef4444" wireframe transparent opacity={0.5} />
+                </mesh>
+            )}
+
+            {/* Gerçek Obje (Rotasyon uygulandıktan sonraki hali) */}
+            <group>
+                {children}
+            </group>
         </group>
     );
 };
