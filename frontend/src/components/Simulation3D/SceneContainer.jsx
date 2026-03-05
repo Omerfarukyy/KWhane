@@ -5,6 +5,7 @@ import Lights from './Lights';
 import RoomBuilder from './RoomBuilder';
 import CameraControls from './CameraControls';
 import DraggableObject from './DraggableObject';
+import ProceduralDevices from './ProceduralDevices';
 import useCollision from './useCollision';
 import useSceneStore from '../../store/useSceneStore';
 import './SceneContainer.css';
@@ -90,6 +91,7 @@ const SceneContent = ({ children }) => {
                 <RoomBuilder
                     key={r.id}
                     id={r.id}
+                    name={r.name}
                     position={r.position}
                     width={r.size.width}
                     depth={r.size.depth}
@@ -111,13 +113,19 @@ const SceneContent = ({ children }) => {
                         collision={collision}
                         objectSize={obj.size}
                         room={room}
+                        floorY={obj.position[1]} // Objenin mevcut Y yüksekliğini koru (duvar montajı için)
                     >
-                        {/* Demo Kutu */}
-                        {obj.type === 'box' && (
-                            <mesh castShadow position={[0, obj.size[1] / 2, 0]}>
-                                <boxGeometry args={obj.size} />
-                                <meshStandardMaterial color={obj.color} />
-                            </mesh>
+                        {/* Elektronik Aletler */}
+                        {['television', 'air_conditioner', 'fridge', 'washing_machine'].includes(obj.type) ? (
+                            <ProceduralDevices type={obj.type} size={obj.size} />
+                        ) : (
+                            /* Demo Kutu */
+                            obj.type === 'box' && (
+                                <mesh castShadow position={[0, obj.size[1] / 2, 0]}>
+                                    <boxGeometry args={obj.size} />
+                                    <meshStandardMaterial color={obj.color} />
+                                </mesh>
+                            )
                         )}
                     </DraggableObject>
                 );

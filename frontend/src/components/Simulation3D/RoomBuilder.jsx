@@ -1,33 +1,84 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import useSceneStore, { objectRefs } from '../../store/useSceneStore';
 
-/**
- * RoomBuilder.jsx — Dinamik Oda Oluşturucu
- *
- * Props:
- *  - id     : Oda ID'si
- *  - name   : Oda Adı
- *  - width  : Oda genişliği (X ekseni, metre)
- *  - depth  : Oda derinliği (Z ekseni, metre)
- *  - height : Oda yüksekliği (Y ekseni, metre)
- *  - position: [x, y, z] başlangıç pozisyonu
- *
- * Ölçü standardı: 1 Birim = 1 Metre
- * Duvar kalınlığı: 0.1 birim (10 cm)
- */
-
 const WALL_THICKNESS = 0.1;
-
-// Normal ve Seçili Durum Malzemeleri
 const wallMatNormal = { color: '#8ecae6', transparent: true, opacity: 0.35, side: 2 };
 const wallMatSelected = { color: '#0ea5e9', transparent: true, opacity: 0.6, side: 2 };
-
 const floorMatNormal = { color: '#e0e0e0', side: 2 };
 const floorMatSelected = { color: '#cbd5e1', side: 2 };
 
-const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0] }) => {
+// Helper Components for UI
+const WallAddBtn = ({ position, onClick, rotation = [0, 0, 0] }) => {
+    const [hovered, setHovered] = useState(false);
+    return (
+        <mesh
+            position={position}
+            rotation={rotation}
+            onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = 'pointer'; }}
+            onPointerOut={(e) => { e.stopPropagation(); setHovered(false); document.body.style.cursor = 'auto'; }}
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
+        >
+            <boxGeometry args={[0.6, 0.6, 0.6]} />
+            <meshBasicMaterial color={hovered ? '#4ade80' : '#22c55e'} transparent opacity={0.8} />
+            <Html center style={{ pointerEvents: 'none', color: 'white', fontWeight: 'bold', fontSize: '1.5rem', userSelect: 'none' }}>
+                +
+            </Html>
+        </mesh>
+    );
+};
+
+const ResizeHandle = ({ position, onDragStart, onDrag, onDragEnd }) => {
+    const [hovered, setHovered] = useState(false);
+    const { gl, raycaster, controls } = useThree();
+    const dragPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
+    const intersection = useRef(new THREE.Vector3());
+    const isDraggingHandle = useRef(false);
+
+    const down = (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.stopPropagation();
+        isDraggingHandle.current = true;
+        if (controls) controls.enabled = false;
+        gl.domElement.style.cursor = 'crosshair';
+        (e.target ?? gl.domElement).setPointerCapture(e.pointerId);
+        onDragStart();
+    };
+
+    const move = (e) => {
+        if (!isDraggingHandle.current) return;
+        e.stopPropagation();
+        raycaster.ray.intersectPlane(dragPlane.current, intersection.current);
+        onDrag(intersection.current.clone());
+    };
+
+    const up = (e) => {
+        if (!isDraggingHandle.current) return;
+        e.stopPropagation();
+        isDraggingHandle.current = false;
+        if (controls) controls.enabled = true;
+        gl.domElement.style.cursor = hovered ? 'pointer' : 'auto';
+        onDragEnd();
+    };
+
+    return (
+        <mesh
+            position={position}
+            onPointerDown={down}
+            onPointerMove={move}
+            onPointerUp={up}
+            onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = 'pointer'; }}
+            onPointerOut={(e) => { e.stopPropagation(); setHovered(false); if (!isDraggingHandle.current) document.body.style.cursor = 'auto'; }}
+        >
+            <boxGeometry args={[0.5, 0.5, 0.5]} />
+            <meshBasicMaterial color={hovered ? '#facc15' : '#eab308'} />
+        </mesh>
+    );
+};
+
+const RoomBuilder = ({ id, name = 'Oda', width = 5, depth = 4, height = 3, position = [0, 0, 0] }) => {
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
 
@@ -37,25 +88,27 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
     const updateRoomPosition = useSceneStore((state) => state.updateRoomPosition);
     const rooms = useSceneStore((state) => state.rooms);
 
+    const isCreationMode = useSceneStore((state) => state.isCreationMode);
+    const addRoom = useSceneStore((state) => state.addRoom);
+    const resizeRoom = useSceneStore((state) => state.resizeRoom);
+
     const isSelected = selectedId === id;
     const wallMaterialProps = isSelected ? wallMatSelected : wallMatNormal;
     const floorMaterialProps = isSelected ? floorMatSelected : floorMatNormal;
 
     const { gl, raycaster, controls } = useThree();
 
-    // Sürükleme düzlemi — Zemin sıfırda kabul ediliyor (Y ekseni = 0)
     const dragPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
     const intersection = useRef(new THREE.Vector3());
     const offset = useRef(new THREE.Vector3());
     const lastValidPos = useRef(new THREE.Vector3(...position));
     const objectsInRoom = useRef([]);
 
-    /**
-     * Duvar pozisyonları ve boyutları hesaplanır.
-     * Duvarlar oda sınırlarının tam GİRECEĞİ için,
-     * farklı odaları yan yana koyduğumuzda duvar kalınlıkları
-     * üst üste binip z-fighting (titreme) yapmaz.
-     */
+    // Keep lastValidPos in sync with external position updates (like resizing)
+    useEffect(() => {
+        lastValidPos.current.set(position[0], position[1], position[2]);
+    }, [position]);
+
     const walls = useMemo(() => {
         const halfW = width / 2;
         const halfD = depth / 2;
@@ -63,64 +116,39 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
         const wt_half = WALL_THICKNESS / 2;
 
         return [
-            {
-                name: 'wall-back',
-                position: [0, halfH, -halfD + wt_half],
-                size: [width - WALL_THICKNESS * 2, height, WALL_THICKNESS],
-            },
-            {
-                name: 'wall-front',
-                position: [0, halfH, halfD - wt_half],
-                size: [width - WALL_THICKNESS * 2, height, WALL_THICKNESS],
-            },
-            {
-                name: 'wall-left',
-                position: [-halfW + wt_half, halfH, 0],
-                size: [WALL_THICKNESS, height, depth],
-            },
-            {
-                name: 'wall-right',
-                position: [halfW - wt_half, halfH, 0],
-                size: [WALL_THICKNESS, height, depth],
-            },
+            { name: 'wall-back', position: [0, halfH, -halfD + wt_half], size: [width - WALL_THICKNESS * 2, height, WALL_THICKNESS] },
+            { name: 'wall-front', position: [0, halfH, halfD - wt_half], size: [width - WALL_THICKNESS * 2, height, WALL_THICKNESS] },
+            { name: 'wall-left', position: [-halfW + wt_half, halfH, 0], size: [WALL_THICKNESS, height, depth] },
+            { name: 'wall-right', position: [halfW - wt_half, halfH, 0], size: [WALL_THICKNESS, height, depth] },
         ];
     }, [width, depth, height]);
 
-    // Odanın diğer odalarla çarpışıp çarpışmadığını kontrol et (Basit AABB)
-    const checkRoomOverlap = useCallback((testX, testZ) => {
-        const halfW = width / 2;
-        const halfD = depth / 2;
-
-        // Yeni pozisyona göre kendi kutumuz
+    const checkRoomOverlap = useCallback((testX, testZ, overrideW = width, overrideD = depth) => {
+        const halfW = overrideW / 2;
+        const halfD = overrideD / 2;
         const minX1 = testX - halfW;
         const maxX1 = testX + halfW;
         const minZ1 = testZ - halfD;
         const maxZ1 = testZ + halfD;
 
         for (const other of rooms) {
-            if (other.id === id) continue; // Kendini atla
-
+            if (other.id === id) continue;
             const oHW = other.size.width / 2;
             const oHD = other.size.depth / 2;
-            const oX = other.position[0];
-            const oZ = other.position[2];
+            const minX2 = other.position[0] - oHW;
+            const maxX2 = other.position[0] + oHW;
+            const minZ2 = other.position[2] - oHD;
+            const maxZ2 = other.position[2] + oHD;
 
-            const minX2 = oX - oHW;
-            const maxX2 = oX + oHW;
-            const minZ2 = oZ - oHD;
-            const maxZ2 = oZ + oHD;
-
-            // Kapsamlı kesişim kontrolü zemin (X-Z) eksenleri için
-            // Precision problemleri için 0.01 margin eklendi, tam 0 olunca yan yana yapışabilir
             if (maxX1 - 0.01 > minX2 && minX1 + 0.01 < maxX2 && maxZ1 - 0.01 > minZ2 && minZ1 + 0.01 < maxZ2) {
-                return true; // Overlap var
+                return true;
             }
         }
         return false;
     }, [rooms, id, width, depth]);
 
-    // Odaya/Zemine tıklandığında sürükleme başlat
     const handlePointerDown = useCallback((e) => {
+        if (!isCreationMode) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (e.object.name !== 'floor') return;
 
@@ -137,7 +165,6 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
         offset.current.copy(groupRef.current.position).sub(intersection.current);
         lastValidPos.current.copy(groupRef.current.position);
 
-        // Odayla birlikte hareket edecek objeleri belirle
         objectsInRoom.current = [];
         const stateObjects = useSceneStore.getState().objects;
         const roomP = groupRef.current.position;
@@ -148,7 +175,6 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
 
         stateObjects.forEach(obj => {
             const [ox, oy, oz] = obj.position;
-            // Eşya odanın sınırlarının (tabanının) içindeyse odayla beraber sürüklenecektir
             if (ox >= minX && ox <= maxX && oz >= minZ && oz <= maxZ) {
                 objectsInRoom.current.push({
                     id: obj.id,
@@ -158,8 +184,7 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
                 });
             }
         });
-
-    }, [gl, raycaster, id, setSelectedId, setIsDraggingStore, controls, width, depth]);
+    }, [isCreationMode, gl, raycaster, id, setSelectedId, setIsDraggingStore, controls, width, depth]);
 
     const handlePointerMove = useCallback((e) => {
         if (!isDragging) return;
@@ -171,7 +196,6 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
             let newX = intersection.current.x + offset.current.x;
             let newZ = intersection.current.z + offset.current.z;
 
-            // Görsel olarak diğer odaya girmeyi anında engelle
             if (checkRoomOverlap(newX, newZ)) {
                 return;
             }
@@ -180,7 +204,6 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
             groupRef.current.position.z = newZ;
             lastValidPos.current.set(newX, 0, newZ);
 
-            // Odadaki eşyaları odanın o anki konumuna göre anında hareket ettiriyoruz (Performans dostu Ref tekniği)
             objectsInRoom.current.forEach(item => {
                 const oRef = objectRefs[item.id];
                 if (oRef) {
@@ -198,7 +221,7 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
         setIsDragging(false);
         setIsDraggingStore(false);
 
-        gl.domElement.style.cursor = 'grab';
+        gl.domElement.style.cursor = 'auto';
 
         if (groupRef.current) {
             let snappedX = Math.round(groupRef.current.position.x / 0.5) * 0.5;
@@ -206,12 +229,8 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
 
             const updateObjPos = useSceneStore.getState().updateObjectPosition;
 
-            // Çarpışma kontrolü
             if (checkRoomOverlap(snappedX, snappedZ)) {
-                // Diğer odaya girdiyse rollback yap
                 groupRef.current.position.copy(lastValidPos.current);
-
-                // Objeleri de aynı şekilde kendi yerlerine geri sarmak için:
                 objectsInRoom.current.forEach(item => {
                     const oRef = objectRefs[item.id];
                     if (oRef) {
@@ -224,7 +243,6 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
                 groupRef.current.position.z = snappedZ;
                 updateRoomPosition(id, [snappedX, 0, snappedZ]);
 
-                // Oda tam yerleştiğinde, taşınmış olan iç objelerin Store konumlarını kaydet
                 objectsInRoom.current.forEach(item => {
                     const oRef = objectRefs[item.id];
                     if (oRef) {
@@ -239,6 +257,64 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
         }
     }, [isDragging, gl, checkRoomOverlap, updateRoomPosition, id, setIsDraggingStore]);
 
+    const handleQuickAdd = (wall) => {
+        addRoom({ attachToRoomId: id, attachWall: wall, width: 6, depth: 5, height: 3 });
+    };
+
+    // Resizing logic for corner handles
+    const handleResizeDrag = useCallback((corner, worldPos) => {
+        let newX = worldPos.x;
+        let newZ = worldPos.z;
+
+        const minW = 2;
+        const minD = 2;
+
+        const currentPos = lastValidPos.current;
+        let newW = width;
+        let newD = depth;
+        let newCenter = new THREE.Vector3().copy(currentPos);
+
+        if (corner === 'fr') { // Front Right
+            const blX = currentPos.x - width / 2;
+            const blZ = currentPos.z - depth / 2;
+            newW = Math.max(minW, newX - blX);
+            newD = Math.max(minD, newZ - blZ);
+            newCenter.x = blX + newW / 2;
+            newCenter.z = blZ + newD / 2;
+        } else if (corner === 'fl') { // Front Left
+            const brX = currentPos.x + width / 2;
+            const brZ = currentPos.z - depth / 2;
+            newW = Math.max(minW, brX - newX);
+            newD = Math.max(minD, newZ - brZ);
+            newCenter.x = brX - newW / 2;
+            newCenter.z = brZ + newD / 2;
+        } else if (corner === 'br') { // Back Right
+            const flX = currentPos.x - width / 2;
+            const flZ = currentPos.z + depth / 2;
+            newW = Math.max(minW, newX - flX);
+            newD = Math.max(minD, flZ - newZ);
+            newCenter.x = flX + newW / 2;
+            newCenter.z = flZ - newD / 2;
+        } else if (corner === 'bl') { // Back Left
+            const frX = currentPos.x + width / 2;
+            const frZ = currentPos.z + depth / 2;
+            newW = Math.max(minW, frX - newX);
+            newD = Math.max(minD, frZ - newZ);
+            newCenter.x = frX - newW / 2;
+            newCenter.z = frZ - newD / 2;
+        }
+
+        newW = Math.round(newW / 0.5) * 0.5;
+        newD = Math.round(newD / 0.5) * 0.5;
+        newCenter.x = Math.round(newCenter.x / 0.5) * 0.5;
+        newCenter.z = Math.round(newCenter.z / 0.5) * 0.5;
+
+        // Optionally only allow resize if no overlap!
+        if (!checkRoomOverlap(newCenter.x, newCenter.z, newW, newD)) {
+            resizeRoom(id, { width: newW, depth: newD, height }, [newCenter.x, 0, newCenter.z]);
+        }
+    }, [id, width, depth, height, resizeRoom, checkRoomOverlap]);
+
     return (
         <group
             ref={groupRef}
@@ -248,7 +324,7 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerOver={(e) => {
-                if (!isDragging && e.object.name === 'floor') gl.domElement.style.cursor = 'grab';
+                if (!isDragging && e.object.name === 'floor' && isCreationMode) gl.domElement.style.cursor = 'grab';
             }}
             onPointerOut={(e) => {
                 if (!isDragging) gl.domElement.style.cursor = 'auto';
@@ -257,35 +333,55 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
                 if (e.object.name === 'floor' || e.object.name.startsWith('wall')) {
                     e.stopPropagation();
-                    setSelectedId(id);
+                    if (isCreationMode) setSelectedId(id);
                 }
             }}
         >
-            {/* ─── Zemin ─────────────────────────────────────────── */}
-            <mesh
-                name="floor"
-                rotation={[-Math.PI / 2, 0, 0]}
-                // Z-fighting'i önlemek için zemini (Grid'den) çok hafif yukarı alıyoruz
-                position={[0, 0.01, 0]}
-                receiveShadow
-            >
+            <mesh name="floor" rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
                 <planeGeometry args={[width, depth]} />
                 <meshStandardMaterial {...floorMaterialProps} />
             </mesh>
 
-            {/* ─── Duvarlar ──────────────────────────────────────── */}
             {walls.map((wall) => (
-                <mesh
-                    key={wall.name}
-                    name={wall.name}
-                    position={wall.position}
-                    castShadow
-                    receiveShadow
-                >
+                <mesh key={wall.name} name={wall.name} position={wall.position} castShadow receiveShadow>
                     <boxGeometry args={wall.size} />
                     <meshStandardMaterial {...wallMaterialProps} />
                 </mesh>
             ))}
+
+            {/* Yüzen Oda Adı */}
+            <Html
+                position={[0, height + 0.5, 0]}
+                center
+                style={{
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '1rem',
+                    pointerEvents: 'none',
+                    userSelect: 'none',
+                    textShadow: '1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black'
+                }}
+            >
+                {name}
+            </Html>
+
+            {/* Hızlı Ekleme ve Yeniden Boyutlandırma Kontrolleri */}
+            {isCreationMode && isSelected && !isDragging && (
+                <group>
+                    {/* Hızlı Duvar Butonları */}
+                    <WallAddBtn position={[0, height / 2, depth / 2 + 0.4]} onClick={() => handleQuickAdd('front')} />
+                    <WallAddBtn position={[0, height / 2, -depth / 2 - 0.4]} onClick={() => handleQuickAdd('back')} />
+                    <WallAddBtn position={[width / 2 + 0.4, height / 2, 0]} onClick={() => handleQuickAdd('right')} />
+                    <WallAddBtn position={[-width / 2 - 0.4, height / 2, 0]} onClick={() => handleQuickAdd('left')} />
+
+                    {/* Köşe Boyutlandırma Tutamaçları */}
+                    {/* Yüksekliği height/2 veya 0.25 yaparak biraz yukarıda olmasını sağla */}
+                    <ResizeHandle position={[width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fr', pos)} onDragEnd={() => { }} />
+                    <ResizeHandle position={[-width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fl', pos)} onDragEnd={() => { }} />
+                    <ResizeHandle position={[width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('br', pos)} onDragEnd={() => { }} />
+                    <ResizeHandle position={[-width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('bl', pos)} onDragEnd={() => { }} />
+                </group>
+            )}
         </group>
     );
 };

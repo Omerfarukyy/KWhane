@@ -64,6 +64,7 @@ const DraggableObject = ({
     const setSelectedId = useSceneStore((state) => state.setSelectedId);
     const updateObjectPosition = useSceneStore((state) => state.updateObjectPosition);
     const setIsDraggingStore = useSceneStore((state) => state.setIsDragging);
+    const isCreationMode = useSceneStore((state) => state.isCreationMode);
 
     const isSelected = selectedId === objectId;
 
@@ -91,6 +92,7 @@ const DraggableObject = ({
     // Pointer down — sürüklemeyi başlat
     const handlePointerDown = useCallback(
         (e) => {
+            if (!isCreationMode) return;
             if (e.pointerType === 'mouse' && e.button !== 0) return; // Sadece sol tık
             // Sadece farenin sol tuşuna (veya dokunmaya) tepki ver, sağ tuş vb yoksay
             e.stopPropagation();
@@ -115,7 +117,7 @@ const DraggableObject = ({
             // Mevcut pozisyonu son geçerli pozisyon olarak kaydet
             lastValidPos.current.copy(groupRef.current.position);
         },
-        [gl, raycaster]
+        [gl, raycaster, isCreationMode]
     );
 
     // Pointer move — sürükleme sırasında pozisyon güncelle

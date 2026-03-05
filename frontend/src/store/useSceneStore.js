@@ -12,11 +12,15 @@ export const objectRefs = {};
  */
 
 const useSceneStore = create((set, get) => ({
+    // Oluşturma Modu (Aksiyonların yapılıp yapılamayacağını belirler)
+    isCreationMode: true,
+    toggleCreationMode: () => set((state) => ({ isCreationMode: !state.isCreationMode })),
+
     // Odalar listesi. Başlangıçta 1 adet varsayılan oda.
     rooms: [
         {
             id: uuidv4(),
-            name: 'Oda 1',
+            name: 'Koridor', // İstenildiği gibi ilk isim "Koridor"
             position: [0, 0, 0], // Merkezde
             size: { width: 6, depth: 5, height: 3 },
         },
@@ -37,34 +41,68 @@ const useSceneStore = create((set, get) => ({
 
     /**
      * YENİ ODA EKLE (Form üzerinden dinamik verilerle)
+     * Quick Wall Add için attachToRoomId ve attachWall ('left', 'right', 'front', 'back') parametrelerini alır.
      */
     addRoom: (roomData) =>
         set((state) => {
-            // En son odanın pozisyonunu bul
-            const lastRoom = state.rooms[state.rooms.length - 1];
             let newX = 0;
             let newZ = 0;
+            const newWidth = roomData?.width || 6;
+            const newDepth = roomData?.depth || 5;
+            const newHeight = roomData?.height || 3;
 
-            if (lastRoom) {
-                // Yeni odayı bir önceki odanın sağına (X ekseni) ve araya 2 birim boşluk koyarak ekle
-                newX = lastRoom.position[0] + lastRoom.size.width / 2 + 6 / 2 + 2;
-                newZ = lastRoom.position[2];
+            // Eğer duvara ekleniyorsa pozisyonu ona göre hesapla
+            if (roomData?.attachToRoomId && roomData?.attachWall) {
+                const parentRoom = state.rooms.find(r => r.id === roomData.attachToRoomId);
+                if (parentRoom) {
+                    const wt_half = 0.1 / 2; // WALL_THICKNESS / 2 (0.1 kalınlığı varsaydık)
+                    switch (roomData.attachWall) {
+                        case 'right':
+                            newX = parentRoom.position[0] + (parentRoom.size.width / 2) + (newWidth / 2) - (wt_half * 2);
+                            newZ = parentRoom.position[2]; // Merkezleri aynı Z de
+                            break;
+                        case 'left':
+                            newX = parentRoom.position[0] - (parentRoom.size.width / 2) - (newWidth / 2) + (wt_half * 2);
+                            newZ = parentRoom.position[2];
+                            break;
+                        case 'front': // Z ekseni pozitif yön (yakın)
+                            newX = parentRoom.position[0];
+                            newZ = parentRoom.position[2] + (parentRoom.size.depth / 2) + (newDepth / 2) - (wt_half * 2);
+                            break;
+                        case 'back': // Z ekseni negatif yön (uzak)
+                            newX = parentRoom.position[0];
+                            newZ = parentRoom.position[2] - (parentRoom.size.depth / 2) - (newDepth / 2) + (wt_half * 2);
+                            break;
+                    }
+                }
+            } else {
+                // Klasik ekleme (Araya boşluk)
+                const lastRoom = state.rooms[state.rooms.length - 1];
+                if (lastRoom) {
+                    newX = lastRoom.position[0] + lastRoom.size.width / 2 + newWidth / 2 + 2;
+                    newZ = lastRoom.position[2];
+                }
             }
 
-            // Verilen isim veya ölçüler yoksa varsayılanları kullan
             const newRoom = {
                 id: uuidv4(),
                 name: roomData?.name || `Oda ${state.rooms.length + 1}`,
                 position: [newX, 0, newZ],
-                size: {
-                    width: roomData?.width || 6,
-                    depth: roomData?.depth || 5,
-                    height: roomData?.height || 3
-                },
+                size: { width: newWidth, depth: newDepth, height: newHeight },
             };
 
             return { rooms: [...state.rooms, newRoom], selectedId: newRoom.id };
         }),
+
+    /**
+     * ODA YENİDEN BOYUTLANDIR
+     */
+    resizeRoom: (id, newSize, newPosition) =>
+        set((state) => ({
+            rooms: state.rooms.map((room) =>
+                room.id === id ? { ...room, size: newSize, position: newPosition || room.position } : room
+            ),
+        })),
 
     /**
      * ODA POZİSYONUNU GÜNCELLE
@@ -79,30 +117,30 @@ const useSceneStore = create((set, get) => ({
     /**
      * YENİ OBJE EKLE
      * Eğer bir oda seçiliyse, objeyi o odanın merkezine ekler.
-     * Geliştirme kolaylığı için şimdilik sadece "demo kutu" ekliyoruz.
+     * defaultY: Objeyi yerden ne kadar yukarıda başlatacağımız (Örn TV için 1.5m)
      */
-    addObject: (type = 'box', color = '#f59e0b', size = [0.6, 1.0, 0.6]) =>
+    addObject: (type = 'box', color = '#f59e0b', size = [0.6, 1.0, 0.6], defaultY = null) =>
         set((state) => {
-            // Seçili odayı bul (veya varsayılan olarak ilk odayı al)
             const targetRoom =
                 state.rooms.find((r) => r.id === state.selectedId) || state.rooms[0];
 
             if (!targetRoom) return state;
 
-            // Objenin pozisyonu odanın merkezi olacak (odanın pozisyonuna göre offset)
+            // Eğer defaultY verilmişse onu kullan, yoksa objenin boyunun yarısı kadar (yere basacak şekilde) ayarla
+            const yPos = (defaultY !== null) ? defaultY : size[1] / 2;
+
             const objParams = {
                 id: uuidv4(),
-                roomId: targetRoom.id, // Hangi odaya ait olduğu
+                roomId: targetRoom.id,
                 type,
                 color,
                 size,
-                // Y ekseni objenin yüksekliğinin yarısı kadar yukarıda başlar
                 position: [
                     targetRoom.position[0],
-                    size[1] / 2,
+                    yPos,
                     targetRoom.position[2],
                 ],
-                rotation: 0, // Sadece Y ekseni rotasyonu (radyan)
+                rotation: 0,
             };
 
             return { objects: [...state.objects, objParams], selectedId: objParams.id };
