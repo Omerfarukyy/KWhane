@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import useSceneStore from '../../store/useSceneStore';
+import useSceneStore, { objectRefs } from '../../store/useSceneStore';
 
 /**
  * DraggableObject.jsx — Sürüklenebilir 3D Obje Sarmalayıcı
@@ -76,11 +76,15 @@ const DraggableObject = ({
     // Çarpışma öncesi son geçerli pozisyon
     const lastValidPos = useRef(new THREE.Vector3(...position));
 
-    // Collision sistemine kayıt
+    // Collision ve SceneStore Drag sistemine kayıt
     useEffect(() => {
-        if (collision && objectId && groupRef.current) {
-            collision.register(objectId, groupRef.current);
-            return () => collision.unregister(objectId);
+        if (objectId && groupRef.current) {
+            objectRefs[objectId] = groupRef.current;
+            if (collision) collision.register(objectId, groupRef.current);
+            return () => {
+                delete objectRefs[objectId];
+                if (collision) collision.unregister(objectId);
+            };
         }
     }, [collision, objectId]);
 

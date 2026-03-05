@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useCallback } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import useSceneStore from '../../store/useSceneStore';
+import useSceneStore, { objectRefs } from '../../store/useSceneStore';
 
 /**
  * RoomBuilder.jsx — Dinamik Oda Oluşturucu
@@ -48,39 +48,39 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
     const intersection = useRef(new THREE.Vector3());
     const offset = useRef(new THREE.Vector3());
     const lastValidPos = useRef(new THREE.Vector3(...position));
+    const objectsInRoom = useRef([]);
+
     /**
      * Duvar pozisyonları ve boyutları hesaplanır.
-     * Duvarlar oda sınırlarının dış kenarına yerleştirilir,
-     * iç hacim tam olarak width × depth × height olur.
+     * Duvarlar oda sınırlarının tam GİRECEĞİ için,
+     * farklı odaları yan yana koyduğumuzda duvar kalınlıkları
+     * üst üste binip z-fighting (titreme) yapmaz.
      */
     const walls = useMemo(() => {
         const halfW = width / 2;
         const halfD = depth / 2;
         const halfH = height / 2;
+        const wt_half = WALL_THICKNESS / 2;
 
         return [
             {
-                // Arka duvar (–Z yönü)
                 name: 'wall-back',
-                position: [0, halfH, -halfD],
-                size: [width + WALL_THICKNESS * 2, height, WALL_THICKNESS],
+                position: [0, halfH, -halfD + wt_half],
+                size: [width - WALL_THICKNESS * 2, height, WALL_THICKNESS],
             },
             {
-                // Ön duvar (+Z yönü)
                 name: 'wall-front',
-                position: [0, halfH, halfD],
-                size: [width + WALL_THICKNESS * 2, height, WALL_THICKNESS],
+                position: [0, halfH, halfD - wt_half],
+                size: [width - WALL_THICKNESS * 2, height, WALL_THICKNESS],
             },
             {
-                // Sol duvar (–X yönü)
                 name: 'wall-left',
-                position: [-halfW, halfH, 0],
+                position: [-halfW + wt_half, halfH, 0],
                 size: [WALL_THICKNESS, height, depth],
             },
             {
-                // Sağ duvar (+X yönü)
                 name: 'wall-right',
-                position: [halfW, halfH, 0],
+                position: [halfW - wt_half, halfH, 0],
                 size: [WALL_THICKNESS, height, depth],
             },
         ];
@@ -121,7 +121,7 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
 
     // Odaya/Zemine tıklandığında sürükleme başlat
     const handlePointerDown = useCallback((e) => {
-        // Objelere tıklanıp odanın da sürüklenmesini önlemek için:
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (e.object.name !== 'floor') return;
 
         e.stopPropagation();
@@ -133,13 +133,33 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
         gl.domElement.style.cursor = 'grabbing';
         (e.target ?? gl.domElement).setPointerCapture(e.pointerId);
 
-        // Raycast ile tıklanan noktayı bul
         raycaster.ray.intersectPlane(dragPlane.current, intersection.current);
-
-        // Oda merkezi ile tıklama noktası arasındaki offset
         offset.current.copy(groupRef.current.position).sub(intersection.current);
         lastValidPos.current.copy(groupRef.current.position);
-    }, [gl, raycaster, id, setSelectedId, setIsDraggingStore, controls]);
+
+        // Odayla birlikte hareket edecek objeleri belirle
+        objectsInRoom.current = [];
+        const stateObjects = useSceneStore.getState().objects;
+        const roomP = groupRef.current.position;
+        const minX = roomP.x - width / 2;
+        const maxX = roomP.x + width / 2;
+        const minZ = roomP.z - depth / 2;
+        const maxZ = roomP.z + depth / 2;
+
+        stateObjects.forEach(obj => {
+            const [ox, oy, oz] = obj.position;
+            // Eşya odanın sınırlarının (tabanının) içindeyse odayla beraber sürüklenecektir
+            if (ox >= minX && ox <= maxX && oz >= minZ && oz <= maxZ) {
+                objectsInRoom.current.push({
+                    id: obj.id,
+                    offsetX: ox - roomP.x,
+                    offsetZ: oz - roomP.z,
+                    y: oy
+                });
+            }
+        });
+
+    }, [gl, raycaster, id, setSelectedId, setIsDraggingStore, controls, width, depth]);
 
     const handlePointerMove = useCallback((e) => {
         if (!isDragging) return;
@@ -159,6 +179,15 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
             groupRef.current.position.x = newX;
             groupRef.current.position.z = newZ;
             lastValidPos.current.set(newX, 0, newZ);
+
+            // Odadaki eşyaları odanın o anki konumuna göre anında hareket ettiriyoruz (Performans dostu Ref tekniği)
+            objectsInRoom.current.forEach(item => {
+                const oRef = objectRefs[item.id];
+                if (oRef) {
+                    oRef.position.x = newX + item.offsetX;
+                    oRef.position.z = newZ + item.offsetZ;
+                }
+            });
         }
     }, [isDragging, raycaster, checkRoomOverlap]);
 
@@ -172,18 +201,40 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
         gl.domElement.style.cursor = 'grab';
 
         if (groupRef.current) {
-            // GRID_SNAP = 0.5
             let snappedX = Math.round(groupRef.current.position.x / 0.5) * 0.5;
             let snappedZ = Math.round(groupRef.current.position.z / 0.5) * 0.5;
+
+            const updateObjPos = useSceneStore.getState().updateObjectPosition;
 
             // Çarpışma kontrolü
             if (checkRoomOverlap(snappedX, snappedZ)) {
                 // Diğer odaya girdiyse rollback yap
                 groupRef.current.position.copy(lastValidPos.current);
+
+                // Objeleri de aynı şekilde kendi yerlerine geri sarmak için:
+                objectsInRoom.current.forEach(item => {
+                    const oRef = objectRefs[item.id];
+                    if (oRef) {
+                        oRef.position.x = lastValidPos.current.x + item.offsetX;
+                        oRef.position.z = lastValidPos.current.z + item.offsetZ;
+                    }
+                });
             } else {
                 groupRef.current.position.x = snappedX;
                 groupRef.current.position.z = snappedZ;
                 updateRoomPosition(id, [snappedX, 0, snappedZ]);
+
+                // Oda tam yerleştiğinde, taşınmış olan iç objelerin Store konumlarını kaydet
+                objectsInRoom.current.forEach(item => {
+                    const oRef = objectRefs[item.id];
+                    if (oRef) {
+                        const finalX = snappedX + item.offsetX;
+                        const finalZ = snappedZ + item.offsetZ;
+                        oRef.position.x = finalX;
+                        oRef.position.z = finalZ;
+                        updateObjPos(item.id, [finalX, item.y, finalZ]);
+                    }
+                });
             }
         }
     }, [isDragging, gl, checkRoomOverlap, updateRoomPosition, id, setIsDraggingStore]);

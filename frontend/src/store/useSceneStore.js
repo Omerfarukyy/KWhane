@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 
+export const objectRefs = {};
+
 /**
  * useSceneStore.js — 3D Sahne Durum Yöneticisi (Zustand)
  *
