@@ -67,7 +67,7 @@ const DraggableObject = ({
 
     const isSelected = selectedId === objectId;
 
-    const { camera, gl, raycaster } = useThree();
+    const { camera, gl, raycaster, controls } = useThree();
 
     // Sürükleme düzlemi — Y ekseni sabit, XZ düzleminde hareket
     const dragPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
@@ -87,8 +87,10 @@ const DraggableObject = ({
     // Pointer down — sürüklemeyi başlat
     const handlePointerDown = useCallback(
         (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return; // Sadece sol tık
             // Sadece farenin sol tuşuna (veya dokunmaya) tepki ver, sağ tuş vb yoksay
             e.stopPropagation();
+            if (controls) controls.enabled = false; // Kamerayı kesin kilitle
             setIsDragging(true);
             setIsDraggingStore(true);
 
@@ -162,6 +164,7 @@ const DraggableObject = ({
         (e) => {
             if (!isDragging) return;
             e.stopPropagation();
+            if (controls) controls.enabled = true; // Kamerayı serbest bırak
             setIsDragging(false);
             setIsDraggingStore(false);
             setIsColliding(false);
@@ -226,6 +229,7 @@ const DraggableObject = ({
             ref={groupRef}
             position={position}
             onPointerDown={(e) => {
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
                 setSelectedId(objectId);
                 handlePointerDown(e);
             }}

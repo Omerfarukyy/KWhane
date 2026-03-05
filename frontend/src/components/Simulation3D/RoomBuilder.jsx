@@ -41,7 +41,7 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
     const wallMaterialProps = isSelected ? wallMatSelected : wallMatNormal;
     const floorMaterialProps = isSelected ? floorMatSelected : floorMatNormal;
 
-    const { gl, raycaster } = useThree();
+    const { gl, raycaster, controls } = useThree();
 
     // Sürükleme düzlemi — Zemin sıfırda kabul ediliyor (Y ekseni = 0)
     const dragPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
@@ -111,8 +111,8 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
             const maxZ2 = oZ + oHD;
 
             // Kapsamlı kesişim kontrolü zemin (X-Z) eksenleri için
-            // 0.1 birim tolerans bırakıldı
-            if (maxX1 - 0.1 > minX2 && minX1 + 0.1 < maxX2 && maxZ1 - 0.1 > minZ2 && minZ1 + 0.1 < maxZ2) {
+            // Precision problemleri için 0.01 margin eklendi, tam 0 olunca yan yana yapışabilir
+            if (maxX1 - 0.01 > minX2 && minX1 + 0.01 < maxX2 && maxZ1 - 0.01 > minZ2 && minZ1 + 0.01 < maxZ2) {
                 return true; // Overlap var
             }
         }
@@ -125,6 +125,7 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
         if (e.object.name !== 'floor') return;
 
         e.stopPropagation();
+        if (controls) controls.enabled = false;
         setSelectedId(id);
         setIsDragging(true);
         setIsDraggingStore(true);
@@ -138,7 +139,7 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
         // Oda merkezi ile tıklama noktası arasındaki offset
         offset.current.copy(groupRef.current.position).sub(intersection.current);
         lastValidPos.current.copy(groupRef.current.position);
-    }, [gl, raycaster, id, setSelectedId, setIsDraggingStore]);
+    }, [gl, raycaster, id, setSelectedId, setIsDraggingStore, controls]);
 
     const handlePointerMove = useCallback((e) => {
         if (!isDragging) return;
@@ -150,14 +151,21 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
             let newX = intersection.current.x + offset.current.x;
             let newZ = intersection.current.z + offset.current.z;
 
+            // Görsel olarak diğer odaya girmeyi anında engelle
+            if (checkRoomOverlap(newX, newZ)) {
+                return;
+            }
+
             groupRef.current.position.x = newX;
             groupRef.current.position.z = newZ;
+            lastValidPos.current.set(newX, 0, newZ);
         }
-    }, [isDragging, raycaster]);
+    }, [isDragging, raycaster, checkRoomOverlap]);
 
     const handlePointerUp = useCallback((e) => {
         if (!isDragging) return;
         e.stopPropagation();
+        if (controls) controls.enabled = true;
         setIsDragging(false);
         setIsDraggingStore(false);
 
@@ -195,6 +203,7 @@ const RoomBuilder = ({ id, width = 5, depth = 4, height = 3, position = [0, 0, 0
                 if (!isDragging) gl.domElement.style.cursor = 'auto';
             }}
             onClick={(e) => {
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
                 if (e.object.name === 'floor' || e.object.name.startsWith('wall')) {
                     e.stopPropagation();
                     setSelectedId(id);
