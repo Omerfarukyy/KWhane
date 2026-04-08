@@ -1,97 +1,67 @@
-# main.py
+"""
+KWhane ML Backend — FastAPI entry point.
+Thin wiring layer that delegates to service modules.
+"""
+
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from pydantic import BaseModel
 
-app = FastAPI()
+from config import settings
+from models.schemas import DeviceInput, CalculateResponse, CompareResponse, SavingsResponse
+from ml.energy_model import EnergyPredictor
+from ml.clustering_model import HouseholdClusterer
+from services.calculate_service import calculate_energy
+from services.compare_service import compare_device
+from services.savings_service import generate_savings
 
-
-# n8n'den gelecek veri formatı
-class DeviceInput(BaseModel):
-    name: str
-    watts: int
-    hours: float
-    year: int = 2024  # Eğer veri gelmezse varsayılan yıl
-    efficiency_class: str
-    type_: str
-    brand: str
+# Initialize ML models
+energy_predictor = EnergyPredictor(settings.model_dir)
+household_clusterer = HouseholdClusterer(settings.model_dir)
 
 
-@app.post("/calculate")
-def analyze_device(device: DeviceInput):
-
-    efficiency_factor = 1.2 if device.year < 2018 else 1.0
-
-    # Aylık Tüketim Hesabı
-    monthly_kwh = (device.watts * device.hours * 30) / 1000
-    monthly_cost = monthly_kwh * 3.5 * efficiency_factor
-
-    # ML Karar Mekanizması (Simülasyon)
-    is_inefficient = efficiency_factor > 1.0
-
-    suggestion = "Cihazınız gayet verimli."
-    savings = 0
-
-    if is_inefficient:
-        suggestion = f"{device.name} eski model olduğu için faturayı şişiriyor. Yeni modelle değiştirin."
-        savings = monthly_cost - (monthly_cost / 1.2)  # Tasarruf miktarı
-
-    return {
-        "calculated_cost": round(monthly_cost, 2),
-        "suggestion": suggestion,
-        "potential_savings": round(savings, 2),
-        "status": "pending" if is_inefficient else "dismissed"
-    }
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load or train ML models at startup."""
+    energy_predictor.ensure_ready()
+    household_clusterer.ensure_ready()
+    yield
 
 
-@app.post("/compare")
-def analyze_device(device: DeviceInput):
-
-    efficiency_factor = 1.2 if device.year < 2018 else 1.0
-
-    # Aylık Tüketim Hesabı
-    monthly_kwh = (device.watts * device.hours * 30) / 1000
-    monthly_cost = monthly_kwh * 3.5 * efficiency_factor
-
-    # ML Karar Mekanizması (Simülasyon)
-    is_inefficient = efficiency_factor > 1.0
-
-    suggestion = "Cihazınız gayet verimli."
-    savings = 0
-
-    if is_inefficient:
-        suggestion = f"{device.name} eski model olduğu için faturayı şişiriyor. Yeni modelle değiştirin."
-        savings = monthly_cost - (monthly_cost / 1.2)  # Tasarruf miktarı
-
-    return {
-        "calculated_cost": round(monthly_cost, 2),
-        "suggestion": suggestion,
-        "potential_savings": round(savings, 2),
-        "status": "pending" if is_inefficient else "dismissed"
-    }
+app = FastAPI(
+    title="KWhane ML Backend",
+    description="Energy consumption prediction, household comparison, and savings recommendations",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 
-@app.post("/savings")
-def analyze_device(device: DeviceInput):
+@app.post("/calculate", response_model=CalculateResponse)
+def calculate(device: DeviceInput):
+    """
+    Calculate real energy consumption and cost for a device.
+    Uses ML to predict actual kWh (not just theoretical watts * hours).
+    """
+    return calculate_energy(device, energy_predictor)
 
-    efficiency_factor = 1.2 if device.year < 2018 else 1.0
 
-    # Aylık Tüketim Hesabı
-    monthly_kwh = (device.watts * device.hours * 30) / 1000
-    monthly_cost = monthly_kwh * 3.5 * efficiency_factor
+@app.post("/compare", response_model=CompareResponse)
+def compare(device: DeviceInput):
+    """
+    Compare user's household energy usage against similar households.
+    Uses K-Means clustering to find peer group and rank consumption.
+    """
+    return compare_device(device, household_clusterer, energy_predictor)
 
-    # ML Karar Mekanizması (Simülasyon)
-    is_inefficient = efficiency_factor > 1.0
 
-    suggestion = "Cihazınız gayet verimli."
-    savings = 0
+@app.post("/savings", response_model=SavingsResponse)
+def savings(device: DeviceInput):
+    """
+    Generate energy saving recommendations for a device.
+    Suggests upgrades, standby reduction, and usage optimization.
+    """
+    return generate_savings(device, energy_predictor)
 
-    if is_inefficient:
-        suggestion = f"{device.name} eski model olduğu için faturayı şişiriyor. Yeni modelle değiştirin."
-        savings = monthly_cost - (monthly_cost / 1.2)  # Tasarruf miktarı
 
-    return {
-        "calculated_cost": round(monthly_cost, 2),
-        "suggestion": suggestion,
-        "potential_savings": round(savings, 2),
-        "status": "pending" if is_inefficient else "dismissed"
-    }
+@app.get("/health")
+def health():
+    return {"status": "ok", "models_loaded": energy_predictor.pipeline is not None}

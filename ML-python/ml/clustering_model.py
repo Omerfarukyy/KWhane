@@ -1,0 +1,137 @@
+"""
+K-Means clustering for grouping similar households.
+Used by the /compare endpoint to rank user consumption against peers.
+"""
+
+import os
+import joblib
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+
+from data.synthetic import generate_household_dataset
+
+SCALER_FILENAME = "household_scaler.joblib"
+KMEANS_FILENAME = "household_kmeans.joblib"
+LABEL_ENCODER_FILENAME = "household_label_encoder.joblib"
+
+CLUSTER_FEATURES = [
+    "city_encoded",
+    "occupants_count",
+    "total_area_sqm",
+    "n_devices",
+    "total_monthly_kwh",
+]
+
+
+class HouseholdClusterer:
+    def __init__(self, model_dir: str, n_clusters: int = 5):
+        self.model_dir = model_dir
+        self.n_clusters = n_clusters
+        self.scaler: StandardScaler | None = None
+        self.kmeans: KMeans | None = None
+        self.label_encoder: LabelEncoder | None = None
+        self._training_data: pd.DataFrame | None = None
+
+    def train(self) -> dict:
+        """Train on synthetic data and return metrics."""
+        df = generate_household_dataset(n_samples=500)
+
+        self.label_encoder = LabelEncoder()
+        df["city_encoded"] = self.label_encoder.fit_transform(df["city"])
+
+        X = df[CLUSTER_FEATURES].values
+
+        self.scaler = StandardScaler()
+        X_scaled = self.scaler.fit_transform(X)
+
+        self.kmeans = KMeans(
+            n_clusters=self.n_clusters,
+            random_state=42,
+            n_init=10,
+        )
+        labels = self.kmeans.fit_predict(X_scaled)
+        sil_score = float(silhouette_score(X_scaled, labels))
+
+        os.makedirs(self.model_dir, exist_ok=True)
+        joblib.dump(self.scaler, os.path.join(self.model_dir, SCALER_FILENAME))
+        joblib.dump(self.kmeans, os.path.join(self.model_dir, KMEANS_FILENAME))
+        joblib.dump(self.label_encoder, os.path.join(self.model_dir, LABEL_ENCODER_FILENAME))
+
+        return {"silhouette_score": round(sil_score, 4), "n_clusters": self.n_clusters}
+
+    def load(self):
+        self.scaler = joblib.load(os.path.join(self.model_dir, SCALER_FILENAME))
+        self.kmeans = joblib.load(os.path.join(self.model_dir, KMEANS_FILENAME))
+        self.label_encoder = joblib.load(os.path.join(self.model_dir, LABEL_ENCODER_FILENAME))
+
+    def predict_cluster(self, household_features: dict) -> int:
+        """Assign a household to a cluster."""
+        if self.kmeans is None:
+            self.load()
+
+        city = household_features.get("city", "Istanbul")
+        if city in self.label_encoder.classes_:
+            city_encoded = self.label_encoder.transform([city])[0]
+        else:
+            city_encoded = 0  # fallback for unknown city
+
+        features = np.array([[
+            city_encoded,
+            household_features["occupants_count"],
+            household_features["total_area_sqm"],
+            household_features["n_devices"],
+            household_features["total_monthly_kwh"],
+        ]])
+
+        scaled = self.scaler.transform(features)
+        return int(self.kmeans.predict(scaled)[0])
+
+    def get_cluster_stats(
+        self, cluster_id: int, households_df: pd.DataFrame, user_kwh: float
+    ) -> dict:
+        """Compute stats for a given cluster and the user's percentile within it."""
+        if "city_encoded" not in households_df.columns:
+            if self.label_encoder is None:
+                self.load()
+            households_df = households_df.copy()
+            households_df["city_encoded"] = households_df["city"].apply(
+                lambda c: self.label_encoder.transform([c])[0]
+                if c in self.label_encoder.classes_
+                else 0
+            )
+
+        X = households_df[CLUSTER_FEATURES].values
+        scaled = self.scaler.transform(X)
+        labels = self.kmeans.predict(scaled)
+
+        cluster_mask = labels == cluster_id
+        cluster_kwh = households_df.loc[cluster_mask, "total_monthly_kwh"].values
+
+        if len(cluster_kwh) == 0:
+            return {
+                "cluster_size": 0,
+                "cluster_avg_monthly_kwh": 0.0,
+                "percentile": 50,
+            }
+
+        avg_kwh = float(np.mean(cluster_kwh))
+        percentile = int(np.searchsorted(np.sort(cluster_kwh), user_kwh) / len(cluster_kwh) * 100)
+        percentile = min(100, max(0, percentile))
+
+        return {
+            "cluster_size": int(cluster_mask.sum()),
+            "cluster_avg_monthly_kwh": round(avg_kwh, 2),
+            "percentile": percentile,
+        }
+
+    def ensure_ready(self):
+        kmeans_path = os.path.join(self.model_dir, KMEANS_FILENAME)
+        if os.path.exists(kmeans_path):
+            self.load()
+        else:
+            print("[HouseholdClusterer] No saved model found, training...")
+            metrics = self.train()
+            print(f"[HouseholdClusterer] Trained — Silhouette: {metrics['silhouette_score']}")

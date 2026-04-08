@@ -1,0 +1,187 @@
+{
+  "name": "KWhane - Device Analysis Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          }
+        },
+        "options": {}
+      },
+      "id": "trigger-node",
+      "name": "Yeni device Olusturuldu",
+      "type": "n8n-nodes-base.supabaseTrigger",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      },
+      "parameters": {
+        "tableId": "devices",
+        "event": "INSERT"
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/calculate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "calculate-node",
+      "name": "Python Gercek Fiyat Hesaplamasi",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/compare",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "compare-node",
+      "name": "Diger Verilerle Kiyasla",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/savings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "savings-node",
+      "name": "Onerileri Olustur",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 500]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "tableId": "device_calculations",
+        "dataToSend": "autoMapInputData",
+        "options": {}
+      },
+      "id": "save-calculate-node",
+      "name": "Gercek Fiyat Verisini Kaydet",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, 100],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "tableId": "device_comparisons",
+        "dataToSend": "autoMapInputData",
+        "options": {}
+      },
+      "id": "save-compare-node",
+      "name": "Kiyaslama Verisini Kaydet",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "tableId": "recommendations",
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            { "name": "user_id", "value": "={{ $json.user_id }}" },
+            { "name": "device_id", "value": "={{ $json.device_id }}" },
+            { "name": "slug", "value": "={{ $json.recommendations[0]?.slug || 'no-recommendation' }}" },
+            { "name": "category", "value": "={{ $json.recommendations[0]?.category || 'none' }}" },
+            { "name": "current_monthly_cost", "value": "={{ $json.recommendations[0]?.current_monthly_cost || 0 }}" },
+            { "name": "projected_monthly_cost", "value": "={{ $json.recommendations[0]?.projected_monthly_cost || 0 }}" },
+            { "name": "potential_savings_amount", "value": "={{ $json.recommendations[0]?.potential_savings_amount || 0 }}" },
+            { "name": "status", "value": "={{ $json.recommendations[0]?.status || 'dismissed' }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-savings-node",
+      "name": "Oneriyi Kaydet",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, 500],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Yeni device Olusturuldu": {
+      "main": [
+        [
+          { "node": "Python Gercek Fiyat Hesaplamasi", "type": "main", "index": 0 },
+          { "node": "Diger Verilerle Kiyasla", "type": "main", "index": 0 },
+          { "node": "Onerileri Olustur", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Python Gercek Fiyat Hesaplamasi": {
+      "main": [
+        [
+          { "node": "Gercek Fiyat Verisini Kaydet", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Diger Verilerle Kiyasla": {
+      "main": [
+        [
+          { "node": "Kiyaslama Verisini Kaydet", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Onerileri Olustur": {
+      "main": [
+        [
+          { "node": "Oneriyi Kaydet", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
