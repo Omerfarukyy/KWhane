@@ -3,6 +3,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import PageTransition from '../components/PageTransition'
+import { SceneContainer } from '../components/Simulation3D'
+import SceneControllerUI from '../components/Simulation3D/SceneControllerUI'
 
 export default function Dashboard() {
   const { user, signOut } = useAuth()
@@ -105,27 +107,21 @@ export default function Dashboard() {
 
         {/* ── 3D VIEWPORT PANEL ─────────────────────── */}
         <div
-          className="lg:col-span-2 rounded-xl relative overflow-hidden flex items-center justify-center viewport-panel"
+          className="lg:col-span-2 rounded-xl relative viewport-panel"
           style={{ backgroundColor: '#000000', minHeight: '480px' }}
         >
           {/* L-bracket corner decoration */}
           <div
-            className="absolute top-0 left-0 w-20 h-px"
+            className="absolute top-0 left-0 w-20 h-px z-10 pointer-events-none"
             style={{ backgroundColor: 'var(--color-blue)', opacity: 0.4 }}
           />
           <div
-            className="absolute top-0 left-0 h-20 w-px"
+            className="absolute top-0 left-0 h-20 w-px z-10 pointer-events-none"
             style={{ backgroundColor: 'var(--color-blue)', opacity: 0.4 }}
           />
 
-          <div className="text-center select-none">
-            <h2 className="text-lg font-medium" style={{ color: 'var(--color-subtle)' }}>
-              3D Digital Twin Alanı
-            </h2>
-            <p className="mt-2 text-xs" style={{ color: 'var(--color-border-2)' }}>
-              React Three Fiber buraya yüklenecek.
-            </p>
-          </div>
+          <SceneControllerUI />
+          <SceneContainer />
         </div>
       </div>
     </PageTransition>
