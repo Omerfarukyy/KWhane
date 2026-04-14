@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import PageTransition from '../components/PageTransition'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -15,44 +16,131 @@ export default function Login() {
     try {
       const { error } = await signIn({ email, password })
       if (error) throw error
-      navigate('/') // Başarılıysa Dashboard'a git
+      navigate('/')
     } catch (err) {
       setError(err.message)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900 text-white">
-      <div className="w-full max-w-md p-8 bg-gray-800 rounded-lg shadow-lg">
-        <h2 className="text-3xl font-bold text-center mb-6 text-emerald-400">Kwhane Giriş</h2>
-
-        {error && <div className="bg-red-500/20 text-red-200 p-3 rounded mb-4 text-sm">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <PageTransition>
+      <div
+        className="min-h-screen flex"
+        style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-sans)' }}
+      >
+        {/* LEFT — Brand panel */}
+        <div
+          className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 auth-brand-panel border-r"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
           <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
-            <input
-              type="email"
-              className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:border-emerald-500 outline-none"
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <span
+              className="text-4xl font-semibold tracking-tight"
+              style={{ color: 'var(--color-blue)' }}
+            >
+              KWhane
+            </span>
+            <p
+              className="mt-4 text-base font-light leading-relaxed"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              Enerji kullanımını anlayan sistem.
+            </p>
+            <div className="mt-10 w-8 h-px" style={{ backgroundColor: 'var(--color-blue)' }} />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Şifre</label>
-            <input
-              type="password"
-              className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:border-emerald-500 outline-none"
-              onChange={(e) => setPassword(e.target.value)}
-            />
+        </div>
+
+        {/* RIGHT — Form panel */}
+        <div
+          className="flex flex-1 flex-col justify-center px-8 sm:px-16 lg:px-24"
+          style={{ backgroundColor: 'var(--color-surface)' }}
+        >
+          <div className="w-full max-w-sm mx-auto">
+
+            {/* Mobile-only brand */}
+            <div className="lg:hidden mb-10">
+              <span className="text-2xl font-semibold" style={{ color: 'var(--color-blue)' }}>
+                KWhane
+              </span>
+            </div>
+
+            <h2 className="text-2xl font-semibold mb-1">Giriş Yap</h2>
+            <p className="text-sm mb-8" style={{ color: 'var(--color-muted)' }}>
+              Hesabınıza devam edin.
+            </p>
+
+            {error && (
+              <div
+                className="mb-6 px-4 py-3 rounded-lg text-sm"
+                style={{
+                  backgroundColor: 'rgba(239,68,68,0.1)',
+                  color: '#fca5a5',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
+                  Email
+                </label>
+                <input
+                  type="email"
+                  className="w-full px-4 py-3 rounded-lg text-sm transition-all"
+                  style={{
+                    backgroundColor: 'var(--color-surface-2)',
+                    border: '1px solid var(--color-border-2)',
+                    color: 'var(--color-text)',
+                  }}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ornek@email.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
+                  Şifre
+                </label>
+                <input
+                  type="password"
+                  className="w-full px-4 py-3 rounded-lg text-sm transition-all"
+                  style={{
+                    backgroundColor: 'var(--color-surface-2)',
+                    border: '1px solid var(--color-border-2)',
+                    color: 'var(--color-text)',
+                  }}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-lg text-sm font-medium transition-all duration-200"
+                style={{ backgroundColor: 'var(--color-blue)', color: '#ffffff' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-blue-dim)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-blue)')}
+              >
+                Giriş Yap
+              </button>
+            </form>
+
+            <p className="mt-8 text-sm" style={{ color: 'var(--color-muted)' }}>
+              Hesabın yok mu?{' '}
+              <Link
+                to="/register"
+                className="font-medium transition-colors"
+                style={{ color: 'var(--color-blue)' }}
+              >
+                Kayıt Ol
+              </Link>
+            </p>
           </div>
-          <button type="submit" className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 rounded font-bold transition">
-            Giriş Yap
-          </button>
-        </form>
-        <p className="mt-4 text-center text-sm text-gray-400">
-          Hesabın yok mu? <Link to="/register" className="text-emerald-400 hover:underline">Kayıt Ol</Link>
-        </p>
+        </div>
       </div>
-    </div>
+    </PageTransition>
   )
 }
