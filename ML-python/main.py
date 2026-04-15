@@ -8,12 +8,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from models.schemas import DeviceInput, CalculateResponse, CompareResponse, SavingsResponse
+from models.schemas import DeviceInput, CalculateResponse, CompareResponse, SavingsResponse, ChatRequest, ChatResponse
 from ml.energy_model import EnergyPredictor
 from ml.clustering_model import HouseholdClusterer
 from services.calculate_service import calculate_energy
 from services.compare_service import compare_device
 from services.savings_service import generate_savings
+from services.chat_service import generate_chat_reply
 
 # Initialize ML models
 energy_predictor = EnergyPredictor(settings.model_dir)
@@ -74,3 +75,14 @@ def savings(device: DeviceInput):
 @app.get("/health")
 def health():
     return {"status": "ok", "models_loaded": energy_predictor.pipeline is not None}
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    AI energy advisor — sends user message + home context to GPT-4o.
+    Returns a Turkish-language reply grounded in the user's actual device data.
+    Requires OPENAI_API_KEY in ML-python/.env
+    """
+    reply = await generate_chat_reply(request)
+    return ChatResponse(reply=reply)

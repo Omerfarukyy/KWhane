@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     model_dir: str = "./trained_models"
     retrain_on_startup: bool = False
+    openai_api_key: str = ""    # set OPENAI_API_KEY in .env
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

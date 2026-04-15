@@ -61,3 +61,43 @@ class SavingsResponse(BaseModel):
     device_id: str
     user_id: str | None = None
     recommendations: list[RecommendationItem]
+
+
+# ─── Chat / AI Advisor ────────────────────────────────────────────────────────
+
+class ChatMessage(BaseModel):
+    role: str       # "user" | "assistant"
+    content: str
+
+
+class DeviceContext(BaseModel):
+    name: str
+    type: str
+    efficiency_class: str
+    nominal_power_watts: int
+    daily_usage_hours: float
+    monthly_kwh: float | None = None
+    monthly_cost: float | None = None
+    efficiency_score: float | None = None
+
+
+class RecommendationContext(BaseModel):
+    category: str
+    slug: str
+    potential_savings_amount: float
+    current_monthly_cost: float
+    projected_monthly_cost: float
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []           # last 6 messages (3 turns)
+    devices: list[DeviceContext] = []
+    recommendations: list[RecommendationContext] = []
+    total_monthly_kwh: float = 0
+    total_monthly_cost: float = 0
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    model: str = "gpt-4o"
