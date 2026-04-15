@@ -332,7 +332,7 @@ const useSceneStore = create((set, get) => ({
         } catch (err) {
             console.error('[store] loadFromSupabase failed:', err.message);
             // Fall back to empty scene — caller shows toast
-            set({ rooms: [], objects: [], ghostObjects: {}, energyData: {}, deviceSpecs: {} });
+            set({ rooms: [], objects: [], ghostObjects: [], energyData: {}, deviceSpecs: {} });
             throw err;  // re-throw so DashboardLayout can toast
         } finally {
             set({ isLoadingFromDB: false });

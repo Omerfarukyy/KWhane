@@ -116,15 +116,15 @@ const DashboardLayout = () => {
             setPendingGhostId(null);
         }
 
-        // addDevice handles: Zustand update + Supabase insert (fire-and-forget) + enriches spec.room_id
+        // addDevice: Zustand update + Supabase INSERT (triggers n8n) + sets spec.room_id
         const newId = addDevice(spec);
         if (!newId) return;
 
         // Mark badge as loading
         setEnergyData(newId, null);
 
-        // Async ML call — spec.room_id now has the real room UUID thanks to addDevice
-        const enrichedSpec = deviceSpecs[newId] || spec;
+        // Read freshly-enriched spec from store (addDevice sets spec.room_id synchronously)
+        const enrichedSpec = useSceneStore.getState().deviceSpecs[newId] || spec;
         try {
             const deviceInput = buildDeviceInput(newId, enrichedSpec);
             const result = await mlCalculate(deviceInput);
@@ -132,7 +132,7 @@ const DashboardLayout = () => {
         } catch {
             setEnergyData(newId, 'error');
         }
-    }, [pendingGhostId, addObject, removeGhost, setDeviceSpec, setEnergyData]);
+    }, [pendingGhostId, addDevice, removeGhost, setEnergyData]);
 
     // Room creation modal save
     const handleRoomSave = useCallback((roomData) => {
