@@ -1,13 +1,14 @@
-import React, { useState, Suspense, lazy, useCallback, useMemo } from 'react';
+import React, { useState, Suspense, lazy, useCallback, useMemo, useEffect } from 'react';
 import {
     Home, PackagePlus, Settings, Ticket as TicketIcon,
     Zap, User, Lightbulb, ChevronRight, SquarePlus,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import ThemeLangToggle from '../../ThemeLangToggle';
 import SceneContainer from '../../Simulation3D/SceneContainer';
 import RoomCreationModal from '../../Simulation3D/RoomCreationModal';
 import DeviceCatalogModal from '../DeviceCatalogModal';
-import useSceneStore, { DEVICE_CONFIGS } from '../../../store/useSceneStore';
+import useSceneStore from '../../../store/useSceneStore';
 import { useLanguage } from '../../../contexts/LanguageProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import { calculate as mlCalculate, buildDeviceInput } from '../../../services/mlService';
@@ -34,17 +35,32 @@ const DashboardLayout = () => {
     const { user } = useAuth();
 
     // ── Store actions ──────────────────────────────────────────────────────
-    const addRoom       = useSceneStore((s) => s.addRoom);
-    const addObject     = useSceneStore((s) => s.addObject);
-    const removeGhost   = useSceneStore((s) => s.removeGhost);
-    const setDeviceSpec = useSceneStore((s) => s.setDeviceSpec);
-    const setEnergyData = useSceneStore((s) => s.setEnergyData);
+    const addRoom            = useSceneStore((s) => s.addRoom);
+    const addDevice          = useSceneStore((s) => s.addDevice);
+    const removeGhost        = useSceneStore((s) => s.removeGhost);
+    const setEnergyData      = useSceneStore((s) => s.setEnergyData);
+    const loadFromSupabase   = useSceneStore((s) => s.loadFromSupabase);
+    const resetStore         = useSceneStore((s) => s.resetStore);
 
     // ── Store read ─────────────────────────────────────────────────────────
-    const objects     = useSceneStore((s) => s.objects);
-    const energyData  = useSceneStore((s) => s.energyData);
-    const selectedId  = useSceneStore((s) => s.selectedId);
-    const deviceSpecs = useSceneStore((s) => s.deviceSpecs);
+    const objects        = useSceneStore((s) => s.objects);
+    const energyData     = useSceneStore((s) => s.energyData);
+    const selectedId     = useSceneStore((s) => s.selectedId);
+    const deviceSpecs    = useSceneStore((s) => s.deviceSpecs);
+    const isLoadingFromDB = useSceneStore((s) => s.isLoadingFromDB);
+
+    // ── Session persistence ────────────────────────────────────────────────
+    useEffect(() => {
+        if (user?.id) {
+            loadFromSupabase(user.id).catch(() => {
+                toast.error('Veriler yüklenemedi. Lütfen sayfayı yenileyin.');
+            });
+        }
+    }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!user) resetStore();
+    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Computed: home totals ──────────────────────────────────────────────
     const homeTotals = useMemo(() => {
@@ -92,26 +108,25 @@ const DashboardLayout = () => {
         removeGhost(id);
     }, [removeGhost]);
 
-    // Device selected from catalog → add to scene + call ML
+    // Device selected from catalog → add to scene + persist + call ML
     const handleDeviceSelect = useCallback(async (spec) => {
-        // If came from a ghost, remove the ghost first
+        // If came from a ghost, remove it first
         if (pendingGhostId) {
             removeGhost(pendingGhostId);
             setPendingGhostId(null);
         }
 
-        const cfg  = DEVICE_CONFIGS[spec.type] || DEVICE_CONFIGS.box;
-        const newId = addObject(spec.type, cfg.color, cfg.size, cfg.defaultY);
+        // addDevice handles: Zustand update + Supabase insert (fire-and-forget) + enriches spec.room_id
+        const newId = addDevice(spec);
+        if (!newId) return;
 
-        // Store the full spec
-        setDeviceSpec(newId, spec);
-
-        // Mark loading
+        // Mark badge as loading
         setEnergyData(newId, null);
 
-        // Async ML call
+        // Async ML call — spec.room_id now has the real room UUID thanks to addDevice
+        const enrichedSpec = deviceSpecs[newId] || spec;
         try {
-            const deviceInput = buildDeviceInput(newId, spec);
+            const deviceInput = buildDeviceInput(newId, enrichedSpec);
             const result = await mlCalculate(deviceInput);
             setEnergyData(newId, result ?? 'error');
         } catch {
@@ -143,6 +158,16 @@ const DashboardLayout = () => {
                     onGhostClick={handleGhostClick}
                     onGhostDismiss={handleGhostDismiss}
                 />
+                {/* Session restore loading overlay */}
+                {isLoadingFromDB && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3"
+                        style={{ background: 'rgba(8,8,8,0.75)', backdropFilter: 'blur(4px)', zIndex: 5 }}>
+                        <div className="w-8 h-8 rounded-full border-2 border-blue-500/20 border-t-blue-500 animate-spin" />
+                        <span className="text-xs font-medium" style={{ color: '#555555', letterSpacing: '0.08em' }}>
+                            Eviniz yükleniyor…
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* LAYER 1: HUD OVERLAY */}

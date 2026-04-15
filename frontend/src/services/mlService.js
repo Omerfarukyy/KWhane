@@ -22,7 +22,7 @@ const client = axios.create({
 export function buildDeviceInput(id, spec) {
     return {
         id: id,
-        room_id: spec.room_id || '00000000-0000-0000-0000-000000000000',
+        room_id: spec.room_id || (() => { console.warn('[mlService] room_id missing on spec'); return '00000000-0000-0000-0000-000000000000'; })(),
         name: spec.name || spec.type,
         type: spec.type,
         spatial_config: null,

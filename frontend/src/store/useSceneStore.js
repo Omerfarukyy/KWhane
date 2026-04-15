@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
+import toast from 'react-hot-toast';
+import * as houseService from '../services/houseService';
 
 export const objectRefs = {};
 
@@ -29,10 +31,7 @@ const ROOM_PRESETS = {
     'Genel':         [],
 };
 
-/**
- * Compute ghost object positions inside a room for preset device types.
- * Ghosts line up along the inner walls so they don't cluster in the center.
- */
+// ─── Ghost positioning ────────────────────────────────────────────────────────
 function computeGhosts(room, roomType) {
     const presets = ROOM_PRESETS[roomType] || [];
     const [rx, , rz] = room.position;
@@ -46,238 +45,340 @@ function computeGhosts(room, roomType) {
 
         let gx, gz;
         if (i === 0) {
-            // Left inner wall
             gx = rx - width / 2 + sw / 2 + margin;
             gz = rz;
         } else if (i === 1) {
-            // Right inner wall
             gx = rx + width / 2 - sw / 2 - margin;
             gz = rz;
         } else {
-            // Back inner wall
             gx = rx;
             gz = rz - depth / 2 + sd / 2 + margin;
         }
 
-        return {
-            id: uuidv4(),
-            roomId: room.id,
-            type,
-            size: cfg.size,
-            position: [gx, yPos, gz],
-        };
+        return { id: uuidv4(), roomId: room.id, type, size: cfg.size, position: [gx, yPos, gz] };
     });
+}
+
+// ─── Map DB rows → Zustand shapes ────────────────────────────────────────────
+function dbRoomToZustand(row) {
+    const dim = row.dimensions || {};
+    return {
+        id:       row.id,
+        name:     row.name,
+        roomType: row.type || 'Genel',
+        position: [row.position_x ?? 0, 0, row.position_z ?? 0],
+        size: {
+            width:  dim.width  ?? 6,
+            depth:  dim.depth  ?? 5,
+            height: dim.height ?? 3,
+        },
+    };
+}
+
+function dbDeviceToZustand(row) {
+    const sc  = row.spatial_config || {};
+    const cfg = DEVICE_CONFIGS[row.type] || DEVICE_CONFIGS.box;
+    return {
+        id:       row.id,
+        roomId:   row.room_id,
+        type:     row.type,
+        color:    cfg.color,
+        size:     cfg.size,
+        position: [sc.x ?? 0, sc.y ?? cfg.size[1] / 2, sc.z ?? 0],
+        rotation: sc.rotation ?? 0,
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const useSceneStore = create((set, get) => ({
     isCreationMode: true,
-    toggleCreationMode: () => set((state) => ({ isCreationMode: !state.isCreationMode })),
+    toggleCreationMode: () => set((s) => ({ isCreationMode: !s.isCreationMode })),
 
-    // Rooms — start with one default room
-    rooms: [
-        {
-            id: uuidv4(),
-            name: 'Koridor',
-            roomType: 'Genel',
-            position: [0, 0, 0],
-            size: { width: 6, depth: 5, height: 3 },
-        },
-    ],
+    // Persistence state
+    homeId:         null,
+    isLoadingFromDB: false,
 
-    // Placed real devices
-    objects: [],
-
-    // Ghost / hologram suggestion devices (not placed yet)
+    // Scene state — starts EMPTY; populated by loadFromSupabase on login
+    rooms:        [],
+    objects:      [],
     ghostObjects: [],
+    energyData:   {},
+    deviceSpecs:  {},
 
-    // Energy data from ML backend: deviceId → CalculateResponse | null (loading) | 'error'
-    energyData: {},
+    isDragging:  false,
+    setIsDragging: (v) => set({ isDragging: v }),
 
-    // Full device spec from catalog: deviceId → DeviceInput
-    deviceSpecs: {},
-
-    isDragging: false,
-    setIsDragging: (status) => set({ isDragging: status }),
-
-    selectedId: null,
+    selectedId:  null,
     setSelectedId: (id) => set({ selectedId: id }),
 
     // ─── Energy / spec setters ────────────────────────────────────────────────
     setEnergyData: (id, data) =>
-        set((state) => ({ energyData: { ...state.energyData, [id]: data } })),
+        set((s) => ({ energyData: { ...s.energyData, [id]: data } })),
 
     setDeviceSpec: (id, spec) =>
-        set((state) => ({ deviceSpecs: { ...state.deviceSpecs, [id]: spec } })),
+        set((s) => ({ deviceSpecs: { ...s.deviceSpecs, [id]: spec } })),
 
     // ─── Ghost management ─────────────────────────────────────────────────────
     removeGhost: (id) =>
-        set((state) => ({ ghostObjects: state.ghostObjects.filter((g) => g.id !== id) })),
+        set((s) => ({ ghostObjects: s.ghostObjects.filter((g) => g.id !== id) })),
 
     clearRoomGhosts: (roomId) =>
-        set((state) => ({ ghostObjects: state.ghostObjects.filter((g) => g.roomId !== roomId) })),
+        set((s) => ({ ghostObjects: s.ghostObjects.filter((g) => g.roomId !== roomId) })),
 
     // ─── ADD ROOM ─────────────────────────────────────────────────────────────
-    addRoom: (roomData) =>
-        set((state) => {
-            const newWidth  = roomData?.width  || 6;
-            const newDepth  = roomData?.depth  || 5;
-            const newHeight = roomData?.height || 3;
-            const roomType  = roomData?.roomType || 'Genel';
+    addRoom: (roomData) => {
+        const state    = get();
+        const newWidth  = roomData?.width    || 6;
+        const newDepth  = roomData?.depth    || 5;
+        const newHeight = roomData?.height   || 3;
+        const roomType  = roomData?.roomType || 'Genel';
 
-            let newX = 0, newZ = 0;
+        let newX = 0, newZ = 0;
 
-            if (roomData?.attachToRoomId && roomData?.attachWall) {
-                const parentRoom = state.rooms.find((r) => r.id === roomData.attachToRoomId);
-                if (parentRoom) {
-                    const wt_half = 0.05;
-                    switch (roomData.attachWall) {
-                        case 'right':
-                            newX = parentRoom.position[0] + parentRoom.size.width / 2 + newWidth / 2 - wt_half * 2;
-                            newZ = parentRoom.position[2];
-                            break;
-                        case 'left':
-                            newX = parentRoom.position[0] - parentRoom.size.width / 2 - newWidth / 2 + wt_half * 2;
-                            newZ = parentRoom.position[2];
-                            break;
-                        case 'front':
-                            newX = parentRoom.position[0];
-                            newZ = parentRoom.position[2] + parentRoom.size.depth / 2 + newDepth / 2 - wt_half * 2;
-                            break;
-                        case 'back':
-                            newX = parentRoom.position[0];
-                            newZ = parentRoom.position[2] - parentRoom.size.depth / 2 - newDepth / 2 + wt_half * 2;
-                            break;
-                    }
-                }
-            } else {
-                const lastRoom = state.rooms[state.rooms.length - 1];
-                if (lastRoom) {
-                    newX = lastRoom.position[0] + lastRoom.size.width / 2 + newWidth / 2 + 2;
-                    newZ = lastRoom.position[2];
+        if (roomData?.attachToRoomId && roomData?.attachWall) {
+            const parentRoom = state.rooms.find((r) => r.id === roomData.attachToRoomId);
+            if (parentRoom) {
+                const wt_half = 0.05;
+                switch (roomData.attachWall) {
+                    case 'right':
+                        newX = parentRoom.position[0] + parentRoom.size.width / 2 + newWidth / 2 - wt_half * 2;
+                        newZ = parentRoom.position[2]; break;
+                    case 'left':
+                        newX = parentRoom.position[0] - parentRoom.size.width / 2 - newWidth / 2 + wt_half * 2;
+                        newZ = parentRoom.position[2]; break;
+                    case 'front':
+                        newX = parentRoom.position[0];
+                        newZ = parentRoom.position[2] + parentRoom.size.depth / 2 + newDepth / 2 - wt_half * 2; break;
+                    case 'back':
+                        newX = parentRoom.position[0];
+                        newZ = parentRoom.position[2] - parentRoom.size.depth / 2 - newDepth / 2 + wt_half * 2; break;
                 }
             }
+        } else {
+            const lastRoom = state.rooms[state.rooms.length - 1];
+            if (lastRoom) {
+                newX = lastRoom.position[0] + lastRoom.size.width / 2 + newWidth / 2 + 2;
+                newZ = lastRoom.position[2];
+            }
+        }
 
-            const newRoom = {
-                id: uuidv4(),
-                name: roomData?.name || `Oda ${state.rooms.length + 1}`,
-                roomType,
-                position: [newX, 0, newZ],
-                size: { width: newWidth, depth: newDepth, height: newHeight },
-            };
+        // Build the room object BEFORE set() so the same reference goes to Supabase
+        const newRoom = {
+            id:       uuidv4(),
+            name:     roomData?.name || `Oda ${state.rooms.length + 1}`,
+            roomType,
+            position: [newX, 0, newZ],
+            size:     { width: newWidth, depth: newDepth, height: newHeight },
+        };
 
-            const ghosts = computeGhosts(newRoom, roomType);
+        const ghosts = computeGhosts(newRoom, roomType);
 
-            return {
-                rooms: [...state.rooms, newRoom],
-                ghostObjects: [...state.ghostObjects, ...ghosts],
-                selectedId: newRoom.id,
-            };
-        }),
+        set((s) => ({
+            rooms:        [...s.rooms, newRoom],
+            ghostObjects: [...s.ghostObjects, ...ghosts],
+            selectedId:   newRoom.id,
+        }));
 
-    // ─── RESIZE ROOM ─────────────────────────────────────────────────────────
-    resizeRoom: (id, newSize, newPosition) =>
-        set((state) => ({
-            rooms: state.rooms.map((room) =>
-                room.id === id ? { ...room, size: newSize, position: newPosition || room.position } : room
-            ),
-        })),
+        // Background persist — fire and forget
+        const { homeId } = get();
+        if (homeId) {
+            houseService.insertRoom(homeId, newRoom).catch((err) => {
+                console.error('[store] insertRoom failed:', err.message);
+                toast.error('Oda kaydedilemedi. İnternet bağlantınızı kontrol edin.');
+            });
+        }
+    },
 
-    updateRoomPosition: (id, newPosition) =>
-        set((state) => ({
-            rooms: state.rooms.map((room) =>
-                room.id === id ? { ...room, position: newPosition } : room
-            ),
-        })),
+    // ─── ADD DEVICE (persisted, domain-aware version of addObject) ───────────
+    // Replaces addObject as the primary call site in DashboardLayout.
+    // Returns the new device id so the caller can associate ML data with it.
+    addDevice: (spec) => {
+        const state = get();
+        const targetRoom = state.rooms.find((r) => r.id === state.selectedId) || state.rooms[0];
+        if (!targetRoom) return null;
 
-    // ─── ADD OBJECT — returns the new object's id ─────────────────────────────
+        const cfg = DEVICE_CONFIGS[spec.type] || DEVICE_CONFIGS.box;
+        const yPos = cfg.defaultY !== null ? cfg.defaultY : cfg.size[1] / 2;
+        const position = [targetRoom.position[0], yPos, targetRoom.position[2]];
+
+        const newId = uuidv4();
+
+        // Attach room_id to spec so mlService gets the real UUID
+        const enrichedSpec = { ...spec, room_id: targetRoom.id };
+
+        set((s) => ({
+            objects:    [...s.objects, {
+                id:       newId,
+                roomId:   targetRoom.id,
+                type:     spec.type,
+                color:    cfg.color,
+                size:     cfg.size,
+                position,
+                rotation: 0,
+            }],
+            deviceSpecs: { ...s.deviceSpecs, [newId]: enrichedSpec },
+            selectedId:  newId,
+        }));
+
+        // Background persist — triggers n8n on INSERT!
+        const { homeId } = get();
+        if (homeId) {
+            houseService.insertDevice(targetRoom.id, newId, enrichedSpec, position).catch((err) => {
+                console.error('[store] insertDevice failed:', err.message);
+                toast.error('Cihaz kaydedilemedi. İnternet bağlantınızı kontrol edin.');
+            });
+        }
+
+        return newId;
+    },
+
+    // ─── ADD OBJECT (kept for internal / legacy use) ──────────────────────────
     addObject: (type = 'box', color = null, size = null, defaultY = undefined) => {
         const cfg = DEVICE_CONFIGS[type] || DEVICE_CONFIGS.box;
-        const finalColor   = color   ?? cfg.color;
-        const finalSize    = size    ?? cfg.size;
+        const finalColor    = color    ?? cfg.color;
+        const finalSize     = size     ?? cfg.size;
         const finalDefaultY = defaultY !== undefined ? defaultY : cfg.defaultY;
-
         const newId = uuidv4();
 
         set((state) => {
             const targetRoom = state.rooms.find((r) => r.id === state.selectedId) || state.rooms[0];
             if (!targetRoom) return state;
-
-            const yPos = (finalDefaultY !== null) ? finalDefaultY : finalSize[1] / 2;
-
-            const objParams = {
-                id: newId,
-                roomId: targetRoom.id,
-                type,
-                color: finalColor,
-                size: finalSize,
-                position: [targetRoom.position[0], yPos, targetRoom.position[2]],
-                rotation: 0,
+            const yPos = finalDefaultY !== null ? finalDefaultY : finalSize[1] / 2;
+            return {
+                objects: [...state.objects, {
+                    id: newId, roomId: targetRoom.id, type,
+                    color: finalColor, size: finalSize,
+                    position: [targetRoom.position[0], yPos, targetRoom.position[2]],
+                    rotation: 0,
+                }],
+                selectedId: newId,
             };
-
-            return { objects: [...state.objects, objParams], selectedId: newId };
         });
 
         return newId;
     },
 
     // ─── REMOVE SELECTED ──────────────────────────────────────────────────────
-    removeSelected: () =>
-        set((state) => {
-            if (!state.selectedId) return state;
+    removeSelected: () => {
+        const state = get();
+        if (!state.selectedId) return;
 
-            const isObject = state.objects.some((o) => o.id === state.selectedId);
-            if (isObject) {
-                const { [state.selectedId]: _, ...restEnergy } = state.energyData;
-                const { [state.selectedId]: __, ...restSpecs } = state.deviceSpecs;
-                return {
-                    objects: state.objects.filter((o) => o.id !== state.selectedId),
-                    energyData: restEnergy,
-                    deviceSpecs: restSpecs,
-                    selectedId: null,
+        const isObject = state.objects.some((o) => o.id === state.selectedId);
+        if (isObject) {
+            const removedId = state.selectedId;
+            const { [removedId]: _e, ...restEnergy } = state.energyData;
+            const { [removedId]: _s, ...restSpecs  } = state.deviceSpecs;
+
+            set({ objects: state.objects.filter((o) => o.id !== removedId), energyData: restEnergy, deviceSpecs: restSpecs, selectedId: null });
+
+            houseService.deleteDevice(removedId).catch((err) => {
+                console.error('[store] deleteDevice failed:', err.message);
+                toast.error('Cihaz silinemedi.');
+            });
+            return;
+        }
+
+        const isRoom = state.rooms.some((r) => r.id === state.selectedId);
+        if (isRoom && state.rooms.length > 1) {
+            const roomId = state.selectedId;
+            const removedObjectIds = state.objects.filter((o) => o.roomId === roomId).map((o) => o.id);
+            const restEnergy = { ...state.energyData };
+            const restSpecs  = { ...state.deviceSpecs };
+            removedObjectIds.forEach((id) => { delete restEnergy[id]; delete restSpecs[id]; });
+
+            set({
+                rooms:        state.rooms.filter((r) => r.id !== roomId),
+                objects:      state.objects.filter((o) => o.roomId !== roomId),
+                ghostObjects: state.ghostObjects.filter((g) => g.roomId !== roomId),
+                energyData:   restEnergy,
+                deviceSpecs:  restSpecs,
+                selectedId:   null,
+            });
+
+            // deleteRoom cascades child devices in DB automatically
+            houseService.deleteRoom(roomId).catch((err) => {
+                console.error('[store] deleteRoom failed:', err.message);
+                toast.error('Oda silinemedi.');
+            });
+        }
+    },
+
+    // ─── LOAD FROM SUPABASE (session restore) ─────────────────────────────────
+    loadFromSupabase: async (userId) => {
+        set({ isLoadingFromDB: true });
+        try {
+            const { homeId, rooms: dbRooms, devices: dbDevices } =
+                await houseService.loadHouseState(userId);
+
+            set({ homeId });
+
+            if (dbRooms.length === 0) {
+                // First login — create the default Koridor room
+                const koridor = {
+                    id:       uuidv4(),
+                    name:     'Koridor',
+                    roomType: 'Genel',
+                    position: [0, 0, 0],
+                    size:     { width: 6, depth: 5, height: 3 },
                 };
+                await houseService.insertRoom(homeId, koridor);
+                set({ rooms: [koridor], objects: [], ghostObjects: [], energyData: {}, deviceSpecs: {} });
+            } else {
+                const rooms   = dbRooms.map(dbRoomToZustand);
+                const objects = dbDevices.map(dbDeviceToZustand);
+                set({ rooms, objects, ghostObjects: [], energyData: {}, deviceSpecs: {} });
             }
+        } catch (err) {
+            console.error('[store] loadFromSupabase failed:', err.message);
+            // Fall back to empty scene — caller shows toast
+            set({ rooms: [], objects: [], ghostObjects: {}, energyData: {}, deviceSpecs: {} });
+            throw err;  // re-throw so DashboardLayout can toast
+        } finally {
+            set({ isLoadingFromDB: false });
+        }
+    },
 
-            const isRoom = state.rooms.some((r) => r.id === state.selectedId);
-            if (isRoom && state.rooms.length > 1) {
-                const roomId = state.selectedId;
-                const removedObjectIds = state.objects
-                    .filter((o) => o.roomId === roomId)
-                    .map((o) => o.id);
-                const restEnergy = { ...state.energyData };
-                const restSpecs = { ...state.deviceSpecs };
-                removedObjectIds.forEach((id) => { delete restEnergy[id]; delete restSpecs[id]; });
-                return {
-                    rooms: state.rooms.filter((r) => r.id !== roomId),
-                    objects: state.objects.filter((o) => o.roomId !== roomId),
-                    ghostObjects: state.ghostObjects.filter((g) => g.roomId !== roomId),
-                    energyData: restEnergy,
-                    deviceSpecs: restSpecs,
-                    selectedId: null,
-                };
-            }
-
-            return state;
+    // ─── RESET (called on logout) ─────────────────────────────────────────────
+    resetStore: () =>
+        set({
+            homeId:         null,
+            isLoadingFromDB: false,
+            rooms:           [],
+            objects:         [],
+            ghostObjects:    [],
+            energyData:      {},
+            deviceSpecs:     {},
+            selectedId:      null,
+            isDragging:      false,
         }),
+
+    // ─── RESIZE ROOM ──────────────────────────────────────────────────────────
+    resizeRoom: (id, newSize, newPosition) =>
+        set((s) => ({
+            rooms: s.rooms.map((r) =>
+                r.id === id ? { ...r, size: newSize, position: newPosition || r.position } : r
+            ),
+        })),
+
+    updateRoomPosition: (id, newPosition) =>
+        set((s) => ({
+            rooms: s.rooms.map((r) => r.id === id ? { ...r, position: newPosition } : r),
+        })),
 
     // ─── UPDATE OBJECT POSITION ───────────────────────────────────────────────
     updateObjectPosition: (id, newPosition) =>
-        set((state) => ({
-            objects: state.objects.map((obj) =>
-                obj.id === id ? { ...obj, position: newPosition } : obj
-            ),
+        set((s) => ({
+            objects: s.objects.map((o) => o.id === id ? { ...o, position: newPosition } : o),
         })),
 
     // ─── ROTATE SELECTED ──────────────────────────────────────────────────────
     rotateSelected: () =>
-        set((state) => {
-            if (!state.selectedId) return state;
+        set((s) => {
+            if (!s.selectedId) return s;
             return {
-                objects: state.objects.map((obj) =>
-                    obj.id === state.selectedId
-                        ? { ...obj, rotation: obj.rotation + Math.PI / 2 }
-                        : obj
+                objects: s.objects.map((o) =>
+                    o.id === s.selectedId ? { ...o, rotation: o.rotation + Math.PI / 2 } : o
                 ),
             };
         }),
