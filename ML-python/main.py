@@ -5,6 +5,7 @@ Thin wiring layer that delegates to service modules.
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from models.schemas import DeviceInput, CalculateResponse, CompareResponse, SavingsResponse
@@ -32,6 +33,14 @@ app = FastAPI(
     description="Energy consumption prediction, household comparison, and savings recommendations",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

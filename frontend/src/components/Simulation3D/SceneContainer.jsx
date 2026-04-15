@@ -6,6 +6,8 @@ import RoomBuilder from './RoomBuilder';
 import CameraControls from './CameraControls';
 import DraggableObject from './DraggableObject';
 import ProceduralDevices from './ProceduralDevices';
+import GhostDevice from './GhostDevice';
+import EnergyBadge from './EnergyBadge';
 import useCollision from './useCollision';
 import useSceneStore from '../../store/useSceneStore';
 import './SceneContainer.css';
@@ -13,11 +15,12 @@ import './SceneContainer.css';
 /**
  * SceneContainer.jsx — İzole 3D Sahne Bileşeni
  *
- * KWhane projesinin herhangi bir sayfasına bağımsız olarak
- * monte edilebilen ana 3D sahne konteyner bileşenidir.
+ * Props:
+ *   onGhostClick(ghost)    — called when user clicks a ghost device suggestion
+ *   onGhostDismiss(id)     — called when user dismisses a ghost via ×
+ *   children               — optional extra Three.js elements
  */
-const SceneContainer = ({ children }) => {
-    // Uzak kamera mesafesi, çoklu odalar için daha geniş açıyla başlatıyoruz
+const SceneContainer = ({ children, onGhostClick, onGhostDismiss }) => {
     const cameraDistance = 15;
 
     return (
@@ -37,7 +40,10 @@ const SceneContainer = ({ children }) => {
                         gl.setClearColor('#0f172a');
                     }}
                 >
-                    <SceneContent>
+                    <SceneContent
+                        onGhostClick={onGhostClick}
+                        onGhostDismiss={onGhostDismiss}
+                    >
                         {children}
                     </SceneContent>
                 </Canvas>
@@ -49,28 +55,26 @@ const SceneContainer = ({ children }) => {
 /**
  * SceneContent — Canvas içindeki dinamik sahne içeriği
  */
-const SceneContent = ({ children }) => {
+const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
     const collision = useCollision();
 
-    // Zustand Store'dan dinamik verileri al
-    const rooms = useSceneStore((state) => state.rooms);
-    const objects = useSceneStore((state) => state.objects);
+    const rooms       = useSceneStore((state) => state.rooms);
+    const objects     = useSceneStore((state) => state.objects);
+    const ghostObjects = useSceneStore((state) => state.ghostObjects);
+    const energyData  = useSceneStore((state) => state.energyData);
     const setSelectedId = useSceneStore((state) => state.setSelectedId);
 
-    // Boşluğa (Grid'e veya Arka Plana) tıklanınca seçimi kaldır
-    const handlePointerMissed = () => {
-        setSelectedId(null);
-    };
+    const handlePointerMissed = () => setSelectedId(null);
 
     return (
         <group onPointerMissed={handlePointerMissed}>
-            {/* ─── Kamera Kontrolleri ────────────────────── */}
+            {/* ─── Kamera Kontrolleri ──────────────────── */}
             <CameraControls maxDistance={60} minDistance={2} />
 
-            {/* ─── Aydınlatma ───────────────────────────── */}
+            {/* ─── Aydınlatma ─────────────────────────── */}
             <Lights />
 
-            {/* ─── Zemin Izgarası ───────────────────────── */}
+            {/* ─── Zemin Izgarası ─────────────────────── */}
             <Grid
                 args={[100, 100]}
                 cellSize={0.5}
@@ -86,7 +90,7 @@ const SceneContent = ({ children }) => {
                 position={[0, -0.001, 0]}
             />
 
-            {/* ─── Dinamik Odalar ─────────────────────────────────── */}
+            {/* ─── Dinamik Odalar ──────────────────────── */}
             {rooms.map((r) => (
                 <RoomBuilder
                     key={r.id}
@@ -99,7 +103,17 @@ const SceneContent = ({ children }) => {
                 />
             ))}
 
-            {/* ─── Dinamik Objeler ─────────────────────────────────── */}
+            {/* ─── Ghost (Hologram) Cihazlar ───────────── */}
+            {ghostObjects.map((ghost) => (
+                <GhostDevice
+                    key={ghost.id}
+                    ghost={ghost}
+                    onGhostClick={onGhostClick || (() => {})}
+                    onGhostDismiss={onGhostDismiss || (() => {})}
+                />
+            ))}
+
+            {/* ─── Yerleştirilmiş Cihazlar ─────────────── */}
             {objects.map((obj) => {
                 const room = rooms.find((r) => r.id === obj.roomId);
 
@@ -113,23 +127,30 @@ const SceneContent = ({ children }) => {
                         collision={collision}
                         objectSize={obj.size}
                         room={room}
-                        floorY={obj.position[1]} // Objenin mevcut Y yüksekliğini koru (duvar montajı için)
+                        floorY={obj.position[1]}
                     >
-                        {/* Elektronik Aletler */}
-                        {['television', 'air_conditioner', 'fridge', 'washing_machine'].includes(obj.type) ? (
+                        {/* Procedural device mesh for all known types */}
+                        {obj.type !== 'box' ? (
                             <ProceduralDevices type={obj.type} size={obj.size} />
                         ) : (
-                            /* Demo Kutu */
-                            obj.type === 'box' && (
-                                <mesh castShadow position={[0, obj.size[1] / 2, 0]}>
-                                    <boxGeometry args={obj.size} />
-                                    <meshStandardMaterial color={obj.color} />
-                                </mesh>
-                            )
+                            <mesh castShadow position={[0, obj.size[1] / 2, 0]}>
+                                <boxGeometry args={obj.size} />
+                                <meshStandardMaterial color={obj.color} />
+                            </mesh>
                         )}
                     </DraggableObject>
                 );
             })}
+
+            {/* ─── Enerji Rozeti Overlayları ───────────── */}
+            {objects.map((obj) => (
+                <EnergyBadge
+                    key={`badge-${obj.id}`}
+                    object={obj}
+                    energyData={energyData[obj.id]}
+                    heightOffset={0.3}
+                />
+            ))}
 
             {/* Dışarıdan eklenen ek 3D bileşenler */}
             {children}
