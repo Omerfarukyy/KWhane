@@ -299,7 +299,7 @@ const AiAssistant = ({ isOpen, onClose }) => {
                     </button>
                 </div>
                 <p className="text-[10px] text-center mt-2 italic" style={{ color: '#333333' }}>
-                    GPT-4o ile desteklenmektedir
+                    Llama 3.2 (Ollama) ile desteklenmektedir
                 </p>
             </div>
         </div>

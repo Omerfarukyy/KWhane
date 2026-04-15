@@ -1,14 +1,17 @@
 """
-chat_service.py — GPT-4o energy advisor for KWhane.
+chat_service.py — Llama 3.2 (Ollama) energy advisor for KWhane.
 
 Receives a ChatRequest (user message + home context + conversation history)
-and returns a grounded Turkish-language reply from GPT-4o.
+and returns a grounded Turkish-language reply from a locally running Llama model.
+
+Ollama exposes an OpenAI-compatible API at http://localhost:11434/v1,
+so we reuse the openai Python package — zero extra dependencies.
 """
 
 from __future__ import annotations
 
 from fastapi import HTTPException
-from openai import AsyncOpenAI, AuthenticationError, OpenAIError, RateLimitError
+from openai import AsyncOpenAI, OpenAIError
 
 from config import settings
 from models.schemas import ChatRequest
@@ -20,12 +23,11 @@ _client: AsyncOpenAI | None = None
 def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
-        if not settings.openai_api_key:
-            raise HTTPException(
-                status_code=503,
-                detail="OPENAI_API_KEY yapılandırılmamış. ML-python/.env dosyasına ekleyin.",
-            )
-        _client = AsyncOpenAI(api_key=settings.openai_api_key)
+        # Ollama requires a dummy api_key value; it ignores the actual string
+        _client = AsyncOpenAI(
+            base_url=settings.ollama_base_url,
+            api_key="ollama",
+        )
     return _client
 
 
@@ -56,7 +58,7 @@ def _build_system_prompt(request: ChatRequest) -> str:
 
     # Format recommendations
     if not request.recommendations:
-        rec_lines = "  (Henüz öneri hesaplanmamış — cihaz ekledikten sonra n8n pipeline tarafından oluşturulur)"
+        rec_lines = "  (Henüz öneri hesaplanmamış — cihaz ekledikten sonra oluşturulur)"
     else:
         rec_lines = "\n".join(
             f"  • {r.category} ({r.slug}): aylık ₺{r.potential_savings_amount:.0f} tasarruf potansiyeli "
@@ -92,9 +94,9 @@ Yanıt kuralları:
 
 async def generate_chat_reply(request: ChatRequest) -> str:
     """
-    Build context-aware messages and call GPT-4o.
+    Build context-aware messages and call local Llama via Ollama.
     Returns the assistant reply string.
-    Raises HTTPException on OpenAI errors so FastAPI returns a proper HTTP status.
+    Raises HTTPException if Ollama is not running or model is not pulled.
     """
     client = _get_client()
 
@@ -111,24 +113,31 @@ async def generate_chat_reply(request: ChatRequest) -> str:
 
     try:
         completion = await client.chat.completions.create(
-            model="gpt-4o",
+            model=settings.llama_model,
             messages=messages,
             max_tokens=500,
             temperature=0.7,
         )
         return completion.choices[0].message.content or "Yanıt alınamadı."
 
-    except RateLimitError:
-        raise HTTPException(
-            status_code=429,
-            detail="OpenAI rate limiti aşıldı. Lütfen birkaç saniye bekleyin.",
-        )
-    except AuthenticationError:
-        raise HTTPException(
-            status_code=503,
-            detail="OpenAI API anahtarı geçersiz. OPENAI_API_KEY değerini kontrol edin.",
-        )
     except OpenAIError as e:
+        err = str(e).lower()
+        if "connection" in err or "connect" in err:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Ollama'ya bağlanılamadı. "
+                    "Ollama'nın çalıştığını kontrol edin: 'ollama serve'"
+                ),
+            )
+        if "model" in err or "not found" in err:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"'{settings.llama_model}' modeli bulunamadı. "
+                    f"Terminalde çalıştırın: 'ollama pull {settings.llama_model}'"
+                ),
+            )
         raise HTTPException(
             status_code=503,
             detail=f"AI servisi şu an kullanılamıyor: {str(e)}",

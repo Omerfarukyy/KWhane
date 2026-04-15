@@ -80,9 +80,9 @@ def health():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    AI energy advisor — sends user message + home context to GPT-4o.
+    AI energy advisor — sends user message + home context to local Llama via Ollama.
     Returns a Turkish-language reply grounded in the user's actual device data.
-    Requires OPENAI_API_KEY in ML-python/.env
+    Requires Ollama running locally with the configured model pulled.
     """
     reply = await generate_chat_reply(request)
     return ChatResponse(reply=reply)

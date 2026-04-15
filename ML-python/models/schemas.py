@@ -100,4 +100,4 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    model: str = "gpt-4o"
+    model: str = "llama3.2"

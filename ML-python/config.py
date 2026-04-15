@@ -6,7 +6,10 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     model_dir: str = "./trained_models"
     retrain_on_startup: bool = False
-    openai_api_key: str = ""    # set OPENAI_API_KEY in .env
+
+    # Local Ollama settings — no API key needed
+    ollama_base_url: str = "http://localhost:11434/v1"
+    llama_model: str = "llama3.2"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
