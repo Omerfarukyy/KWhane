@@ -110,14 +110,21 @@ const DashboardLayout = () => {
 
     // Device selected from catalog → add to scene + persist + call ML
     const handleDeviceSelect = useCallback(async (spec) => {
-        // If came from a ghost, remove it first
+        // Capture ghost position + roomId BEFORE removing it so we can spawn there
+        const ghost = pendingGhostId
+            ? useSceneStore.getState().ghostObjects.find((g) => g.id === pendingGhostId)
+            : null;
+        const spawnOptions = ghost
+            ? { position: ghost.position, roomId: ghost.roomId }
+            : null;
+
         if (pendingGhostId) {
             removeGhost(pendingGhostId);
             setPendingGhostId(null);
         }
 
         // addDevice: Zustand update + Supabase INSERT (triggers n8n) + sets spec.room_id
-        const newId = addDevice(spec);
+        const newId = addDevice(spec, spawnOptions);
         if (!newId) return;
 
         // Mark badge as loading
@@ -150,7 +157,7 @@ const DashboardLayout = () => {
 
     return (
         <div className="relative w-screen h-screen overflow-hidden font-sans"
-            style={{ background: '#080808', fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" }}>
+            style={{ background: 'var(--color-bg)', fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" }}>
 
             {/* LAYER 0: 3D SCENE */}
             <div className="absolute inset-0 z-0 pointer-events-auto">
@@ -161,9 +168,9 @@ const DashboardLayout = () => {
                 {/* Session restore loading overlay */}
                 {isLoadingFromDB && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3"
-                        style={{ background: 'rgba(8,8,8,0.75)', backdropFilter: 'blur(4px)', zIndex: 5 }}>
+                        style={{ background: 'var(--color-bg-overlay)', backdropFilter: 'blur(4px)', zIndex: 5 }}>
                         <div className="w-8 h-8 rounded-full border-2 border-blue-500/20 border-t-blue-500 animate-spin" />
-                        <span className="text-xs font-medium" style={{ color: '#555555', letterSpacing: '0.08em' }}>
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-subtle)', letterSpacing: '0.08em' }}>
                             Eviniz yükleniyor…
                         </span>
                     </div>
@@ -176,9 +183,9 @@ const DashboardLayout = () => {
                 {/* HEADER */}
                 <header className="pointer-events-auto w-full h-16 flex items-center justify-between px-6 rounded-2xl"
                     style={{
-                        background: 'rgba(17,17,17,0.85)',
+                        background: 'var(--color-surface-glass)',
                         backdropFilter: 'blur(24px)',
-                        border: '1px solid #1e1e1e',
+                        border: '1px solid var(--color-border)',
                         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                     }}>
                     <div className="flex items-center gap-3">
@@ -193,17 +200,17 @@ const DashboardLayout = () => {
 
                     <div className="flex items-center gap-4">
                         <ThemeLangToggle />
-                        <div className="w-px h-6" style={{ background: '#1e1e1e' }} />
+                        <div className="w-px h-6" style={{ background: 'var(--color-border)' }} />
                         <button onClick={() => setIsProfileModalOpen(true)} className="flex items-center gap-3 group">
                             <div className="text-right hidden sm:block">
                                 <p className="text-sm font-semibold text-white group-hover:text-blue-400 transition-colors">{displayName}</p>
                                 <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#3b82f6' }}>Premium</p>
                             </div>
                             <div className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
-                                style={{ background: '#161616', border: '1px solid #2a2a2a' }}
+                                style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)' }}
                                 onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(59,130,246,0.5)'; e.currentTarget.style.boxShadow = '0 0 14px rgba(59,130,246,0.2)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.boxShadow = 'none'; }}>
-                                <User size={16} style={{ color: '#888888' }} />
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-2)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                <User size={16} style={{ color: 'var(--color-muted)' }} />
                             </div>
                         </button>
                     </div>
@@ -215,9 +222,9 @@ const DashboardLayout = () => {
                     {/* LEFT FLOATING TOOLBAR */}
                     <aside className="pointer-events-auto flex flex-col gap-3 py-5 px-2.5 rounded-2xl h-fit"
                         style={{
-                            background: 'rgba(17,17,17,0.85)',
+                            background: 'var(--color-surface-glass)',
                             backdropFilter: 'blur(24px)',
-                            border: '1px solid #1e1e1e',
+                            border: '1px solid var(--color-border)',
                             boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                         }}>
                         <NavButton icon={<Home size={20} />} active={activeTab === 'home'}
@@ -231,7 +238,7 @@ const DashboardLayout = () => {
                         <NavButton icon={<PackagePlus size={20} />} active={isCatalogOpen}
                             onClick={openCatalog} tooltip={t('addDevice')} />
 
-                        <div className="w-7 h-px mx-auto my-1" style={{ background: '#1e1e1e' }} />
+                        <div className="w-7 h-px mx-auto my-1" style={{ background: 'var(--color-border)' }} />
 
                         <NavButton icon={<TicketIcon size={20} />} active={activeTab === 'tickets'}
                             onClick={openTicketModal} tooltip={t('support')} />
@@ -242,9 +249,9 @@ const DashboardLayout = () => {
                     {/* RIGHT ANALYSIS PANEL */}
                     <aside className="pointer-events-auto w-80 lg:w-96 rounded-3xl p-6 flex flex-col gap-7 relative overflow-hidden"
                         style={{
-                            background: 'rgba(17,17,17,0.85)',
+                            background: 'var(--color-surface-glass)',
                             backdropFilter: 'blur(24px)',
-                            border: '1px solid #1e1e1e',
+                            border: '1px solid var(--color-border)',
                             boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                         }}>
 
@@ -260,13 +267,13 @@ const DashboardLayout = () => {
                             <>
                                 <div className="flex flex-col items-center">
                                     <h3 className="text-[10px] font-bold uppercase mb-5"
-                                        style={{ color: '#555555', letterSpacing: '0.2em' }}>
+                                        style={{ color: 'var(--color-subtle)', letterSpacing: '0.2em' }}>
                                         {t('monthlyConsumptionStatus')}
                                     </h3>
                                     <div className="relative w-44 h-44 flex items-center justify-center">
                                         <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100"
                                             style={{ filter: 'drop-shadow(0 0 12px rgba(59,130,246,0.25))' }}>
-                                            <circle cx="50" cy="50" r="45" fill="none" stroke="#1e1e1e" strokeWidth="6" />
+                                            <circle cx="50" cy="50" r="45" fill="none" stroke="var(--color-border)" strokeWidth="6" />
                                             <circle cx="50" cy="50" r="45" fill="none" stroke="url(#blueGradient)"
                                                 strokeWidth="6" strokeDasharray="283" strokeDashoffset={gaugeOffset}
                                                 strokeLinecap="round" />
@@ -291,7 +298,7 @@ const DashboardLayout = () => {
                                 <div className="w-full h-px" style={{ background: 'linear-gradient(to right, transparent, #1e1e1e, transparent)' }} />
 
                                 <div className="flex flex-col gap-1 items-center">
-                                    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#555555' }}>
+                                    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-subtle)' }}>
                                         {t('estimatedBill')}
                                     </span>
                                     <span className="text-3xl font-black" style={{ color: '#3b82f6' }}>
@@ -318,7 +325,7 @@ const DashboardLayout = () => {
                                                 {t('kwhaneAi')}
                                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
                                             </h4>
-                                            <p className="text-xs leading-relaxed" style={{ color: '#888888' }}
+                                            <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}
                                                 dangerouslySetInnerHTML={{ __html: t('aiRecommendationEx') }} />
                                         </div>
                                     </div>
@@ -336,21 +343,21 @@ const DashboardLayout = () => {
                 <div className="pointer-events-auto w-full flex justify-center">
                     <div className="w-2/3 max-w-4xl h-24 rounded-2xl p-4 flex items-end justify-between gap-1.5 sm:gap-2.5"
                         style={{
-                            background: 'rgba(17,17,17,0.85)',
+                            background: 'var(--color-surface-glass)',
                             backdropFilter: 'blur(24px)',
-                            border: '1px solid #1e1e1e',
+                            border: '1px solid var(--color-border)',
                             boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                         }}>
                         {timelineData.map((h, i) => (
                             <div key={i} className="flex-1 relative group cursor-pointer" style={{ height: '100%' }}>
                                 <div className="absolute -top-9 left-1/2 -translate-x-1/2 text-white text-[9px] font-bold py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20"
-                                    style={{ background: '#161616', border: '1px solid #2a2a2a' }}>
+                                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)' }}>
                                     G{i + 1}: {Math.floor(h * 1.5)} kWh
                                 </div>
                                 <div className="absolute bottom-0 w-full rounded-t-sm transition-all duration-300"
-                                    style={{ height: `${h}%`, background: i === 8 ? '#3b82f6' : '#2a2a2a' }}
+                                    style={{ height: `${h}%`, background: i === 8 ? '#3b82f6' : 'var(--color-border-2)' }}
                                     onMouseEnter={e => { if (i !== 8) e.currentTarget.style.background = 'rgba(59,130,246,0.5)'; }}
-                                    onMouseLeave={e => { if (i !== 8) e.currentTarget.style.background = '#2a2a2a'; }}
+                                    onMouseLeave={e => { if (i !== 8) e.currentTarget.style.background = 'var(--color-border-2)'; }}
                                 />
                             </div>
                         ))}
@@ -366,11 +373,11 @@ const DashboardLayout = () => {
 
                 {isTicketModalOpen && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-auto"
-                        style={{ background: 'rgba(8,8,8,0.9)', backdropFilter: 'blur(20px)' }}>
+                        style={{ background: 'var(--color-bg-overlay)', backdropFilter: 'blur(20px)' }}>
                         <div className="w-full max-w-5xl overflow-hidden rounded-3xl flex flex-col"
-                            style={{ background: '#111111', border: '1px solid #1e1e1e', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
+                            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
                             <div className="flex items-center justify-between p-5"
-                                style={{ borderBottom: '1px solid #1e1e1e', background: '#0d0d0d' }}>
+                                style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
                                 <h2 className="text-base font-bold flex items-center gap-3 text-white">
                                     <div className="p-2 rounded-lg" style={{ background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}>
                                         <TicketIcon size={18} />
@@ -379,7 +386,7 @@ const DashboardLayout = () => {
                                 </h2>
                                 <button onClick={closeTicketModal}
                                     className="px-3 py-1.5 rounded-xl text-sm font-semibold transition-all"
-                                    style={{ color: '#888888', border: '1px solid #1e1e1e' }}
+                                    style={{ color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
                                     onMouseEnter={e => e.currentTarget.style.color = '#ffffff'}
                                     onMouseLeave={e => e.currentTarget.style.color = '#888888'}>
                                     {t('goBack')}
@@ -429,7 +436,7 @@ const NavButton = React.memo(({ icon, active, onClick, tooltip }) => (
             {icon}
         </button>
         <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1 text-white text-xs font-semibold rounded-lg opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all pointer-events-none whitespace-nowrap z-50"
-            style={{ background: '#161616', border: '1px solid #1e1e1e', boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}>
+            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}>
             {tooltip}
             <div className="absolute top-1/2 -left-1.5 -translate-y-1/2 border-[5px] border-transparent"
                 style={{ borderRightColor: '#161616' }} />
@@ -487,14 +494,14 @@ const DeviceDetailPanel = ({ obj, data, spec }) => {
                     {/* kWh / Cost */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="rounded-xl p-3 flex flex-col"
-                            style={{ background: '#111', border: '1px solid #1e1e1e' }}>
+                            style={{ background: '#111', border: '1px solid var(--color-border)' }}>
                             <span className="text-[10px] text-white/30 uppercase tracking-wider">kWh/ay</span>
                             <span className="text-2xl font-black mt-1" style={{ color: accentColor }}>
                                 {kwh.toFixed(1)}
                             </span>
                         </div>
                         <div className="rounded-xl p-3 flex flex-col"
-                            style={{ background: '#111', border: '1px solid #1e1e1e' }}>
+                            style={{ background: '#111', border: '1px solid var(--color-border)' }}>
                             <span className="text-[10px] text-white/30 uppercase tracking-wider">₺/ay</span>
                             <span className="text-2xl font-black mt-1 text-white">
                                 {Math.round(cost)}

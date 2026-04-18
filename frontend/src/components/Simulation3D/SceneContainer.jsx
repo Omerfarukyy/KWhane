@@ -96,6 +96,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                     key={r.id}
                     id={r.id}
                     name={r.name}
+                    roomType={r.roomType}
                     position={r.position}
                     width={r.size.width}
                     depth={r.size.depth}

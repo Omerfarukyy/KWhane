@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import useSceneStore, { objectRefs } from '../../store/useSceneStore';
+import RoomFurnishings from './RoomFurnishings';
 
 const WALL_THICKNESS = 0.1;
 const wallMatNormal = { color: '#8ecae6', transparent: true, opacity: 0.35, side: 2 };
@@ -78,7 +79,7 @@ const ResizeHandle = ({ position, onDragStart, onDrag, onDragEnd }) => {
     );
 };
 
-const RoomBuilder = ({ id, name = 'Oda', width = 5, depth = 4, height = 3, position = [0, 0, 0] }) => {
+const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0] }) => {
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
 
@@ -348,6 +349,9 @@ const RoomBuilder = ({ id, name = 'Oda', width = 5, depth = 4, height = 3, posit
                     <meshStandardMaterial {...wallMaterialProps} />
                 </mesh>
             ))}
+
+            {/* Static decorative furniture for this room type */}
+            <RoomFurnishings roomType={roomType} width={width} depth={depth} height={height} />
 
             {/* Yüzen Oda Adı */}
             <Html

@@ -63,6 +63,7 @@ const DraggableObject = ({
     const selectedId = useSceneStore((state) => state.selectedId);
     const setSelectedId = useSceneStore((state) => state.setSelectedId);
     const updateObjectPosition = useSceneStore((state) => state.updateObjectPosition);
+    const updateObjectRoom     = useSceneStore((state) => state.updateObjectRoom);
     const setIsDraggingStore = useSceneStore((state) => state.setIsDragging);
     const isCreationMode = useSceneStore((state) => state.isCreationMode);
 
@@ -132,12 +133,18 @@ const DraggableObject = ({
                 let newX = intersection.current.x + offset.current.x;
                 let newZ = intersection.current.z + offset.current.z;
 
-                // Duvar sınır kontrolü
-                if (room && collision) {
+                // Cross-room wall constraint: use whichever room the object is over
+                const allRooms = useSceneStore.getState().rooms;
+                const hoverRoom = allRooms.find((r) => {
+                    const hw = r.size.width / 2, hd = r.size.depth / 2;
+                    return newX >= r.position[0] - hw && newX <= r.position[0] + hw
+                        && newZ >= r.position[2] - hd && newZ <= r.position[2] + hd;
+                });
+                if (hoverRoom && collision) {
                     const clamped = collision.checkWallCollision(
                         [newX, floorY, newZ],
                         objectSize,
-                        room
+                        hoverRoom
                     );
                     newX = clamped[0];
                     newZ = clamped[2];
@@ -182,12 +189,18 @@ const DraggableObject = ({
                 let snappedX = snapToGrid(groupRef.current.position.x, gridSnap);
                 let snappedZ = snapToGrid(groupRef.current.position.z, gridSnap);
 
-                // Snap sonrası da duvar sınır kontrolü
-                if (room && collision) {
+                // Snap sonrası — cross-room wall constraint
+                const allRooms = useSceneStore.getState().rooms;
+                const landedRoom = allRooms.find((r) => {
+                    const hw = r.size.width / 2, hd = r.size.depth / 2;
+                    return snappedX >= r.position[0] - hw && snappedX <= r.position[0] + hw
+                        && snappedZ >= r.position[2] - hd && snappedZ <= r.position[2] + hd;
+                });
+                if (landedRoom && collision) {
                     const clamped = collision.checkWallCollision(
                         [snappedX, floorY, snappedZ],
                         objectSize,
-                        room
+                        landedRoom
                     );
                     snappedX = clamped[0];
                     snappedZ = clamped[2];
@@ -209,10 +222,14 @@ const DraggableObject = ({
                 // Zustand Store'daki global pozisyonu güncelle
                 if (objectId) {
                     updateObjectPosition(objectId, [snappedX, floorY, snappedZ]);
+                    // Cross-room reassignment: update roomId if landed in a different room
+                    if (landedRoom && landedRoom.id !== room?.id) {
+                        updateObjectRoom(objectId, landedRoom.id);
+                    }
                 }
             }
         },
-        [isDragging, gl, gridSnap, floorY, updateObjectPosition, collision, objectId, objectSize, room]
+        [isDragging, gl, gridSnap, floorY, updateObjectPosition, updateObjectRoom, collision, objectId, objectSize, room]
     );
 
     /**

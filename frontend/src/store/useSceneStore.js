@@ -40,7 +40,7 @@ function computeGhosts(room, roomType) {
     return presets.map((type, i) => {
         const cfg = DEVICE_CONFIGS[type] || DEVICE_CONFIGS.box;
         const [sw, sh, sd] = cfg.size;
-        const yPos = cfg.defaultY !== null ? cfg.defaultY : sh / 2;
+        const yPos = cfg.defaultY !== null ? cfg.defaultY : 0;
         const margin = 0.3;
 
         let gx, gz;
@@ -84,7 +84,7 @@ function dbDeviceToZustand(row) {
         type:     row.type,
         color:    cfg.color,
         size:     cfg.size,
-        position: [sc.x ?? 0, sc.y ?? cfg.size[1] / 2, sc.z ?? 0],
+        position: [sc.x ?? 0, sc.y != null ? sc.y : (cfg.defaultY !== null ? cfg.defaultY : 0), sc.z ?? 0],
         rotation: sc.rotation ?? 0,
     };
 }
@@ -126,6 +126,13 @@ const useSceneStore = create((set, get) => ({
     clearRoomGhosts: (roomId) =>
         set((s) => ({ ghostObjects: s.ghostObjects.filter((g) => g.roomId !== roomId) })),
 
+    updateObjectRoom: (objectId, newRoomId) =>
+        set((s) => ({
+            objects: s.objects.map((o) =>
+                o.id === objectId ? { ...o, roomId: newRoomId } : o
+            ),
+        })),
+
     // ─── ADD ROOM ─────────────────────────────────────────────────────────────
     addRoom: (roomData) => {
         const state    = get();
@@ -142,17 +149,17 @@ const useSceneStore = create((set, get) => ({
                 const wt_half = 0.05;
                 switch (roomData.attachWall) {
                     case 'right':
-                        newX = parentRoom.position[0] + parentRoom.size.width / 2 + newWidth / 2 - wt_half * 2;
+                        newX = parentRoom.position[0] + parentRoom.size.width / 2 + newWidth / 2;
                         newZ = parentRoom.position[2]; break;
                     case 'left':
-                        newX = parentRoom.position[0] - parentRoom.size.width / 2 - newWidth / 2 + wt_half * 2;
+                        newX = parentRoom.position[0] - parentRoom.size.width / 2 - newWidth / 2;
                         newZ = parentRoom.position[2]; break;
                     case 'front':
                         newX = parentRoom.position[0];
-                        newZ = parentRoom.position[2] + parentRoom.size.depth / 2 + newDepth / 2 - wt_half * 2; break;
+                        newZ = parentRoom.position[2] + parentRoom.size.depth / 2 + newDepth / 2; break;
                     case 'back':
                         newX = parentRoom.position[0];
-                        newZ = parentRoom.position[2] - parentRoom.size.depth / 2 - newDepth / 2 + wt_half * 2; break;
+                        newZ = parentRoom.position[2] - parentRoom.size.depth / 2 - newDepth / 2; break;
                 }
             }
         } else {
@@ -193,14 +200,18 @@ const useSceneStore = create((set, get) => ({
     // ─── ADD DEVICE (persisted, domain-aware version of addObject) ───────────
     // Replaces addObject as the primary call site in DashboardLayout.
     // Returns the new device id so the caller can associate ML data with it.
-    addDevice: (spec) => {
+    addDevice: (spec, spawnOptions = null) => {
         const state = get();
-        const targetRoom = state.rooms.find((r) => r.id === state.selectedId) || state.rooms[0];
+        const targetRoom = (spawnOptions?.roomId
+            ? state.rooms.find((r) => r.id === spawnOptions.roomId)
+            : state.rooms.find((r) => r.id === state.selectedId)
+        ) || state.rooms[0];
         if (!targetRoom) return null;
 
         const cfg = DEVICE_CONFIGS[spec.type] || DEVICE_CONFIGS.box;
-        const yPos = cfg.defaultY !== null ? cfg.defaultY : cfg.size[1] / 2;
-        const position = [targetRoom.position[0], yPos, targetRoom.position[2]];
+        const yPos = cfg.defaultY !== null ? cfg.defaultY : 0;
+        const position = spawnOptions?.position
+            || [targetRoom.position[0], yPos, targetRoom.position[2]];
 
         const newId = uuidv4();
 
@@ -244,7 +255,7 @@ const useSceneStore = create((set, get) => ({
         set((state) => {
             const targetRoom = state.rooms.find((r) => r.id === state.selectedId) || state.rooms[0];
             if (!targetRoom) return state;
-            const yPos = finalDefaultY !== null ? finalDefaultY : finalSize[1] / 2;
+            const yPos = finalDefaultY !== null ? finalDefaultY : 0;
             return {
                 objects: [...state.objects, {
                     id: newId, roomId: targetRoom.id, type,
