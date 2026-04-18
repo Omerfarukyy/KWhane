@@ -1,13 +1,16 @@
 import { Suspense, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Grid } from '@react-three/drei';
-import Lights from './Lights';
+import { Grid, Sky } from '@react-three/drei';
+import * as THREE from 'three';
+import Lights, { SUN_POSITION } from './Lights';
 import RoomBuilder from './RoomBuilder';
 import CameraControls from './CameraControls';
+import KeyboardCameraControls from './KeyboardCameraControls';
 import DraggableObject from './DraggableObject';
 import ProceduralDevices from './ProceduralDevices';
 import GhostDevice from './GhostDevice';
 import EnergyBadge from './EnergyBadge';
+import GardenProps from './GardenProps';
 import useCollision from './useCollision';
 import useSceneStore from '../../store/useSceneStore';
 import './SceneContainer.css';
@@ -72,15 +75,17 @@ const SceneContainer = ({ children, onGhostClick, onGhostDismiss }) => {
                 fallback={<div className="scene-container__loader">Sahne yükleniyor…</div>}
             >
                 <Canvas
-                    shadows
+                    shadows="soft"
+                    frameloop="always"
+                    gl={{
+                        toneMapping: THREE.NoToneMapping,
+                        outputColorSpace: THREE.SRGBColorSpace,
+                    }}
                     camera={{
                         position: [cameraDistance, cameraDistance * 0.8, cameraDistance],
                         fov: 50,
                         near: 0.1,
-                        far: 200,
-                    }}
-                    onCreated={({ gl }) => {
-                        gl.setClearColor('#0f172a');
+                        far: 1000,
                     }}
                 >
                     <SceneContent
@@ -115,19 +120,43 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
         <group onPointerMissed={handlePointerMissed}>
             {/* ─── Kamera Kontrolleri ──────────────────── */}
             <CameraControls maxDistance={60} minDistance={2} />
+            <KeyboardCameraControls />
 
             {/* ─── Aydınlatma ─────────────────────────── */}
             <Lights />
+
+            {/* ─── Gökyüzü (prosedürel) ───────────────── */}
+            <Sky
+                distance={450000}
+                sunPosition={SUN_POSITION}
+                turbidity={6}
+                rayleigh={1.2}
+                mieCoefficient={0.005}
+                mieDirectionalG={0.8}
+            />
+
+            {/* ─── Bahçe Zemini (geniş çim alan) ──────── */}
+            <mesh
+                rotation={[-Math.PI / 2, 0, 0]}
+                position={[0, -0.005, 0]}
+                receiveShadow
+            >
+                <planeGeometry args={[200, 200]} />
+                <meshStandardMaterial color="#5d8a4e" roughness={0.95} metalness={0} />
+            </mesh>
+
+            {/* ─── Bahçe Prop'ları (ağaçlar + çalılar) ── */}
+            <GardenProps />
 
             {/* ─── Zemin Izgarası ─────────────────────── */}
             <Grid
                 args={[100, 100]}
                 cellSize={0.5}
                 cellThickness={0.5}
-                cellColor="#334155"
+                cellColor="#3f5a3a"
                 sectionSize={1}
                 sectionThickness={1}
-                sectionColor="#475569"
+                sectionColor="#506b48"
                 fadeDistance={50}
                 fadeStrength={1}
                 followCamera={false}

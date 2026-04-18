@@ -6,8 +6,11 @@ import useSceneStore, { objectRefs } from '../../store/useSceneStore';
 import RoomFurnishings from './RoomFurnishings';
 
 const WALL_THICKNESS = 0.1;
+const DIVIDER_THICKNESS = 0.04;
 const wallMatNormal = { color: '#8ecae6', transparent: true, opacity: 0.35, side: 2 };
 const wallMatSelected = { color: '#0ea5e9', transparent: true, opacity: 0.6, side: 2 };
+const dividerMatNormal = { color: '#a8d8ea', transparent: true, opacity: 0.18, side: 2 };
+const dividerMatSelected = { color: '#0ea5e9', transparent: true, opacity: 0.32, side: 2 };
 const floorMatNormal = { color: '#e0e0e0', side: 2 };
 const floorMatSelected = { color: '#cbd5e1', side: 2 };
 
@@ -97,6 +100,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
 
     const isSelected = selectedId === id;
     const wallMaterialProps = isSelected ? wallMatSelected : wallMatNormal;
+    const dividerMaterialProps = isSelected ? dividerMatSelected : dividerMatNormal;
     const floorMaterialProps = isSelected ? floorMatSelected : floorMatNormal;
 
     const { gl, raycaster, controls } = useThree();
@@ -351,10 +355,24 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
             </mesh>
 
             {walls.map((wall) => {
-                // Skip this wall when the adjacent room is on that side —
-                // the gap between the two rooms naturally forms the doorway opening.
                 const sideKey = wall.name.replace('wall-', ''); // 'back','front','left','right'
-                if (adjacentSides[sideKey]) return null;
+                const neighborId = adjacentSides[sideKey];
+
+                // Bitişik komşu varsa: ince saydam bölme duvar (her iki oda da çizmesin diye id kıyaslamasıyla tek seferde)
+                if (neighborId) {
+                    if (String(id) > String(neighborId)) return null;
+                    const isLR = sideKey === 'left' || sideKey === 'right';
+                    const dividerSize = isLR
+                        ? [DIVIDER_THICKNESS, wall.size[1], wall.size[2]]
+                        : [wall.size[0], wall.size[1], DIVIDER_THICKNESS];
+                    return (
+                        <mesh key={wall.name} name={wall.name} position={wall.position} receiveShadow>
+                            <boxGeometry args={dividerSize} />
+                            <meshStandardMaterial {...dividerMaterialProps} />
+                        </mesh>
+                    );
+                }
+
                 return (
                     <mesh key={wall.name} name={wall.name} position={wall.position} castShadow receiveShadow>
                         <boxGeometry args={wall.size} />
