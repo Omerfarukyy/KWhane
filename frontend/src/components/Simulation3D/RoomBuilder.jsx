@@ -79,7 +79,8 @@ const ResizeHandle = ({ position, onDragStart, onDrag, onDragEnd }) => {
     );
 };
 
-const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0] }) => {
+
+const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0], adjacentSides = {} }) => {
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
 
@@ -92,6 +93,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     const isCreationMode = useSceneStore((state) => state.isCreationMode);
     const addRoom = useSceneStore((state) => state.addRoom);
     const resizeRoom = useSceneStore((state) => state.resizeRoom);
+    const moveRoomGhosts = useSceneStore((state) => state.moveRoomGhosts);
 
     const isSelected = selectedId === id;
     const wallMaterialProps = isSelected ? wallMatSelected : wallMatNormal;
@@ -244,6 +246,11 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                 groupRef.current.position.z = snappedZ;
                 updateRoomPosition(id, [snappedX, 0, snappedZ]);
 
+                // Shift ghost objects with the room
+                const dx = snappedX - position[0];
+                const dz = snappedZ - position[2];
+                if (dx !== 0 || dz !== 0) moveRoomGhosts(id, dx, dz);
+
                 objectsInRoom.current.forEach(item => {
                     const oRef = objectRefs[item.id];
                     if (oRef) {
@@ -256,7 +263,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                 });
             }
         }
-    }, [isDragging, gl, checkRoomOverlap, updateRoomPosition, id, setIsDraggingStore]);
+    }, [isDragging, gl, checkRoomOverlap, updateRoomPosition, id, setIsDraggingStore, moveRoomGhosts, position]);
 
     const handleQuickAdd = (wall) => {
         addRoom({ attachToRoomId: id, attachWall: wall, width: 6, depth: 5, height: 3 });
@@ -343,12 +350,18 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                 <meshStandardMaterial {...floorMaterialProps} />
             </mesh>
 
-            {walls.map((wall) => (
-                <mesh key={wall.name} name={wall.name} position={wall.position} castShadow receiveShadow>
-                    <boxGeometry args={wall.size} />
-                    <meshStandardMaterial {...wallMaterialProps} />
-                </mesh>
-            ))}
+            {walls.map((wall) => {
+                // Skip this wall when the adjacent room is on that side —
+                // the gap between the two rooms naturally forms the doorway opening.
+                const sideKey = wall.name.replace('wall-', ''); // 'back','front','left','right'
+                if (adjacentSides[sideKey]) return null;
+                return (
+                    <mesh key={wall.name} name={wall.name} position={wall.position} castShadow receiveShadow>
+                        <boxGeometry args={wall.size} />
+                        <meshStandardMaterial {...wallMaterialProps} />
+                    </mesh>
+                );
+            })}
 
             {/* Static decorative furniture for this room type */}
             <RoomFurnishings roomType={roomType} width={width} depth={depth} height={height} />

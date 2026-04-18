@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Grid } from '@react-three/drei';
 import Lights from './Lights';
@@ -11,6 +11,49 @@ import EnergyBadge from './EnergyBadge';
 import useCollision from './useCollision';
 import useSceneStore from '../../store/useSceneStore';
 import './SceneContainer.css';
+
+// ─── Adjacency detection ─────────────────────────────────────────────────────
+const DOOR_THRESHOLD = 0.35; // rooms within this world-unit distance share a wall
+
+function computeAdjacencies(rooms) {
+    const adj = new Map(rooms.map((r) => [r.id, { right: null, left: null, front: null, back: null }]));
+
+    for (let i = 0; i < rooms.length; i++) {
+        for (let j = i + 1; j < rooms.length; j++) {
+            const a = rooms[i];
+            const b = rooms[j];
+            const ax = a.position[0], az = a.position[2];
+            const bx = b.position[0], bz = b.position[2];
+
+            const aRight = ax + a.size.width / 2;
+            const aLeft  = ax - a.size.width / 2;
+            const bRight = bx + b.size.width / 2;
+            const bLeft  = bx - b.size.width / 2;
+            const aFront = az + a.size.depth / 2;
+            const aBack  = az - a.size.depth / 2;
+            const bFront = bz + b.size.depth / 2;
+            const bBack  = bz - b.size.depth / 2;
+
+            const xOverlap = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
+            const zOverlap = Math.min(aFront, bFront) - Math.max(aBack, bBack);
+
+            if (Math.abs(aRight - bLeft) < DOOR_THRESHOLD && zOverlap > 0.5) {
+                adj.get(a.id).right = b.id;
+                adj.get(b.id).left  = a.id;
+            } else if (Math.abs(aLeft - bRight) < DOOR_THRESHOLD && zOverlap > 0.5) {
+                adj.get(a.id).left  = b.id;
+                adj.get(b.id).right = a.id;
+            } else if (Math.abs(aFront - bBack) < DOOR_THRESHOLD && xOverlap > 0.5) {
+                adj.get(a.id).front = b.id;
+                adj.get(b.id).back  = a.id;
+            } else if (Math.abs(aBack - bFront) < DOOR_THRESHOLD && xOverlap > 0.5) {
+                adj.get(a.id).back  = b.id;
+                adj.get(b.id).front = a.id;
+            }
+        }
+    }
+    return adj;
+}
 
 /**
  * SceneContainer.jsx — İzole 3D Sahne Bileşeni
@@ -58,11 +101,13 @@ const SceneContainer = ({ children, onGhostClick, onGhostDismiss }) => {
 const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
     const collision = useCollision();
 
-    const rooms       = useSceneStore((state) => state.rooms);
-    const objects     = useSceneStore((state) => state.objects);
+    const rooms        = useSceneStore((state) => state.rooms);
+    const objects      = useSceneStore((state) => state.objects);
     const ghostObjects = useSceneStore((state) => state.ghostObjects);
-    const energyData  = useSceneStore((state) => state.energyData);
+    const energyData   = useSceneStore((state) => state.energyData);
     const setSelectedId = useSceneStore((state) => state.setSelectedId);
+
+    const adjacencies = useMemo(() => computeAdjacencies(rooms), [rooms]);
 
     const handlePointerMissed = () => setSelectedId(null);
 
@@ -101,8 +146,10 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                     width={r.size.width}
                     depth={r.size.depth}
                     height={r.size.height}
+                    adjacentSides={adjacencies.get(r.id) || {}}
                 />
             ))}
+
 
             {/* ─── Ghost (Hologram) Cihazlar ───────────── */}
             {ghostObjects.map((ghost) => (

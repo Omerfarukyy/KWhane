@@ -89,6 +89,20 @@ function dbDeviceToZustand(row) {
     };
 }
 
+// Reconstruct a deviceSpec (for ML) from a raw DB devices row
+function dbDeviceSpecFromRow(row) {
+    return {
+        name:                row.name || row.type,
+        type:                row.type,
+        room_id:             row.room_id,
+        nominal_power_watts: row.nominal_power_watts ?? 100,
+        daily_usage_hours:   row.daily_usage_hours   ?? 4,
+        standby_power_watts: row.standby_power_watts ?? 0,
+        efficiency_class:    row.efficiency_class    ?? 'A',
+        year_of_purchase:    row.year_of_purchase    ?? new Date().getFullYear(),
+    };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const useSceneStore = create((set, get) => ({
@@ -101,6 +115,7 @@ const useSceneStore = create((set, get) => ({
 
     // Scene state — starts EMPTY; populated by loadFromSupabase on login
     rooms:        [],
+    roomLinks:    [],   // [{fromId, toId, fromWall, toWall}] — connection graph
     objects:      [],
     ghostObjects: [],
     energyData:   {},
@@ -126,6 +141,16 @@ const useSceneStore = create((set, get) => ({
     clearRoomGhosts: (roomId) =>
         set((s) => ({ ghostObjects: s.ghostObjects.filter((g) => g.roomId !== roomId) })),
 
+    // Shift all ghosts belonging to a room by (dx, dz) — called after room drag
+    moveRoomGhosts: (roomId, dx, dz) =>
+        set((s) => ({
+            ghostObjects: s.ghostObjects.map((g) =>
+                g.roomId === roomId
+                    ? { ...g, position: [g.position[0] + dx, g.position[1], g.position[2] + dz] }
+                    : g
+            ),
+        })),
+
     updateObjectRoom: (objectId, newRoomId) =>
         set((s) => ({
             objects: s.objects.map((o) =>
@@ -140,6 +165,7 @@ const useSceneStore = create((set, get) => ({
         const newDepth  = roomData?.depth    || 5;
         const newHeight = roomData?.height   || 3;
         const roomType  = roomData?.roomType || 'Genel';
+        const OPPOSITE  = { right: 'left', left: 'right', front: 'back', back: 'front' };
 
         let newX = 0, newZ = 0;
 
@@ -185,6 +211,14 @@ const useSceneStore = create((set, get) => ({
             rooms:        [...s.rooms, newRoom],
             ghostObjects: [...s.ghostObjects, ...ghosts],
             selectedId:   newRoom.id,
+            roomLinks:    roomData?.attachToRoomId && roomData?.attachWall
+                ? [...s.roomLinks, {
+                    fromId:   roomData.attachToRoomId,
+                    toId:     newRoom.id,
+                    fromWall: roomData.attachWall,
+                    toWall:   OPPOSITE[roomData.attachWall],
+                  }]
+                : s.roomLinks,
         }));
 
         // Background persist — fire and forget
@@ -302,6 +336,7 @@ const useSceneStore = create((set, get) => ({
                 rooms:        state.rooms.filter((r) => r.id !== roomId),
                 objects:      state.objects.filter((o) => o.roomId !== roomId),
                 ghostObjects: state.ghostObjects.filter((g) => g.roomId !== roomId),
+                roomLinks:    state.roomLinks.filter((l) => l.fromId !== roomId && l.toId !== roomId),
                 energyData:   restEnergy,
                 deviceSpecs:  restSpecs,
                 selectedId:   null,
@@ -338,7 +373,10 @@ const useSceneStore = create((set, get) => ({
             } else {
                 const rooms   = dbRooms.map(dbRoomToZustand);
                 const objects = dbDevices.map(dbDeviceToZustand);
-                set({ rooms, objects, ghostObjects: [], energyData: {}, deviceSpecs: {} });
+                // Rebuild deviceSpecs so ML can re-calculate on session restore
+                const deviceSpecs = {};
+                dbDevices.forEach((row) => { deviceSpecs[row.id] = dbDeviceSpecFromRow(row); });
+                set({ rooms, objects, ghostObjects: [], energyData: {}, deviceSpecs });
             }
         } catch (err) {
             console.error('[store] loadFromSupabase failed:', err.message);
@@ -356,6 +394,7 @@ const useSceneStore = create((set, get) => ({
             homeId:         null,
             isLoadingFromDB: false,
             rooms:           [],
+            roomLinks:       [],
             objects:         [],
             ghostObjects:    [],
             energyData:      {},

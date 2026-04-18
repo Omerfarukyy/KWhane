@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python -m ml.train)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/calculate -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"test-001\\\\\",\\\\\"room_id\\\\\":\\\\\"room-001\\\\\",\\\\\"name\\\\\":\\\\\"Buzdolabi\\\\\",\\\\\"type\\\\\":\\\\\"refrigerator\\\\\",\\\\\"nominal_power_watts\\\\\":150,\\\\\"daily_usage_hours\\\\\":24,\\\\\"standby_power_watts\\\\\":3,\\\\\"efficiency_class\\\\\":\\\\\"A+\\\\\",\\\\\"year_of_purchase\\\\\":2019}\")",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/savings -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"test-001\\\\\",\\\\\"room_id\\\\\":\\\\\"room-001\\\\\",\\\\\"name\\\\\":\\\\\"Buzdolabi\\\\\",\\\\\"type\\\\\":\\\\\"refrigerator\\\\\",\\\\\"nominal_power_watts\\\\\":150,\\\\\"daily_usage_hours\\\\\":24,\\\\\"standby_power_watts\\\\\":3,\\\\\"efficiency_class\\\\\":\\\\\"A+\\\\\",\\\\\"year_of_purchase\\\\\":2019}\")",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/calculate -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"test-002\\\\\",\\\\\"room_id\\\\\":\\\\\"room-001\\\\\",\\\\\"name\\\\\":\\\\\"Eski Klima\\\\\",\\\\\"type\\\\\":\\\\\"air_conditioner\\\\\",\\\\\"nominal_power_watts\\\\\":2500,\\\\\"daily_usage_hours\\\\\":10,\\\\\"standby_power_watts\\\\\":8,\\\\\"efficiency_class\\\\\":\\\\\"C\\\\\",\\\\\"year_of_purchase\\\\\":2012}\")",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/savings -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"test-002\\\\\",\\\\\"room_id\\\\\":\\\\\"room-001\\\\\",\\\\\"name\\\\\":\\\\\"Eski Klima\\\\\",\\\\\"type\\\\\":\\\\\"air_conditioner\\\\\",\\\\\"nominal_power_watts\\\\\":2500,\\\\\"daily_usage_hours\\\\\":10,\\\\\"standby_power_watts\\\\\":8,\\\\\"efficiency_class\\\\\":\\\\\"C\\\\\",\\\\\"year_of_purchase\\\\\":2012}\")",
+      "Bash(taskkill /F /IM uvicorn.exe)",
+      "Bash(pkill -f \"uvicorn main:app\")",
+      "Bash(uvicorn main:app --host 127.0.0.1 --port 8000)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/calculate -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"test-001\\\\\",\\\\\"room_id\\\\\":\\\\\"room-001\\\\\",\\\\\"name\\\\\":\\\\\"Buzdolabi\\\\\",\\\\\"type\\\\\":\\\\\"fridge\\\\\",\\\\\"nominal_power_watts\\\\\":150,\\\\\"daily_usage_hours\\\\\":24,\\\\\"standby_power_watts\\\\\":3,\\\\\"efficiency_class\\\\\":\\\\\"A+\\\\\",\\\\\"year_of_purchase\\\\\":2019}\")",
+      "Bash(curl -s http://127.0.0.1:8000/health)",
+      "Bash(python -c ':*)",
+      "Bash(pkill -f \"uvicorn\")",
+      "Bash(find . -type d -name __pycache__ -exec rm -rf {} +)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8000)",
+      "Bash(taskkill /F /PID 14900)",
+      "Bash(python -m uvicorn main:app --host 127.0.0.1 --port 8001)",
+      "Bash(curl -s -X POST http://127.0.0.1:8001/calculate -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"test-001\\\\\",\\\\\"room_id\\\\\":\\\\\"room-001\\\\\",\\\\\"name\\\\\":\\\\\"Buzdolabi\\\\\",\\\\\"type\\\\\":\\\\\"fridge\\\\\",\\\\\"nominal_power_watts\\\\\":150,\\\\\"daily_usage_hours\\\\\":24,\\\\\"standby_power_watts\\\\\":3,\\\\\"efficiency_class\\\\\":\\\\\"A+\\\\\",\\\\\"year_of_purchase\\\\\":2019}\")",
+      "Bash(curl -s -X POST http://127.0.0.1:8001/calculate -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"test-002\\\\\",\\\\\"room_id\\\\\":\\\\\"room-001\\\\\",\\\\\"name\\\\\":\\\\\"Eski Klima\\\\\",\\\\\"type\\\\\":\\\\\"ac\\\\\",\\\\\"nominal_power_watts\\\\\":2500,\\\\\"daily_usage_hours\\\\\":10,\\\\\"standby_power_watts\\\\\":8,\\\\\"efficiency_class\\\\\":\\\\\"G\\\\\",\\\\\"year_of_purchase\\\\\":2012}\")",
+      "Bash(curl -s -X POST http://127.0.0.1:8001/compare -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"test-002\\\\\",\\\\\"room_id\\\\\":\\\\\"room-001\\\\\",\\\\\"name\\\\\":\\\\\"Eski Klima\\\\\",\\\\\"type\\\\\":\\\\\"ac\\\\\",\\\\\"nominal_power_watts\\\\\":2500,\\\\\"daily_usage_hours\\\\\":10,\\\\\"standby_power_watts\\\\\":8,\\\\\"efficiency_class\\\\\":\\\\\"G\\\\\",\\\\\"year_of_purchase\\\\\":2012}\")",
+      "Bash(curl -s -X POST http://127.0.0.1:8001/savings -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"test-002\\\\\",\\\\\"room_id\\\\\":\\\\\"room-001\\\\\",\\\\\"name\\\\\":\\\\\"Eski Klima\\\\\",\\\\\"type\\\\\":\\\\\"ac\\\\\",\\\\\"nominal_power_watts\\\\\":2500,\\\\\"daily_usage_hours\\\\\":10,\\\\\"standby_power_watts\\\\\":8,\\\\\"efficiency_class\\\\\":\\\\\"G\\\\\",\\\\\"year_of_purchase\\\\\":2012}\")",
+      "Bash(pkill -f \"uvicorn main:app.*8001\")",
+      "Bash(npm install:*)",
+      "Bash(xargs grep *)",
+      "Bash(node -e ' *)",
+      "Bash(findstr /rn \"signOut\\\\|logout\" frontend/src/components/Dashboard/Layout/ProfileModal.jsx)"
+    ]
+  }
+}
