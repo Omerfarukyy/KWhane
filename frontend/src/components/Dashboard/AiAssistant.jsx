@@ -17,7 +17,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import useSceneStore from '../../store/useSceneStore';
 
-const AiAssistant = ({ isOpen, onClose }) => {
+const AiAssistant = ({ isOpen, onOpen, onClose }) => {
     const { user } = useAuth();
 
     const [messages, setMessages] = useState([
@@ -150,7 +150,39 @@ const AiAssistant = ({ isOpen, onClose }) => {
         }
     };
 
-    if (!isOpen) return null;
+    // Floating circular launcher — always visible when the panel is closed.
+    if (!isOpen) {
+        return (
+            <button
+                type="button"
+                onClick={onOpen}
+                aria-label="KWhane AI yardımcısını aç"
+                className="fixed bottom-6 right-6 z-50 flex items-center justify-center rounded-full transition-transform hover:scale-105"
+                style={{
+                    width:      56,
+                    height:     56,
+                    background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                    boxShadow:  '0 12px 32px rgba(59,130,246,0.45)',
+                    border:     '1px solid rgba(255,255,255,0.08)',
+                    color:      '#ffffff',
+                    cursor:     'pointer',
+                }}
+            >
+                <Sparkles size={22} />
+                <span
+                    className="absolute rounded-full"
+                    style={{
+                        right:      6,
+                        top:        6,
+                        width:      8,
+                        height:     8,
+                        background: '#22c55e',
+                        boxShadow:  '0 0 8px rgba(34,197,94,0.8)',
+                    }}
+                />
+            </button>
+        );
+    }
 
     return (
         <div

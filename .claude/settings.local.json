@@ -28,7 +28,14 @@
       "Bash(npm install:*)",
       "Bash(xargs grep *)",
       "Bash(node -e ' *)",
-      "Bash(findstr /rn \"signOut\\\\|logout\" frontend/src/components/Dashboard/Layout/ProfileModal.jsx)"
+      "Bash(findstr /rn \"signOut\\\\|logout\" frontend/src/components/Dashboard/Layout/ProfileModal.jsx)",
+      "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx --log-level=error src/store/useSceneStore.js --outfile=/dev/null)",
+      "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx --log-level=error src/components/Simulation3D/DraggableObject.jsx --outfile=/dev/null)",
+      "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx --log-level=error src/components/Dashboard/AiAssistant.jsx --outfile=/dev/null)",
+      "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx --log-level=error src/services/houseService.js --outfile=/dev/null)",
+      "Bash(python -c \"import json; json.load\\(open\\('n8n-workflow.json'\\)\\); print\\('OK'\\)\")",
+      "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx --log-level=error src/services/mlService.js src/components/Dashboard/Layout/DashboardLayout.jsx --outdir=/tmp/esbuild-check)",
+      "Bash(npx esbuild *)"
     ]
   }
 }

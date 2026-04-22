@@ -50,6 +50,7 @@ class CompareResponse(BaseModel):
 class RecommendationItem(BaseModel):
     slug: str
     category: str
+    title: str
     current_monthly_cost: float
     projected_monthly_cost: float
     potential_savings_amount: float

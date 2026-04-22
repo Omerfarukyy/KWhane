@@ -119,6 +119,19 @@
     },
     {
       "parameters": {
+        "fieldToSplitOut": "recommendations",
+        "include": "selectedOtherFields",
+        "fieldsToInclude": "device_id,user_id",
+        "options": {}
+      },
+      "id": "split-recommendations-node",
+      "name": "Onerileri Boyle",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [600, 500]
+    },
+    {
+      "parameters": {
         "operation": "create",
         "tableId": "recommendations",
         "dataToSend": "defineBelow",
@@ -126,12 +139,14 @@
           "fieldValues": [
             { "name": "user_id", "value": "={{ $json.user_id }}" },
             { "name": "device_id", "value": "={{ $json.device_id }}" },
-            { "name": "slug", "value": "={{ $json.recommendations[0]?.slug || 'no-recommendation' }}" },
-            { "name": "category", "value": "={{ $json.recommendations[0]?.category || 'none' }}" },
-            { "name": "current_monthly_cost", "value": "={{ $json.recommendations[0]?.current_monthly_cost || 0 }}" },
-            { "name": "projected_monthly_cost", "value": "={{ $json.recommendations[0]?.projected_monthly_cost || 0 }}" },
-            { "name": "potential_savings_amount", "value": "={{ $json.recommendations[0]?.potential_savings_amount || 0 }}" },
-            { "name": "status", "value": "={{ $json.recommendations[0]?.status || 'dismissed' }}" }
+            { "name": "slug", "value": "={{ $json.slug }}" },
+            { "name": "category", "value": "={{ $json.category }}" },
+            { "name": "title", "value": "={{ $json.title }}" },
+            { "name": "description", "value": "={{ $json.description }}" },
+            { "name": "current_monthly_cost", "value": "={{ $json.current_monthly_cost }}" },
+            { "name": "projected_monthly_cost", "value": "={{ $json.projected_monthly_cost }}" },
+            { "name": "potential_savings_amount", "value": "={{ $json.potential_savings_amount }}" },
+            { "name": "status", "value": "={{ $json.status || 'pending' }}" }
           ]
         },
         "options": {}
@@ -140,7 +155,7 @@
       "name": "Oneriyi Kaydet",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [600, 500],
+      "position": [900, 500],
       "credentials": {
         "supabaseApi": {
           "id": "YOUR_SUPABASE_CREDENTIAL_ID",
@@ -174,6 +189,13 @@
       ]
     },
     "Onerileri Olustur": {
+      "main": [
+        [
+          { "node": "Onerileri Boyle", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Onerileri Boyle": {
       "main": [
         [
           { "node": "Oneriyi Kaydet", "type": "main", "index": 0 }

@@ -12,7 +12,7 @@ import SuggestionCards from '../SuggestionCards';
 import useSceneStore from '../../../store/useSceneStore';
 import { useLanguage } from '../../../contexts/LanguageProvider';
 import { useAuth } from '../../../contexts/AuthContext';
-import { calculate as mlCalculate, buildDeviceInput } from '../../../services/mlService';
+import { runFullAnalysis } from '../../../services/mlService';
 import { supabase } from '../../../lib/supabase';
 
 // Lazy-loaded modals
@@ -47,6 +47,7 @@ const DashboardLayout = () => {
     const removeGhost        = useSceneStore((s) => s.removeGhost);
     const removeSelected     = useSceneStore((s) => s.removeSelected);
     const setEnergyData      = useSceneStore((s) => s.setEnergyData);
+    const setSelectedId      = useSceneStore((s) => s.setSelectedId);
     const loadFromSupabase   = useSceneStore((s) => s.loadFromSupabase);
     const resetStore         = useSceneStore((s) => s.resetStore);
 
@@ -70,8 +71,7 @@ const DashboardLayout = () => {
                     if (!spec) return;
                     setEnergyData(obj.id, null); // badge shows spinner
                     try {
-                        const input  = buildDeviceInput(obj.id, spec);
-                        const result = await mlCalculate(input);
+                        const result = await runFullAnalysis(obj.id, spec, user?.id);
                         setEnergyData(obj.id, result ?? 'error');
                     } catch {
                         setEnergyData(obj.id, 'error');
@@ -98,19 +98,23 @@ const DashboardLayout = () => {
         return () => window.removeEventListener('keydown', onKey);
     }, [removeSelected]);
 
-    // Load ranking when Sıralama tab is opened
+    // Re-fetch ranking every time the Sıralama tab is opened so newly
+    // completed analyses are always reflected without a page reload.
     useEffect(() => {
-        if (homeTab !== 'siralama' || !user?.id || ranking !== null) return;
+        if (homeTab !== 'siralama' || !user?.id) return;
+        setRanking(null);
         setRankingLoading(true);
         supabase
             .from('device_comparisons')
-            .select('percentile, comparison_label, device_type')
-            .eq('user_id', user.id)
-            .order('percentile', { ascending: false })
+            .select('percentile, comparison_label, cluster_id, cluster_size, user_monthly_kwh, cluster_avg_monthly_kwh, device_id')
+            .order('created_at', { ascending: false })
             .limit(1)
-            .single()
-            .then(({ data }) => setRanking(data ?? false))
-            .catch(() => setRanking(false))
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (error) console.warn('[ranking] fetch error:', error.message);
+                setRanking(data ?? false);
+            })
+            .catch((e) => { console.warn('[ranking] threw:', e.message); setRanking(false); })
             .finally(() => setRankingLoading(false));
     }, [homeTab, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -137,7 +141,12 @@ const DashboardLayout = () => {
     const closeProfileModal = useCallback(() => setIsProfileModalOpen(false),  []);
     const closeSettingsModal = useCallback(() => setIsSettingsModalOpen(false), []);
     const closeAiAssistant  = useCallback(() => setIsAiAssistantOpen(false),   []);
-    const handleTabChange   = useCallback((tab) => setActiveTab(tab),          []);
+    const handleTabChange   = useCallback((tab) => {
+        setActiveTab(tab);
+        // Clear any scene selection so the home panel is always visible
+        // when the user explicitly navigates back to the overview.
+        if (tab === 'home') setSelectedId(null);
+    }, [setSelectedId]);
     const openTicketModal   = useCallback(() => { setActiveTab('tickets');  setIsTicketModalOpen(true); },   []);
     const openSettingsModal = useCallback(() => { setActiveTab('settings'); setIsSettingsModalOpen(true); }, []);
     const openAiAssistant   = useCallback(() => setIsAiAssistantOpen(true), []);
@@ -186,8 +195,7 @@ const DashboardLayout = () => {
         // Read freshly-enriched spec from store (addDevice sets spec.room_id synchronously)
         const enrichedSpec = useSceneStore.getState().deviceSpecs[newId] || spec;
         try {
-            const deviceInput = buildDeviceInput(newId, enrichedSpec);
-            const result = await mlCalculate(deviceInput);
+            const result = await runFullAnalysis(newId, enrichedSpec, user?.id);
             setEnergyData(newId, result ?? 'error');
         } catch {
             setEnergyData(newId, 'error');
@@ -557,7 +565,7 @@ const DashboardLayout = () => {
             <Suspense fallback={null}>
                 <ProfileModal  isOpen={isProfileModalOpen}  onClose={closeProfileModal} />
                 <SettingsModal isOpen={isSettingsModalOpen} onClose={closeSettingsModal} />
-                <AiAssistant   isOpen={isAiAssistantOpen}   onClose={closeAiAssistant} />
+                <AiAssistant   isOpen={isAiAssistantOpen}   onOpen={openAiAssistant} onClose={closeAiAssistant} />
 
                 {isTicketModalOpen && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-auto"

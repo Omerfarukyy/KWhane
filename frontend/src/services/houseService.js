@@ -137,6 +137,33 @@ export async function insertDevice(roomId, deviceId, spec, position) {
 }
 
 /**
+ * Update a device's position (and optionally room) in Supabase.
+ * Called from the store after a successful drag, so the layout survives reloads.
+ *
+ * @param {string} deviceId
+ * @param {number[]} position — [x, y, z]
+ * @param {string} [roomId]   — only set when the device crossed into a new room
+ * @param {number} [rotation] — radians; defaults to 0
+ */
+export async function updateDevicePosition(deviceId, position, roomId, rotation) {
+    const patch = {
+        spatial_config: {
+            x:        position[0],
+            y:        position[1],
+            z:        position[2],
+            rotation: rotation ?? 0,
+        },
+    };
+    if (roomId) patch.room_id = roomId;
+
+    const { error } = await withTimeout(
+        supabase.from('devices').update(patch).eq('id', deviceId)
+    );
+
+    if (error) throw new Error(`updateDevicePosition failed: ${error.message}`);
+}
+
+/**
  * Delete a device by id.
  * @param {string} deviceId
  */

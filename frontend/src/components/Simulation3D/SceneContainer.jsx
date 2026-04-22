@@ -198,6 +198,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                     <DraggableObject
                         key={obj.id}
                         objectId={obj.id}
+                        objectType={obj.type}
                         position={obj.position}
                         rotation={obj.rotation}
                         gridSnap={0.5}

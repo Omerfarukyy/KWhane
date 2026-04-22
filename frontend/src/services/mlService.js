@@ -6,6 +6,7 @@
  */
 
 import axios from 'axios';
+import { supabase } from '../lib/supabase';
 
 const BASE_URL = import.meta.env.VITE_ML_API_URL || 'http://localhost:8000';
 
@@ -77,6 +78,74 @@ export async function savings(deviceInput) {
         console.warn('[mlService] /savings failed:', err.message);
         return null;
     }
+}
+
+/**
+ * Run all three ML endpoints (/calculate, /compare, /savings) for a device
+ * in parallel and persist /compare + /savings results to Supabase.
+ *
+ * The frontend used to only call /calculate, leaving the recommendations and
+ * peer-comparison tables empty (n8n was supposed to fan out, but the trigger
+ * node was misconfigured). Doing it here from the authenticated client makes
+ * the RLS policies work and removes the n8n dependency.
+ *
+ * Returns the /calculate response so the energy badge keeps working.
+ */
+export async function runFullAnalysis(deviceId, spec, userId) {
+    const input = buildDeviceInput(deviceId, spec);
+
+    const [calcRes, cmpRes, savRes] = await Promise.all([
+        calculate(input),
+        compare(input),
+        savings(input),
+    ]);
+
+    // Persist /compare → device_comparisons
+    if (cmpRes) {
+        try {
+            const { error } = await supabase.from('device_comparisons').insert({
+                device_id:               deviceId,
+                cluster_id:              cmpRes.cluster_id,
+                cluster_size:            cmpRes.cluster_size,
+                user_monthly_kwh:        cmpRes.user_monthly_kwh,
+                cluster_avg_monthly_kwh: cmpRes.cluster_avg_monthly_kwh,
+                percentile:              cmpRes.percentile,
+                comparison_label:        cmpRes.comparison_label,
+            });
+            if (error) console.warn('[mlService] persist compare:', error.message);
+        } catch (err) {
+            console.warn('[mlService] persist compare threw:', err.message);
+        }
+    }
+
+    // Persist /savings.recommendations[] → recommendations table
+    if (userId && savRes?.recommendations?.length) {
+        try {
+            // Replace prior recs for this device to avoid stacking duplicates
+            // every time the device is re-analyzed (login restore, refresh).
+            await supabase.from('recommendations').delete().eq('device_id', deviceId);
+
+            const rows = savRes.recommendations.map((r) => ({
+                user_id:                  userId,
+                device_id:                deviceId,
+                slug:                     r.slug,
+                category:                 r.category,
+                title:                    r.title,
+                description:              r.description,
+                current_monthly_cost:     r.current_monthly_cost,
+                projected_monthly_cost:   r.projected_monthly_cost,
+                potential_savings_amount: r.potential_savings_amount,
+                status:                   r.status || 'pending',
+            }));
+
+            const { error } = await supabase.from('recommendations').insert(rows);
+            if (error) console.warn('[mlService] persist recommendations:', error.message);
+        } catch (err) {
+            console.warn('[mlService] persist recommendations threw:', err.message);
+        }
+    }
+
+    return calcRes;
 }
 
 /**

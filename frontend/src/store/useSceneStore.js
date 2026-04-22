@@ -6,19 +6,35 @@ import * as houseService from '../services/houseService';
 export const objectRefs = {};
 
 // ─── Device size / placement configs ─────────────────────────────────────────
+// `mount` controls where the device must sit:
+//   'wall'    → must snap to one of the 4 room walls (klima, tv)
+//   'ceiling' → free XZ but pinned high (lighting)
+//   undefined → free placement on the floor
 export const DEVICE_CONFIGS = {
     fridge:          { size: [0.7, 1.8, 0.7], color: '#94a3b8', defaultY: null },
-    tv:              { size: [1.2, 0.8, 0.1], color: '#111111', defaultY: 1.2 },
-    ac:              { size: [0.9, 0.3, 0.3], color: '#f8fafc', defaultY: 2.2 },
+    tv:              { size: [1.2, 0.8, 0.1], color: '#111111', defaultY: 1.2, mount: 'wall' },
+    ac:              { size: [0.9, 0.3, 0.3], color: '#f8fafc', defaultY: 2.2, mount: 'wall' },
     washing_machine: { size: [0.6, 0.85, 0.6], color: '#f1f5f9', defaultY: null },
     dishwasher:      { size: [0.6, 0.85, 0.6], color: '#e2e8f0', defaultY: null },
     oven:            { size: [0.6, 0.6, 0.6],  color: '#9ca3af', defaultY: null },
     computer:        { size: [0.5, 0.4, 0.35], color: '#334155', defaultY: 0.75 },
-    lighting:        { size: [0.4, 0.1, 0.4],  color: '#fef3c7', defaultY: 2.8 },
+    lighting:        { size: [0.4, 0.1, 0.4],  color: '#fef3c7', defaultY: 2.8, mount: 'ceiling' },
     water_heater:    { size: [0.5, 1.5, 0.5],  color: '#dbeafe', defaultY: null },
     dryer:           { size: [0.6, 0.85, 0.6], color: '#f8fafc', defaultY: null },
     box:             { size: [0.6, 1.0, 0.6],  color: '#f59e0b', defaultY: null },
 };
+
+// AABB overlap test for two rooms (small epsilon so touching edges don't count).
+export function roomsOverlap(a, b, eps = 0.01) {
+    const ahw = a.size.width / 2, ahd = a.size.depth / 2;
+    const bhw = b.size.width / 2, bhd = b.size.depth / 2;
+    return (
+        a.position[0] - ahw < b.position[0] + bhw - eps &&
+        a.position[0] + ahw > b.position[0] - bhw + eps &&
+        a.position[2] - ahd < b.position[2] + bhd - eps &&
+        a.position[2] + ahd > b.position[2] - bhd + eps
+    );
+}
 
 // ─── Room type → ghost device presets ────────────────────────────────────────
 const ROOM_PRESETS = {
@@ -29,6 +45,28 @@ const ROOM_PRESETS = {
     'Çamaşır Odası': ['washing_machine', 'dryer'],
     'Ofis':          ['computer', 'lighting'],
     'Genel':         [],
+};
+
+// ─── Room-type specific ghost spots (relative to room center) ─────────────────
+// Each entry is [xFraction, zFraction, wallBias] where fractions are applied to
+// half-width/half-depth. Use 'wall-left','wall-right','wall-back','wall-front'
+// as special presets instead of arbitrary fractions.
+const KITCHEN_GHOST_SPOTS = {
+    // Fridge: left wall, back corner — clear of counters and dining table
+    fridge: (w, d, sw, sd) => [
+        -(w / 2 - sw / 2 - 0.05),        // flush left wall
+        -(d / 2 - sd / 2 - 0.05),        // flush back wall
+    ],
+    // Dishwasher: back wall, right of center (near sink side, but not ON it)
+    dishwasher: (w, d, sw, sd) => [
+        w / 4,                            // right quarter
+        -(d / 2 - sd / 2 - 0.05),        // flush back wall
+    ],
+    // Oven: back wall, left of center (away from sink)
+    oven: (w, d, sw, sd) => [
+        -(w / 4),                         // left quarter
+        -(d / 2 - sd / 2 - 0.05),        // flush back wall
+    ],
 };
 
 // ─── Ghost positioning ────────────────────────────────────────────────────────
@@ -44,7 +82,14 @@ function computeGhosts(room, roomType) {
         const margin = 0.3;
 
         let gx, gz;
-        if (i === 0) {
+
+        // Kitchen has static furnishings (counter, dining table) — use
+        // hand-tuned spots so ghosts don't spawn inside the static geometry.
+        if (roomType === 'Mutfak' && KITCHEN_GHOST_SPOTS[type]) {
+            const [ox, oz] = KITCHEN_GHOST_SPOTS[type](width, depth, sw, sd);
+            gx = rx + ox;
+            gz = rz + oz;
+        } else if (i === 0) {
             gx = rx - width / 2 + sw / 2 + margin;
             gz = rz;
         } else if (i === 1) {
@@ -75,16 +120,25 @@ function dbRoomToZustand(row) {
     };
 }
 
-function dbDeviceToZustand(row) {
+function dbDeviceToZustand(row, roomLookup = null) {
     const sc  = row.spatial_config || {};
     const cfg = DEVICE_CONFIGS[row.type] || DEVICE_CONFIGS.box;
+    // If position was never persisted (legacy rows), fall back to the room
+    // center instead of world origin so devices don't all stack at (0,0,0).
+    const room = roomLookup ? roomLookup.get(row.room_id) : null;
+    const fallbackX = room ? room.position[0] : 0;
+    const fallbackZ = room ? room.position[2] : 0;
     return {
         id:       row.id,
         roomId:   row.room_id,
         type:     row.type,
         color:    cfg.color,
         size:     cfg.size,
-        position: [sc.x ?? 0, sc.y != null ? sc.y : (cfg.defaultY !== null ? cfg.defaultY : 0), sc.z ?? 0],
+        position: [
+            sc.x != null ? sc.x : fallbackX,
+            sc.y != null ? sc.y : (cfg.defaultY !== null ? cfg.defaultY : 0),
+            sc.z != null ? sc.z : fallbackZ,
+        ],
         rotation: sc.rotation ?? 0,
     };
 }
@@ -151,12 +205,20 @@ const useSceneStore = create((set, get) => ({
             ),
         })),
 
-    updateObjectRoom: (objectId, newRoomId) =>
+    updateObjectRoom: (objectId, newRoomId) => {
         set((s) => ({
             objects: s.objects.map((o) =>
                 o.id === objectId ? { ...o, roomId: newRoomId } : o
             ),
-        })),
+        }));
+        const obj = get().objects.find((o) => o.id === objectId);
+        if (obj && get().homeId) {
+            houseService.updateDevicePosition(objectId, obj.position, newRoomId, obj.rotation)
+                .catch((err) => {
+                    console.error('[store] updateDevicePosition (room) failed:', err.message);
+                });
+        }
+    },
 
     // ─── ADD ROOM ─────────────────────────────────────────────────────────────
     addRoom: (roomData) => {
@@ -168,31 +230,62 @@ const useSceneStore = create((set, get) => ({
         const OPPOSITE  = { right: 'left', left: 'right', front: 'back', back: 'front' };
 
         let newX = 0, newZ = 0;
+        let chosenAttach = null;   // { parentId, wall } if auto-placement found one
+
+        // Helper: candidate position for attaching a (newWidth × newDepth) room
+        // to a given wall of the parent room.
+        const candidateFor = (parent, wall) => {
+            switch (wall) {
+                case 'right':
+                    return [parent.position[0] + parent.size.width / 2 + newWidth / 2, parent.position[2]];
+                case 'left':
+                    return [parent.position[0] - parent.size.width / 2 - newWidth / 2, parent.position[2]];
+                case 'front':
+                    return [parent.position[0], parent.position[2] + parent.size.depth / 2 + newDepth / 2];
+                case 'back':
+                    return [parent.position[0], parent.position[2] - parent.size.depth / 2 - newDepth / 2];
+                default:
+                    return [0, 0];
+            }
+        };
 
         if (roomData?.attachToRoomId && roomData?.attachWall) {
             const parentRoom = state.rooms.find((r) => r.id === roomData.attachToRoomId);
             if (parentRoom) {
-                const wt_half = 0.05;
-                switch (roomData.attachWall) {
-                    case 'right':
-                        newX = parentRoom.position[0] + parentRoom.size.width / 2 + newWidth / 2;
-                        newZ = parentRoom.position[2]; break;
-                    case 'left':
-                        newX = parentRoom.position[0] - parentRoom.size.width / 2 - newWidth / 2;
-                        newZ = parentRoom.position[2]; break;
-                    case 'front':
-                        newX = parentRoom.position[0];
-                        newZ = parentRoom.position[2] + parentRoom.size.depth / 2 + newDepth / 2; break;
-                    case 'back':
-                        newX = parentRoom.position[0];
-                        newZ = parentRoom.position[2] - parentRoom.size.depth / 2 - newDepth / 2; break;
+                [newX, newZ] = candidateFor(parentRoom, roomData.attachWall);
+            }
+        } else if (state.rooms.length > 0) {
+            // Auto-placement: try every wall of every existing room and pick the
+            // first non-overlapping spot. Wall preference order keeps the house
+            // growing rightward / forward instead of crawling backward.
+            const wallOrder = ['right', 'front', 'left', 'back'];
+            const trial     = { size: { width: newWidth, depth: newDepth, height: newHeight } };
+
+            outer: for (const parent of state.rooms) {
+                for (const wall of wallOrder) {
+                    const [cx, cz] = candidateFor(parent, wall);
+                    trial.position = [cx, 0, cz];
+                    const collides = state.rooms.some((r) => roomsOverlap(trial, r));
+                    if (!collides) {
+                        newX = cx;
+                        newZ = cz;
+                        chosenAttach = { parentId: parent.id, wall };
+                        break outer;
+                    }
                 }
             }
-        } else {
-            const lastRoom = state.rooms[state.rooms.length - 1];
-            if (lastRoom) {
+
+            // Fallback: nudge rightward from the last room until clear.
+            if (chosenAttach === null) {
+                const lastRoom = state.rooms[state.rooms.length - 1];
                 newX = lastRoom.position[0] + lastRoom.size.width / 2 + newWidth / 2 + 2;
                 newZ = lastRoom.position[2];
+                let guard = 0;
+                while (guard++ < 50) {
+                    const trial2 = { position: [newX, 0, newZ], size: { width: newWidth, depth: newDepth } };
+                    if (!state.rooms.some((r) => roomsOverlap(trial2, r))) break;
+                    newX += newWidth + 2;
+                }
             }
         }
 
@@ -207,16 +300,21 @@ const useSceneStore = create((set, get) => ({
 
         const ghosts = computeGhosts(newRoom, roomType);
 
+        // Build a roomLink for either explicit attachment or auto-placement.
+        const linkInfo = (roomData?.attachToRoomId && roomData?.attachWall)
+            ? { parentId: roomData.attachToRoomId, wall: roomData.attachWall }
+            : chosenAttach;
+
         set((s) => ({
             rooms:        [...s.rooms, newRoom],
             ghostObjects: [...s.ghostObjects, ...ghosts],
             selectedId:   newRoom.id,
-            roomLinks:    roomData?.attachToRoomId && roomData?.attachWall
+            roomLinks:    linkInfo
                 ? [...s.roomLinks, {
-                    fromId:   roomData.attachToRoomId,
+                    fromId:   linkInfo.parentId,
                     toId:     newRoom.id,
-                    fromWall: roomData.attachWall,
-                    toWall:   OPPOSITE[roomData.attachWall],
+                    fromWall: linkInfo.wall,
+                    toWall:   OPPOSITE[linkInfo.wall],
                   }]
                 : s.roomLinks,
         }));
@@ -371,8 +469,9 @@ const useSceneStore = create((set, get) => ({
                 await houseService.insertRoom(homeId, koridor);
                 set({ rooms: [koridor], objects: [], ghostObjects: [], energyData: {}, deviceSpecs: {} });
             } else {
-                const rooms   = dbRooms.map(dbRoomToZustand);
-                const objects = dbDevices.map(dbDeviceToZustand);
+                const rooms      = dbRooms.map(dbRoomToZustand);
+                const roomLookup = new Map(rooms.map((r) => [r.id, r]));
+                const objects    = dbDevices.map((row) => dbDeviceToZustand(row, roomLookup));
                 // Rebuild deviceSpecs so ML can re-calculate on session restore
                 const deviceSpecs = {};
                 dbDevices.forEach((row) => { deviceSpecs[row.id] = dbDeviceSpecFromRow(row); });
@@ -417,10 +516,21 @@ const useSceneStore = create((set, get) => ({
         })),
 
     // ─── UPDATE OBJECT POSITION ───────────────────────────────────────────────
-    updateObjectPosition: (id, newPosition) =>
+    updateObjectPosition: (id, newPosition) => {
         set((s) => ({
             objects: s.objects.map((o) => o.id === id ? { ...o, position: newPosition } : o),
-        })),
+        }));
+        // Persist to Supabase so the layout survives a reload. Without this,
+        // dbDeviceToZustand on the next login falls back to defaults and items
+        // pile up at the room origin.
+        const obj = get().objects.find((o) => o.id === id);
+        if (obj && get().homeId) {
+            houseService.updateDevicePosition(id, newPosition, undefined, obj.rotation)
+                .catch((err) => {
+                    console.error('[store] updateDevicePosition failed:', err.message);
+                });
+        }
+    },
 
     // ─── ROTATE SELECTED ──────────────────────────────────────────────────────
     rotateSelected: () =>

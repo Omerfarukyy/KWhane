@@ -1,7 +1,27 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import useSceneStore, { objectRefs } from '../../store/useSceneStore';
+import toast from 'react-hot-toast';
+import useSceneStore, { objectRefs, DEVICE_CONFIGS } from '../../store/useSceneStore';
+
+// Snap a position to the nearest wall of `room`, given the device's footprint.
+// Returns { x, z, rotation } so the device sits flush and faces inward.
+function snapToNearestWall(x, z, room, size) {
+    const rx = room.position[0], rz = room.position[2];
+    const hw = room.size.width / 2, hd = room.size.depth / 2;
+    const halfW = size[0] / 2, halfD = size[2] / 2;
+
+    const dRight = Math.abs((rx + hw) - x);
+    const dLeft  = Math.abs(x - (rx - hw));
+    const dFront = Math.abs((rz + hd) - z);
+    const dBack  = Math.abs(z - (rz - hd));
+    const min = Math.min(dRight, dLeft, dFront, dBack);
+
+    if (min === dRight) return { x: rx + hw - halfW, z, rotation: -Math.PI / 2 };
+    if (min === dLeft)  return { x: rx - hw + halfW, z, rotation:  Math.PI / 2 };
+    if (min === dFront) return { x, z: rz + hd - halfD, rotation: Math.PI };
+    return { x, z: rz - hd + halfD, rotation: 0 };
+}
 
 /**
  * DraggableObject.jsx — Sürüklenebilir 3D Obje Sarmalayıcı
@@ -51,10 +71,14 @@ const DraggableObject = ({
     floorY = 0,
     collision,
     objectId,
+    objectType,
     objectSize = [1, 1, 1],
     room,
     children,
 }) => {
+    const deviceCfg = DEVICE_CONFIGS[objectType];
+    // Every device except ceiling-mounted ones belongs against a wall.
+    const wallMounted = deviceCfg?.mount !== 'ceiling';
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
     const [isColliding, setIsColliding] = useState(false);
@@ -148,6 +172,13 @@ const DraggableObject = ({
                     );
                     newX = clamped[0];
                     newZ = clamped[2];
+
+                    // Wall-mounted devices snap to the nearest wall in real-time
+                    if (wallMounted) {
+                        const snap = snapToNearestWall(newX, newZ, hoverRoom, objectSize);
+                        newX = snap.x;
+                        newZ = snap.z;
+                    }
                 }
 
                 // Obje–obje çarpışma kontrolü
@@ -166,7 +197,10 @@ const DraggableObject = ({
                 groupRef.current.position.x = newX;
                 groupRef.current.position.z = newZ;
                 groupRef.current.position.y = floorY;
-                lastValidPos.current.set(newX, floorY, newZ);
+                // Only mark as a valid snap-back point when we are over a room.
+                // If the user drags outside, we still let them visually drag,
+                // but pointer-up will revert to the last in-room position.
+                if (hoverRoom) lastValidPos.current.set(newX, floorY, newZ);
             }
         },
         [isDragging, raycaster, floorY, collision, objectId, objectSize, room]
@@ -196,7 +230,16 @@ const DraggableObject = ({
                     return snappedX >= r.position[0] - hw && snappedX <= r.position[0] + hw
                         && snappedZ >= r.position[2] - hd && snappedZ <= r.position[2] + hd;
                 });
-                if (landedRoom && collision) {
+                // Drop validation: object must end inside SOME room. If the
+                // user releases over empty world, snap back to the last in-room
+                // position and bail out without persisting.
+                if (!landedRoom) {
+                    groupRef.current.position.copy(lastValidPos.current);
+                    toast.error('Cihaz bir odanın içine bırakılmalı');
+                    return;
+                }
+
+                if (collision) {
                     const clamped = collision.checkWallCollision(
                         [snappedX, floorY, snappedZ],
                         objectSize,
@@ -204,6 +247,15 @@ const DraggableObject = ({
                     );
                     snappedX = clamped[0];
                     snappedZ = clamped[2];
+                }
+
+                // Wall-mounted devices snap to the nearest wall on release.
+                let finalRotation = null;
+                if (wallMounted) {
+                    const snap = snapToNearestWall(snappedX, snappedZ, landedRoom, objectSize);
+                    snappedX = snap.x;
+                    snappedZ = snap.z;
+                    finalRotation = snap.rotation;
                 }
 
                 // Snap sonrası çarpışma kontrolü
@@ -221,9 +273,16 @@ const DraggableObject = ({
                 groupRef.current.position.z = snappedZ;
                 // Zustand Store'daki global pozisyonu güncelle
                 if (objectId) {
+                    if (finalRotation !== null) {
+                        useSceneStore.setState((s) => ({
+                            objects: s.objects.map((o) =>
+                                o.id === objectId ? { ...o, rotation: finalRotation } : o
+                            ),
+                        }));
+                    }
                     updateObjectPosition(objectId, [snappedX, floorY, snappedZ]);
                     // Cross-room reassignment: update roomId if landed in a different room
-                    if (landedRoom && landedRoom.id !== room?.id) {
+                    if (landedRoom.id !== room?.id) {
                         updateObjectRoom(objectId, landedRoom.id);
                     }
                 }

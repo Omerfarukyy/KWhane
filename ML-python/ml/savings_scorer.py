@@ -48,6 +48,7 @@ def score_recommendations(
             recommendations.append({
                 "slug": slug,
                 "category": "device_upgrade",
+                "title": f"{brand} {model} modeline gecis ({eff})".strip(),
                 "current_monthly_cost": round(current_monthly_cost, 2),
                 "projected_monthly_cost": round(projected_cost, 2),
                 "potential_savings_amount": round(savings, 2),
@@ -73,6 +74,7 @@ def score_recommendations(
                 recommendations.append({
                     "slug": "reduce-standby-power",
                     "category": "standby_reduction",
+                    "title": "Akilli priz ile bekleme tuketimini azalt",
                     "current_monthly_cost": round(current_monthly_cost, 2),
                     "projected_monthly_cost": round(projected_cost, 2),
                     "potential_savings_amount": round(savings, 2),
@@ -97,6 +99,7 @@ def score_recommendations(
                 recommendations.append({
                     "slug": "reduce-daily-usage",
                     "category": "usage_optimization",
+                    "title": f"Gunluk kullanimi {round(typical_mid, 1)} saate dusur",
                     "current_monthly_cost": round(current_monthly_cost, 2),
                     "projected_monthly_cost": round(projected_cost, 2),
                     "potential_savings_amount": round(savings, 2),
