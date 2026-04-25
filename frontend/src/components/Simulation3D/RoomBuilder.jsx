@@ -87,14 +87,15 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
 
-    const selectedId = useSceneStore((state) => state.selectedId);
-    const setSelectedId = useSceneStore((state) => state.setSelectedId);
+    const selectedId        = useSceneStore((state) => state.selectedId);
+    const setSelectedId     = useSceneStore((state) => state.setSelectedId);
+    const setPinnedDeviceId = useSceneStore((state) => state.setPinnedDeviceId);
     const setIsDraggingStore = useSceneStore((state) => state.setIsDragging);
     const updateRoomPosition = useSceneStore((state) => state.updateRoomPosition);
     const rooms = useSceneStore((state) => state.rooms);
 
     const isCreationMode = useSceneStore((state) => state.isCreationMode);
-    const addRoom = useSceneStore((state) => state.addRoom);
+    const setPendingRoomAttach = useSceneStore((state) => state.setPendingRoomAttach);
     const resizeRoom = useSceneStore((state) => state.resizeRoom);
     const moveRoomGhosts = useSceneStore((state) => state.moveRoomGhosts);
 
@@ -162,6 +163,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
         e.stopPropagation();
         if (controls) controls.enabled = false;
         setSelectedId(id);
+        setPinnedDeviceId(null);
         setIsDragging(true);
         setIsDraggingStore(true);
 
@@ -270,7 +272,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     }, [isDragging, gl, checkRoomOverlap, updateRoomPosition, id, setIsDraggingStore, moveRoomGhosts, position]);
 
     const handleQuickAdd = (wall) => {
-        addRoom({ attachToRoomId: id, attachWall: wall, width: 6, depth: 5, height: 3 });
+        setPendingRoomAttach({ parentId: id, wall });
     };
 
     // Resizing logic for corner handles
@@ -345,7 +347,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
                 if (e.object.name === 'floor' || e.object.name.startsWith('wall')) {
                     e.stopPropagation();
-                    if (isCreationMode) setSelectedId(id);
+                    if (isCreationMode) { setSelectedId(id); setPinnedDeviceId(null); }
                 }
             }}
         >

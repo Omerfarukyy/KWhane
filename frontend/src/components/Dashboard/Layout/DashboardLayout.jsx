@@ -1,7 +1,7 @@
 import React, { useState, Suspense, lazy, useCallback, useMemo, useEffect } from 'react';
 import {
     Home, PackagePlus, Settings, Ticket as TicketIcon,
-    Zap, User, Lightbulb, ChevronRight, SquarePlus, Loader2, Trash2,
+    Zap, User, Lightbulb, ChevronRight, SquarePlus, Loader2, Trash2, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ThemeLangToggle from '../../ThemeLangToggle';
@@ -14,12 +14,15 @@ import { useLanguage } from '../../../contexts/LanguageProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import { runFullAnalysis } from '../../../services/mlService';
 import { supabase } from '../../../lib/supabase';
+import { USAGE_MODEL } from '../../../utils/usageModels';
 
 // Lazy-loaded modals
-const TicketSystem  = lazy(() => import('../TicketSystem'));
-const ProfileModal  = lazy(() => import('./ProfileModal'));
-const SettingsModal = lazy(() => import('./SettingsModal'));
-const AiAssistant   = lazy(() => import('../AiAssistant'));
+const TicketSystem      = lazy(() => import('../TicketSystem'));
+const ProfileModal      = lazy(() => import('./ProfileModal'));
+const SettingsModal     = lazy(() => import('./SettingsModal'));
+const AiAssistant       = lazy(() => import('../AiAssistant'));
+const HomeBuilderWizard = lazy(() => import('../HomeBuilderWizard'));
+const BillsTab          = lazy(() => import('../Bills/BillsTab'));
 
 const DashboardLayout = () => {
     // ── Modal / tab state ──────────────────────────────────────────────────
@@ -27,6 +30,7 @@ const DashboardLayout = () => {
     const [isProfileModalOpen,  setIsProfileModalOpen]  = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isAiAssistantOpen,   setIsAiAssistantOpen]   = useState(false);
+    const [isBuilderOpen,       setIsBuilderOpen]       = useState(false);
     const [isRoomModalOpen,     setIsRoomModalOpen]     = useState(false);
     const [isCatalogOpen,       setIsCatalogOpen]       = useState(false);
     const [catalogInitialType,  setCatalogInitialType]  = useState(null);
@@ -42,14 +46,19 @@ const DashboardLayout = () => {
     const { user } = useAuth();
 
     // ── Store actions ──────────────────────────────────────────────────────
-    const addRoom            = useSceneStore((s) => s.addRoom);
-    const addDevice          = useSceneStore((s) => s.addDevice);
-    const removeGhost        = useSceneStore((s) => s.removeGhost);
-    const removeSelected     = useSceneStore((s) => s.removeSelected);
-    const setEnergyData      = useSceneStore((s) => s.setEnergyData);
-    const setSelectedId      = useSceneStore((s) => s.setSelectedId);
-    const loadFromSupabase   = useSceneStore((s) => s.loadFromSupabase);
-    const resetStore         = useSceneStore((s) => s.resetStore);
+    const addRoom                = useSceneStore((s) => s.addRoom);
+    const addDevice              = useSceneStore((s) => s.addDevice);
+    const removeGhost            = useSceneStore((s) => s.removeGhost);
+    const removeSelected         = useSceneStore((s) => s.removeSelected);
+    const setEnergyData          = useSceneStore((s) => s.setEnergyData);
+    const setDeviceSpec          = useSceneStore((s) => s.setDeviceSpec);
+    const setSelectedId          = useSceneStore((s) => s.setSelectedId);
+    const loadFromSupabase       = useSceneStore((s) => s.loadFromSupabase);
+    const resetStore             = useSceneStore((s) => s.resetStore);
+    const pendingRoomAttach      = useSceneStore((s) => s.pendingRoomAttach);
+    const setPendingRoomAttach   = useSceneStore((s) => s.setPendingRoomAttach);
+    const pinnedDeviceId         = useSceneStore((s) => s.pinnedDeviceId);
+    const setPinnedDeviceId      = useSceneStore((s) => s.setPinnedDeviceId);
 
     // ── Store read ─────────────────────────────────────────────────────────
     const rooms          = useSceneStore((s) => s.rooms);
@@ -85,6 +94,11 @@ const DashboardLayout = () => {
         if (!user) resetStore();
     }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Open room modal when a wall-add button sets pendingRoomAttach
+    useEffect(() => {
+        if (pendingRoomAttach) setIsRoomModalOpen(true);
+    }, [pendingRoomAttach]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // ── Global Delete key — removes selected room or device ───────────────
     useEffect(() => {
         const onKey = (e) => {
@@ -92,6 +106,7 @@ const DashboardLayout = () => {
             // Don't fire when typing in an input/textarea
             const tag = document.activeElement?.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            setPinnedDeviceId(null);
             removeSelected();
         };
         window.addEventListener('keydown', onKey);
@@ -133,8 +148,11 @@ const DashboardLayout = () => {
 
     // Selected device / room
     const selectedObj  = useMemo(() => objects.find((o) => o.id === selectedId), [objects, selectedId]);
-    const selectedData = selectedId ? energyData[selectedId] : undefined;
     const selectedRoom = useMemo(() => !selectedObj ? rooms.find((r) => r.id === selectedId) : null, [rooms, selectedId, selectedObj]);
+
+    const pinnedObj  = useMemo(() => objects.find((o) => o.id === pinnedDeviceId), [objects, pinnedDeviceId]);
+    const pinnedData = pinnedDeviceId ? energyData[pinnedDeviceId] : undefined;
+    const closePinnedPanel = useCallback(() => { setPinnedDeviceId(null); setSelectedId(null); }, [setPinnedDeviceId, setSelectedId]);
 
     // ── Handlers ───────────────────────────────────────────────────────────
     const closeTicketModal  = useCallback(() => setIsTicketModalOpen(false),   []);
@@ -143,13 +161,13 @@ const DashboardLayout = () => {
     const closeAiAssistant  = useCallback(() => setIsAiAssistantOpen(false),   []);
     const handleTabChange   = useCallback((tab) => {
         setActiveTab(tab);
-        // Clear any scene selection so the home panel is always visible
-        // when the user explicitly navigates back to the overview.
-        if (tab === 'home') setSelectedId(null);
-    }, [setSelectedId]);
+        if (tab === 'home') { setSelectedId(null); setPinnedDeviceId(null); }
+    }, [setSelectedId, setPinnedDeviceId]);
     const openTicketModal   = useCallback(() => { setActiveTab('tickets');  setIsTicketModalOpen(true); },   []);
     const openSettingsModal = useCallback(() => { setActiveTab('settings'); setIsSettingsModalOpen(true); }, []);
     const openAiAssistant   = useCallback(() => setIsAiAssistantOpen(true), []);
+    const openBuilder       = useCallback(() => setIsBuilderOpen(true), []);
+    const closeBuilder      = useCallback(() => setIsBuilderOpen(false), []);
 
     // Open catalog for "Add Device" toolbar button
     const openCatalog = useCallback(() => {
@@ -204,8 +222,13 @@ const DashboardLayout = () => {
 
     // Room creation modal save
     const handleRoomSave = useCallback((roomData) => {
-        addRoom(roomData);
-    }, [addRoom]);
+        const attach = useSceneStore.getState().pendingRoomAttach;
+        addRoom({
+            ...roomData,
+            ...(attach ? { attachToRoomId: attach.parentId, attachWall: attach.wall } : {}),
+        });
+        setPendingRoomAttach(null);
+    }, [addRoom, setPendingRoomAttach]);
 
     const timelineData = useMemo(() => [40, 60, 30, 80, 50, 90, 45, 70, 55, 65, 35, 75, 85, 40], []);
     const displayName  = user?.fullName || user?.email?.split('@')[0] || 'Kullanıcı';
@@ -334,14 +357,30 @@ const DashboardLayout = () => {
                         <div className="absolute -top-16 -right-16 w-32 h-32 rounded-full pointer-events-none"
                             style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)', filter: 'blur(20px)' }} />
 
-                        {selectedObj && selectedData !== undefined ? (
+                        {pinnedObj ? (
                             /* ── DEVICE DETAIL VIEW ── */
-                            <DeviceDetailPanel
-                                obj={selectedObj}
-                                data={selectedData}
-                                spec={deviceSpecs[selectedObj.id]}
-                                onDelete={removeSelected}
-                            />
+                            <>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--color-subtle)' }}>Cihaz Detayı</span>
+                                    <button onClick={closePinnedPanel}
+                                        className="p-1 rounded-md transition-colors"
+                                        title="Kapat"
+                                        style={{ color: 'var(--color-subtle)', background: 'transparent', cursor: 'pointer' }}
+                                        onMouseEnter={e => e.currentTarget.style.color = 'var(--color-text)'}
+                                        onMouseLeave={e => e.currentTarget.style.color = 'var(--color-subtle)'}>
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                                <DeviceDetailPanel
+                                    obj={pinnedObj}
+                                    data={pinnedData}
+                                    spec={deviceSpecs[pinnedObj.id]}
+                                    onDelete={() => { closePinnedPanel(); removeSelected(); }}
+                                    setEnergyData={setEnergyData}
+                                    setDeviceSpec={setDeviceSpec}
+                                    user={user}
+                                />
+                            </>
                         ) : (
                             /* ── HOME PANEL (tabbed) ── */
                             <>
@@ -366,9 +405,10 @@ const DashboardLayout = () => {
                                 <div className="flex rounded-xl overflow-hidden"
                                     style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: 3, gap: 2 }}>
                                     {[
-                                        { id: 'ozet',    label: 'Özet' },
+                                        { id: 'ozet',     label: 'Özet' },
                                         { id: 'oneriler', label: 'Öneriler' },
                                         { id: 'siralama', label: 'Sıralama' },
+                                        { id: 'faturalar', label: 'Faturalar' },
                                     ].map(tab => (
                                         <button key={tab.id} onClick={() => setHomeTab(tab.id)}
                                             className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
@@ -426,6 +466,37 @@ const DashboardLayout = () => {
                                                 {objects.length === 0 ? '₺—' : `₺${Math.round(homeTotals.cost)}`}
                                             </span>
                                         </div>
+
+                                        {/* Home builder CTA — shown only when there are no rooms yet */}
+                                        {rooms.length === 0 && (
+                                            <div onClick={openBuilder}
+                                                className="rounded-2xl p-4 relative overflow-hidden group cursor-pointer transition-all"
+                                                style={{ background: 'rgba(5,150,105,0.06)', border: '1px solid rgba(5,150,105,0.25)' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(5,150,105,0.12)'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'rgba(5,150,105,0.06)'}>
+                                                <div className="absolute top-0 left-0 w-full h-0.5"
+                                                    style={{ background: 'linear-gradient(to right, #059669, #047857)' }} />
+                                                <div className="flex items-start gap-3">
+                                                    <div className="p-2 rounded-xl mt-0.5"
+                                                        style={{ background: 'rgba(5,150,105,0.12)', color: '#10b981' }}>
+                                                        <Home size={18} />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="text-[10px] font-bold uppercase tracking-widest mb-1.5"
+                                                            style={{ color: '#10b981' }}>
+                                                            Evimi Anlat
+                                                        </h4>
+                                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                                                            Evinizi tarif edin — AI otomatik olarak oda ve cihazlarınızı eklesin.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-3 flex items-center justify-end text-xs font-semibold gap-1 transition-colors"
+                                                    style={{ color: '#10b981' }}>
+                                                    Başla <ChevronRight size={13} className="group-hover:translate-x-1 transition-transform" />
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* AI chatbot entry */}
                                         <div onClick={openAiAssistant}
@@ -530,6 +601,17 @@ const DashboardLayout = () => {
                                         )}
                                     </div>
                                 )}
+
+                                {/* ── Faturalar tab ── */}
+                                {homeTab === 'faturalar' && (
+                                    <Suspense fallback={
+                                        <div className="flex items-center justify-center py-8" style={{ color: 'var(--color-subtle)' }}>
+                                            <Loader2 size={20} className="animate-spin" />
+                                        </div>
+                                    }>
+                                        <BillsTab userId={user?.id} />
+                                    </Suspense>
+                                )}
                             </>
                         )}
                     </aside>
@@ -565,7 +647,8 @@ const DashboardLayout = () => {
             <Suspense fallback={null}>
                 <ProfileModal  isOpen={isProfileModalOpen}  onClose={closeProfileModal} />
                 <SettingsModal isOpen={isSettingsModalOpen} onClose={closeSettingsModal} />
-                <AiAssistant   isOpen={isAiAssistantOpen}   onOpen={openAiAssistant} onClose={closeAiAssistant} />
+                <AiAssistant       isOpen={isAiAssistantOpen} onOpen={openAiAssistant} onClose={closeAiAssistant} />
+                <HomeBuilderWizard isOpen={isBuilderOpen}     onOpen={openBuilder}     onClose={closeBuilder} />
 
                 {isTicketModalOpen && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-auto"
@@ -599,7 +682,7 @@ const DashboardLayout = () => {
             {/* Room Creation Modal */}
             <RoomCreationModal
                 isOpen={isRoomModalOpen}
-                onClose={() => setIsRoomModalOpen(false)}
+                onClose={() => { setIsRoomModalOpen(false); setPendingRoomAttach(null); }}
                 onSave={handleRoomSave}
             />
 
@@ -659,7 +742,7 @@ const EFFICIENCY_BAR_COLOR = (score) => {
     return '#f87171';
 };
 
-const DeviceDetailPanel = ({ obj, data, spec, onDelete }) => {
+const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDeviceSpec, user }) => {
     const isLoading = data === null || data === undefined;
     const isError   = data === 'error';
 
@@ -669,6 +752,43 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete }) => {
     const theoretical = spec ? (spec.nominal_power_watts * spec.daily_usage_hours * 30) / 1000 : 0;
 
     const accentColor = EFFICIENCY_BAR_COLOR(score);
+
+    const usageModel   = USAGE_MODEL[obj.type];
+    const isCycles     = usageModel?.unit === 'cycles';
+    const isLocked     = usageModel?.locked === true;
+    const cycleHours   = usageModel?.cycle_hours ?? 1;
+
+    const initHours  = spec?.daily_usage_hours ?? usageModel?.default_hours ?? 8;
+    const initCycles = isCycles ? Math.round(initHours / cycleHours) : 0;
+
+    const [editHours,  setEditHours]  = useState(initHours);
+    const [editCycles, setEditCycles] = useState(initCycles);
+    const [isSaving,   setIsSaving]   = useState(false);
+
+    // Reset local edit state when selected device changes
+    useEffect(() => {
+        const h = spec?.daily_usage_hours ?? usageModel?.default_hours ?? 8;
+        setEditHours(h);
+        setEditCycles(isCycles ? Math.round(h / cycleHours) : 0);
+    }, [obj.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const currentHours = isCycles ? editCycles * cycleHours : editHours;
+    const hasChanged   = Math.abs(currentHours - initHours) > 0.01;
+
+    const handleSave = async () => {
+        if (!hasChanged || isSaving) return;
+        setIsSaving(true);
+        const newSpec = { ...spec, daily_usage_hours: currentHours };
+        setDeviceSpec(obj.id, newSpec);
+        setEnergyData(obj.id, null);
+        try {
+            const result = await runFullAnalysis(obj.id, newSpec, user?.id);
+            setEnergyData(obj.id, result ?? 'error');
+        } catch {
+            setEnergyData(obj.id, 'error');
+        }
+        setIsSaving(false);
+    };
 
     return (
         <div className="flex flex-col gap-4">
@@ -700,6 +820,54 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete }) => {
                     <Trash2 size={14} />
                 </button>
             </div>
+
+            {/* Usage editor */}
+            {usageModel && (
+                <div className="rounded-xl p-3 flex flex-col gap-2"
+                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
+                        {isCycles ? 'Haftalık Kullanım (Sefer)' : 'Günlük Kullanım (Saat)'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="number"
+                            min={0}
+                            max={isCycles ? 50 : 24}
+                            step={1}
+                            value={isCycles ? editCycles : (isLocked ? 24 : editHours)}
+                            disabled={isLocked || isSaving}
+                            onChange={(e) => {
+                                const v = Number(e.target.value);
+                                if (isCycles) setEditCycles(v);
+                                else setEditHours(Math.min(24, Math.max(0, v)));
+                            }}
+                            className="flex-1 text-sm py-1.5 px-3 rounded-lg outline-none"
+                            style={{
+                                background: 'var(--color-surface)',
+                                border: '1px solid var(--color-border)',
+                                color: isLocked ? 'var(--color-subtle)' : 'var(--color-text)',
+                                opacity: isLocked ? 0.6 : 1,
+                                cursor: isLocked ? 'not-allowed' : 'text',
+                            }}
+                        />
+                        <button
+                            onClick={handleSave}
+                            disabled={!hasChanged || isSaving || isLocked}
+                            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+                            style={{
+                                background: hasChanged && !isSaving && !isLocked ? '#3b82f6' : 'var(--color-border)',
+                                color: hasChanged && !isSaving && !isLocked ? '#fff' : 'var(--color-subtle)',
+                                cursor: hasChanged && !isSaving && !isLocked ? 'pointer' : 'not-allowed',
+                            }}
+                        >
+                            {isSaving ? '…' : 'Kaydet'}
+                        </button>
+                    </div>
+                    {isLocked && (
+                        <p className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>Buzdolabı 24 saat çalışır.</p>
+                    )}
+                </div>
+            )}
 
             {isLoading && (
                 <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-subtle)' }}>

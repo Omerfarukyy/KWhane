@@ -110,11 +110,12 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
     const objects      = useSceneStore((state) => state.objects);
     const ghostObjects = useSceneStore((state) => state.ghostObjects);
     const energyData   = useSceneStore((state) => state.energyData);
-    const setSelectedId = useSceneStore((state) => state.setSelectedId);
+    const setSelectedId     = useSceneStore((state) => state.setSelectedId);
+    const setPinnedDeviceId = useSceneStore((state) => state.setPinnedDeviceId);
 
     const adjacencies = useMemo(() => computeAdjacencies(rooms), [rooms]);
 
-    const handlePointerMissed = () => setSelectedId(null);
+    const handlePointerMissed = () => { setSelectedId(null); setPinnedDeviceId(null); };
 
     return (
         <group onPointerMissed={handlePointerMissed}>
@@ -181,7 +182,9 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
 
 
             {/* ─── Ghost (Hologram) Cihazlar ───────────── */}
-            {ghostObjects.map((ghost) => (
+            {ghostObjects.filter((g) =>
+                !objects.some((o) => o.roomId === g.roomId && o.type === g.type)
+            ).map((ghost) => (
                 <GhostDevice
                     key={ghost.id}
                     ghost={ghost}

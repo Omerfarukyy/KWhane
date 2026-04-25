@@ -164,6 +164,20 @@ export async function updateDevicePosition(deviceId, position, roomId, rotation)
 }
 
 /**
+ * Update a single device's spec fields (hours, efficiency_class, year, etc).
+ * Used by Phase A.5's BillDiagnosticCard to apply diagnostic suggestions.
+ *
+ * @param {string} deviceId
+ * @param {object} patch — partial devices row
+ */
+export async function updateDeviceFields(deviceId, patch) {
+    const { error } = await withTimeout(
+        supabase.from('devices').update(patch).eq('id', deviceId)
+    );
+    if (error) throw new Error(`updateDeviceFields failed: ${error.message}`);
+}
+
+/**
  * Delete a device by id.
  * @param {string} deviceId
  */

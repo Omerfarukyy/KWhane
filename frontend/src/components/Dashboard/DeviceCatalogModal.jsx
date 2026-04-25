@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import { USAGE_MODEL } from '../../utils/usageModels';
 
 // ─── Fallback device profiles (used when Supabase returns 0 rows) ─────────────
 const DEVICE_PROFILES = {
@@ -14,6 +15,7 @@ const DEVICE_PROFILES = {
     water_heater:    { name: 'Standart Şofben',          nominal_power_watts: 2000, daily_usage_hours: 2,   standby_power_watts: 5,   efficiency_class: 'A'   },
     dryer:           { name: 'Standart Kurutma Mak.',    nominal_power_watts: 2500, daily_usage_hours: 1,   standby_power_watts: 3,   efficiency_class: 'A'   },
 };
+
 
 const DEVICE_CATEGORIES = [
     { type: 'fridge',          label: 'Buzdolabı',         icon: '🧊' },
@@ -52,7 +54,10 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
     const [search, setSearch]             = useState('');
     const [cards, setCards]               = useState([]);
     const [loading, setLoading]           = useState(false);
-    const [picked, setPicked]             = useState(null); // selected card spec
+    const [picked, setPicked]             = useState(null);
+
+    // Usage state — hours for hours-type, cycles for cycle-type
+    const [usageValue, setUsageValue] = useState(null);
 
     // Sync category when modal is opened with an initialType (ghost click)
     useEffect(() => {
@@ -60,8 +65,21 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
             setSelectedType(initialType || 'fridge');
             setPicked(null);
             setSearch('');
+            setUsageValue(null);
         }
     }, [isOpen, initialType]);
+
+    // Reset usage value when type or picked card changes
+    useEffect(() => {
+        if (!picked) { setUsageValue(null); return; }
+        const model = USAGE_MODEL[selectedType];
+        if (!model) { setUsageValue(null); return; }
+        if (model.unit === 'cycles') {
+            setUsageValue(model.default_cycles);
+        } else {
+            setUsageValue(picked.daily_usage_hours ?? model.default_hours);
+        }
+    }, [picked, selectedType]);
 
     // Load cards when type changes
     useEffect(() => {
@@ -69,6 +87,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
         let cancelled = false;
         setLoading(true);
         setPicked(null);
+        setUsageValue(null);
 
         const fetchCatalog = async () => {
             try {
@@ -83,7 +102,6 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                 if (!error && data && data.length > 0) {
                     setCards(data);
                 } else {
-                    // Fallback: create one default card from DEVICE_PROFILES
                     const profile = DEVICE_PROFILES[selectedType] || {};
                     setCards([{ id: 'default', type: selectedType, ...profile, year_of_purchase: new Date().getFullYear() }]);
                 }
@@ -107,11 +125,23 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
 
     const handleAdd = () => {
         if (!picked) return;
+        const model = USAGE_MODEL[selectedType] || { unit: 'hours', default_hours: picked.daily_usage_hours || 4 };
+
+        let daily_usage_hours;
+        if (model.locked) {
+            daily_usage_hours = model.default_hours;
+        } else if (model.unit === 'cycles') {
+            const cycles = parseFloat(usageValue) || model.default_cycles;
+            daily_usage_hours = (cycles * model.cycle_hours) / 7;
+        } else {
+            daily_usage_hours = parseFloat(usageValue) ?? (picked.daily_usage_hours || model.default_hours || 4);
+        }
+
         onDeviceSelect({
             type:                 picked.type || selectedType,
             name:                 picked.name,
             nominal_power_watts:  picked.nominal_power_watts || 100,
-            daily_usage_hours:    picked.daily_usage_hours   || 4,
+            daily_usage_hours:    Math.round(daily_usage_hours * 100) / 100,
             standby_power_watts:  picked.standby_power_watts || 0,
             efficiency_class:     picked.efficiency_class    || 'A',
             year_of_purchase:     picked.year_of_purchase    || new Date().getFullYear(),
@@ -121,11 +151,13 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
 
     if (!isOpen) return null;
 
+    const usageModel = USAGE_MODEL[selectedType];
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
             <div
                 className="bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl flex overflow-hidden"
-                style={{ width: 720, height: 520 }}
+                style={{ width: 720, height: picked ? 580 : 520 }}
             >
                 {/* ── Left sidebar: categories ── */}
                 <div className="w-44 border-r border-white/10 flex flex-col py-3 overflow-y-auto flex-shrink-0">
@@ -229,6 +261,60 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                             </div>
                         )}
                     </div>
+
+                    {/* ── Usage configuration (visible when a card is picked) ── */}
+                    {picked && usageModel && (
+                        <div className="px-5 py-3 border-t border-white/10 bg-white/[0.02]">
+                            <p className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2">Kullanım Ayarı</p>
+                            {usageModel.unit === 'cycles' ? (
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-xs text-white/60">Haftalık kullanım (kez)</label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={21}
+                                            step={1}
+                                            value={usageValue ?? usageModel.default_cycles}
+                                            onChange={(e) => setUsageValue(e.target.value)}
+                                            className="w-16 bg-white/5 border border-white/15 rounded-lg px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-blue-500 transition"
+                                        />
+                                    </div>
+                                    <span className="text-xs text-white/30">
+                                        ≈ {(((parseFloat(usageValue) || usageModel.default_cycles) * usageModel.cycle_hours) / 7).toFixed(2)} saat/gün (enerji hesabı için)
+                                    </span>
+                                </div>
+                            ) : usageModel.locked ? (
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="number"
+                                        value={24}
+                                        disabled
+                                        className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white/40 text-sm text-center cursor-not-allowed"
+                                    />
+                                    <span className="text-xs text-white/30">saat/gün — Buzdolabı her zaman açıktır</span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-xs text-white/60">Günlük kullanım (saat)</label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            max={24}
+                                            step={0.5}
+                                            value={usageValue ?? (picked.daily_usage_hours || usageModel.default_hours)}
+                                            onChange={(e) => setUsageValue(e.target.value)}
+                                            className="w-16 bg-white/5 border border-white/15 rounded-lg px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-blue-500 transition"
+                                        />
+                                    </div>
+                                    <span className="text-xs text-white/30">
+                                        {(((parseFloat(usageValue) || usageModel.default_hours) * 30)).toFixed(0)} saat/ay
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Footer */}
                     <div className="flex items-center justify-between px-5 py-3 border-t border-white/10">

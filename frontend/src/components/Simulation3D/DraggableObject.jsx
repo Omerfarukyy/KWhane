@@ -84,8 +84,9 @@ const DraggableObject = ({
     const [isColliding, setIsColliding] = useState(false);
 
     // Zustand State
-    const selectedId = useSceneStore((state) => state.selectedId);
-    const setSelectedId = useSceneStore((state) => state.setSelectedId);
+    const selectedId       = useSceneStore((state) => state.selectedId);
+    const setSelectedId    = useSceneStore((state) => state.setSelectedId);
+    const setPinnedDeviceId = useSceneStore((state) => state.setPinnedDeviceId);
     const updateObjectPosition = useSceneStore((state) => state.updateObjectPosition);
     const updateObjectRoom     = useSceneStore((state) => state.updateObjectRoom);
     const setIsDraggingStore = useSceneStore((state) => state.setIsDragging);
@@ -313,6 +314,7 @@ const DraggableObject = ({
             onPointerDown={(e) => {
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
                 setSelectedId(objectId);
+                setPinnedDeviceId(objectId);
                 handlePointerDown(e);
             }}
             onPointerMove={handlePointerMove}

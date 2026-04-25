@@ -11,24 +11,11 @@ so we reuse the openai Python package — zero extra dependencies.
 from __future__ import annotations
 
 from fastapi import HTTPException
-from openai import AsyncOpenAI, OpenAIError
+from openai import OpenAIError
 
 from config import settings
 from models.schemas import ChatRequest
-
-# ─── Lazy singleton client ────────────────────────────────────────────────────
-_client: AsyncOpenAI | None = None
-
-
-def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        # Ollama requires a dummy api_key value; it ignores the actual string
-        _client = AsyncOpenAI(
-            base_url=settings.ollama_base_url,
-            api_key="ollama",
-        )
-    return _client
+from services.ollama_client import get_client
 
 
 # ─── System prompt builder ────────────────────────────────────────────────────
@@ -66,13 +53,52 @@ def _build_system_prompt(request: ChatRequest) -> str:
             for r in request.recommendations
         )
 
+    # Branch the consumption block on whether we have real bill data.
+    # When bill_count > 0 we cite the user's actual numbers and drop the generic
+    # tariff fallback, so Llama stops hedging with "tahminen" / "ortalama".
+    has_bills = request.bill_count > 0 and request.actual_monthly_kwh is not None
+
+    if has_bills:
+        consumption_block = (
+            f"Gerçek tüketim  : {request.actual_monthly_kwh:.1f} kWh/ay (son {request.bill_count} faturanın ortalaması)\n"
+            f"Gerçek fatura   : ₺{request.actual_monthly_cost:.0f}/ay\n"
+            f"Tahmini tüketim : {request.total_monthly_kwh:.1f} kWh/ay (cihaz bazlı tahmin)"
+        )
+        if request.effective_tariff_tl_per_kwh is not None:
+            consumption_block += f"\nKullanıcının ortalama birim fiyatı: ₺{request.effective_tariff_tl_per_kwh:.2f}/kWh"
+        tariff_rule = (
+            "- Fatura hesaplarını yaparken kullanıcının gerçek tüketim ve fatura rakamlarını esas al; "
+            "tahmini rakamları sadece karşılaştırma için kullan."
+        )
+        if request.bill_diagnostic_summary:
+            tariff_rule += (
+                "\n- Kullanıcı 'faturam neden yüksek/düşük?' tarzı sorduğunda, fatura analizi bölümündeki "
+                "cihaz bazlı dağılım ve tespitleri spesifik olarak referans göster."
+            )
+    else:
+        consumption_block = (
+            f"Toplam tüketim : {request.total_monthly_kwh:.1f} kWh/ay (tahmini)\n"
+            f"Tahmini fatura : ₺{request.total_monthly_cost:.0f}/ay"
+        )
+        tariff_rule = (
+            "- Henüz gerçek fatura verisi yok; rakamları tahmini olarak sun. "
+            "Genel Türkiye elektrik tarifelerine (alt kademe ≈1.50 ₺/kWh, üst kademe ≈2.30 ₺/kWh) dayanarak tahmin yapabilirsin. "
+            "Daha doğru sonuç için kullanıcıyı son faturasını girmeye yönlendirebilirsin."
+        )
+
+    diagnostic_block = ""
+    if has_bills and request.bill_diagnostic_summary:
+        diagnostic_block = (
+            "\nFatura analizi:\n"
+            f"  {request.bill_diagnostic_summary}\n"
+        )
+
     return f"""Sen KWhane AI'sın — Türk haneleri için enerji tasarrufu uzmanısın.
 Samimi, pratik ve özlü yanıtlar ver. Gereksiz teknik jargon kullanma.
 Her zaman Türkçe yanıt ver.
 
 === KULLANICININ EV DURUMU ===
-Toplam tüketim : {request.total_monthly_kwh:.1f} kWh/ay
-Tahmini fatura : ₺{request.total_monthly_cost:.0f}/ay
+{consumption_block}
 Cihaz sayısı   : {device_count}
 
 Cihazlar:
@@ -80,14 +106,14 @@ Cihazlar:
 
 Tasarruf fırsatları:
 {rec_lines}
-=== ===
+{diagnostic_block}=== ===
 
 Yanıt kuralları:
 - Yalnızca yukarıdaki verilere dayanarak yanıt ver; veri yoksa bunu belirt.
 - Rakamları daima ₺ ve kWh birimleriyle ver.
 - Yanıtları 3-5 cümle ile sınırla; liste gerekiyorsa en fazla 4 madde.
 - Cihaz yoksa kullanıcıyı simülasyona cihaz eklemeye yönlendir.
-- Genel Türkiye elektrik tarifelerine (alt kademe ≈1.50 ₺/kWh, üst kademe ≈2.30 ₺/kWh) dayanarak tahmin yapabilirsin."""
+{tariff_rule}"""
 
 
 # ─── Main entry point ─────────────────────────────────────────────────────────
@@ -98,7 +124,7 @@ async def generate_chat_reply(request: ChatRequest) -> str:
     Returns the assistant reply string.
     Raises HTTPException if Ollama is not running or model is not pulled.
     """
-    client = _get_client()
+    client = get_client()
 
     system_prompt = _build_system_prompt(request)
 

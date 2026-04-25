@@ -97,8 +97,103 @@ class ChatRequest(BaseModel):
     recommendations: list[RecommendationContext] = []
     total_monthly_kwh: float = 0
     total_monthly_cost: float = 0
+    # Real bill data (populated when the user has entered at least one bill).
+    # When present, the advisor cites these numbers instead of synthetic predictions.
+    actual_monthly_kwh: float | None = None
+    actual_monthly_cost: float | None = None
+    bill_count: int = 0
+    effective_tariff_tl_per_kwh: float | None = None
+    # Optional pre-computed diagnostic narrative (Phase A.5). The frontend
+    # caches the summary from the most recent /bills/diagnose call and
+    # forwards it here so the advisor can reference per-device attribution
+    # without recomputing.
+    bill_diagnostic_summary: str | None = None
 
 
 class ChatResponse(BaseModel):
     reply: str
     model: str = "llama3.2"
+
+
+# ─── Home Builder ─────────────────────────────────────────────────────────────
+
+class PlannedRoom(BaseModel):
+    name: str
+    roomType: str   # one of: Mutfak, Oturma Odası, Yatak Odası, Banyo, Çamaşır Odası, Ofis, Genel
+    width: float = 5.0
+    depth: float = 4.0
+    height: float = 3.0
+
+
+class PlannedDevice(BaseModel):
+    roomName: str   # must match a PlannedRoom name
+    type: str       # one of canonical device types
+    name: str
+    nominal_power_watts: int = 100
+    daily_usage_hours: float = 4.0
+    standby_power_watts: int = 0
+    efficiency_class: str = "A"
+    year_of_purchase: int = 2024
+
+
+class HomePlan(BaseModel):
+    rooms: list[PlannedRoom] = []
+    devices: list[PlannedDevice] = []
+
+
+class HomeBuilderRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+    currentHome: dict = {}
+
+
+class HomeBuilderResponse(BaseModel):
+    reply: str
+    plan: HomePlan | None = None
+
+
+# ─── Bill Diagnostics ─────────────────────────────────────────────────────────
+
+class DiagnosticDeviceInput(BaseModel):
+    """One declared device with its current ML prediction, fed into diagnose()."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    type: str
+    predicted_monthly_kwh: float
+    efficiency_class: str = "A"
+    daily_usage_hours: float = 0.0
+    year_of_purchase: int = 2024
+
+
+class BillDiagnoseRequest(BaseModel):
+    actual_kwh: float
+    actual_cost_tl: float
+    devices: list[DiagnosticDeviceInput] = []
+    predicted_tariff_tl_per_kwh: float | None = None
+
+
+class AttributionItem(BaseModel):
+    device_id: str | None = None
+    name: str
+    type: str
+    share_pct: float
+    kwh: float
+    cost_tl: float
+
+
+class DiagnosticFlag(BaseModel):
+    type: str        # missing_device_suspected | over_declared_usage | device_outlier | tariff_mismatch
+    severity: str    # low | medium | high
+    device_id: str | None = None
+    message_tr: str
+    suggested_action: dict
+
+
+class BillDiagnoseResponse(BaseModel):
+    attribution: list[AttributionItem] = []
+    residual_kwh: float = 0.0
+    residual_pct: float = 0.0
+    diagnostics: list[DiagnosticFlag] = []
+    summary_tr: str = ""

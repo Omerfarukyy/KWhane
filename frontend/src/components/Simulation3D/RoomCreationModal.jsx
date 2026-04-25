@@ -103,10 +103,11 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
                         <label className="block text-xs font-medium text-white/50 mb-2 uppercase tracking-wider">
                             Boyutlar
                         </label>
+                        <p className="text-xs text-white/30 mb-2">Örn: 4m × 5m oda → 4 genişlik, 5 uzunluk</p>
                         <div className="grid grid-cols-3 gap-3">
                             {[
                                 { label: 'Genişlik', key: 'width',  value: width,  setter: setWidth,  min: 2, max: 20 },
-                                { label: 'Derinlik', key: 'depth',  value: depth,  setter: setDepth,  min: 2, max: 20 },
+                                { label: 'Uzunluk',  key: 'depth',  value: depth,  setter: setDepth,  min: 2, max: 20 },
                                 { label: 'Yükseklik', key: 'height', value: height, setter: setHeight, min: 2, max: 5  },
                             ].map(({ label, key, value, setter, min, max }) => (
                                 <div key={key}>

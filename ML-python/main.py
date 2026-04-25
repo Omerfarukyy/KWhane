@@ -8,13 +8,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from models.schemas import DeviceInput, CalculateResponse, CompareResponse, SavingsResponse, ChatRequest, ChatResponse
+from models.schemas import (
+    DeviceInput, CalculateResponse, CompareResponse, SavingsResponse,
+    ChatRequest, ChatResponse, HomeBuilderRequest, HomeBuilderResponse,
+    BillDiagnoseRequest, BillDiagnoseResponse,
+)
 from ml.energy_model import EnergyPredictor
 from ml.clustering_model import HouseholdClusterer
 from services.calculate_service import calculate_energy
 from services.compare_service import compare_device
 from services.savings_service import generate_savings
 from services.chat_service import generate_chat_reply
+from services.home_builder_service import generate_home_plan
+from services.bill_diagnostics import diagnose, summarize_for_prompt, DiagnosticDevice
 
 # Initialize ML models
 energy_predictor = EnergyPredictor(settings.model_dir)
@@ -86,3 +92,47 @@ async def chat(request: ChatRequest):
     """
     reply = await generate_chat_reply(request)
     return ChatResponse(reply=reply)
+
+
+@app.post("/bills/diagnose", response_model=BillDiagnoseResponse)
+def diagnose_bill(request: BillDiagnoseRequest):
+    """
+    Bill diagnostic narrative — given a bill's actual totals and the user's
+    declared device list (with current ML predictions), return:
+      • per-device cost attribution
+      • the unattributed residual
+      • flagged anomalies + suggested actions
+
+    Pure function; no DB writes.
+    """
+    devices = [
+        DiagnosticDevice(
+            id=d.id,
+            name=d.name,
+            type=d.type,
+            predicted_monthly_kwh=d.predicted_monthly_kwh,
+            efficiency_class=d.efficiency_class,
+            daily_usage_hours=d.daily_usage_hours,
+            year_of_purchase=d.year_of_purchase,
+        )
+        for d in request.devices
+    ]
+    result = diagnose(
+        actual_kwh=request.actual_kwh,
+        actual_cost=request.actual_cost_tl,
+        devices=devices,
+        predicted_tariff_tl_per_kwh=request.predicted_tariff_tl_per_kwh,
+    )
+    return BillDiagnoseResponse(
+        **result,
+        summary_tr=summarize_for_prompt(result),
+    )
+
+
+@app.post("/home-builder", response_model=HomeBuilderResponse)
+async def home_builder(request: HomeBuilderRequest):
+    """
+    Home setup wizard — user describes their home in natural language,
+    returns a structured plan of rooms and devices to create in the simulation.
+    """
+    return await generate_home_plan(request)

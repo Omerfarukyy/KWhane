@@ -10,12 +10,14 @@
  * On send: POSTs to FastAPI /chat with full home context + last 6 messages.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, X, Send } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Sparkles, X, Send, Mic, MicOff } from 'lucide-react';
 import { sendMessage } from '../../services/chatService';
+import { getBillSummary, readCachedDiagnosticSummary } from '../../services/billsService';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import useSceneStore from '../../store/useSceneStore';
+import { useSpeechToText } from '../../hooks/useSpeechToText';
 
 const AiAssistant = ({ isOpen, onOpen, onClose }) => {
     const { user } = useAuth();
@@ -30,8 +32,14 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
     const [recommendationContext, setRecommendationContext] = useState([]);
     const [totalMonthlyKwh, setTotalMonthlyKwh]   = useState(0);
     const [totalMonthlyCost, setTotalMonthlyCost] = useState(0);
+    const [billSummary, setBillSummary]           = useState({
+        billCount: 0, avgMonthlyKwh: null, avgMonthlyCost: null, effectiveTariffTlPerKwh: null,
+    });
 
     const scrollRef = useRef(null);
+
+    const handleTranscript = useCallback((text) => setInputText(text), []);
+    const { listening, supported: micSupported, start: startMic, stop: stopMic } = useSpeechToText({ onTranscript: handleTranscript });
 
     // ── Auto-scroll whenever messages change ─────────────────────────────────
     useEffect(() => {
@@ -68,30 +76,37 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
             const totKwh  = devices.reduce((s, d) => s + (d.monthly_kwh  || 0), 0);
             const totCost = devices.reduce((s, d) => s + (d.monthly_cost || 0), 0);
 
-            // Query Supabase recommendations (optional — skip on error or no auth)
+            // Query Supabase recommendations + bill summary in parallel
+            // (both optional — chat still works if either fails)
             let recs = [];
+            let bills = { billCount: 0, avgMonthlyKwh: null, avgMonthlyCost: null, effectiveTariffTlPerKwh: null };
             if (user?.id) {
-                try {
-                    const { data } = await supabase
+                const [recsResult, billsResult] = await Promise.all([
+                    supabase
                         .from('recommendations')
                         .select('category, slug, potential_savings_amount, current_monthly_cost, projected_monthly_cost')
                         .eq('user_id', user.id)
-                        .limit(5);
-                    recs = data || [];
-                } catch {
-                    // recommendations are optional — chat still works
-                }
+                        .limit(5)
+                        .then(({ data }) => data || [])
+                        .catch(() => []),
+                    getBillSummary(user.id).catch(() => bills),
+                ]);
+                recs = recsResult;
+                bills = billsResult;
             }
 
             setDeviceContext(devices);
             setRecommendationContext(recs);
             setTotalMonthlyKwh(totKwh);
             setTotalMonthlyCost(totCost);
+            setBillSummary(bills);
             setContextReady(true);
 
-            // Build welcome message with real numbers
+            // Build welcome message — prefer real bill numbers when available
             let welcome;
-            if (devices.length === 0) {
+            if (bills.billCount > 0) {
+                welcome = `Son ${bills.billCount} faturanıza göre ortalama ₺${Math.round(bills.avgMonthlyCost)}/ay (${bills.avgMonthlyKwh.toFixed(0)} kWh) ödüyorsunuz. Nereyi konuşalım?`;
+            } else if (devices.length === 0) {
                 welcome = 'Henüz cihaz eklenmemiş. Sol panelden bir cihaz ekledikten sonra enerji analizinizi yapabilirim.';
             } else {
                 const hasCosts = totCost > 0;
@@ -127,12 +142,17 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
         const history = nextMessages.slice(-6).map(({ role, content }) => ({ role, content }));
 
         const result = await sendMessage({
-            message:            text,
+            message:                       text,
             history,
-            devices:            deviceContext,
-            recommendations:    recommendationContext,
-            total_monthly_kwh:  totalMonthlyKwh,
-            total_monthly_cost: totalMonthlyCost,
+            devices:                       deviceContext,
+            recommendations:               recommendationContext,
+            total_monthly_kwh:             totalMonthlyKwh,
+            total_monthly_cost:            totalMonthlyCost,
+            actual_monthly_kwh:            billSummary.avgMonthlyKwh,
+            actual_monthly_cost:           billSummary.avgMonthlyCost,
+            bill_count:                    billSummary.billCount,
+            effective_tariff_tl_per_kwh:   billSummary.effectiveTariffTlPerKwh,
+            bill_diagnostic_summary:       readCachedDiagnosticSummary(user?.id),
         });
 
         const replyContent = result?.reply
@@ -291,7 +311,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
                 className="px-4 pt-3 pb-4 flex-shrink-0"
                 style={{ borderTop: '1px solid #1e1e1e', background: '#0d0d0d' }}
             >
-                <div className="relative flex items-center">
+                <div className="relative flex items-center gap-2">
                     <input
                         type="text"
                         value={inputText}
@@ -299,7 +319,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
                         onKeyDown={handleKeyDown}
                         placeholder="Bir şey sor… (Enter ile gönder)"
                         disabled={isLoading}
-                        className="w-full text-sm py-3 pl-4 pr-12 rounded-xl outline-none text-white transition-colors"
+                        className="flex-1 text-sm py-3 pl-4 pr-4 rounded-xl outline-none text-white transition-colors"
                         style={{
                             background:  '#161616',
                             border:      '1px solid #1e1e1e',
@@ -310,10 +330,26 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
                         onFocus={(e)  => (e.target.style.borderColor = '#3b82f6')}
                         onBlur={(e)   => (e.target.style.borderColor = '#1e1e1e')}
                     />
+                    {micSupported && (
+                        <button
+                            onClick={listening ? stopMic : startMic}
+                            disabled={isLoading}
+                            title={listening ? 'Mikrofonu durdur' : 'Sesle yaz'}
+                            className="flex-shrink-0 p-2 rounded-xl text-white transition-colors"
+                            style={{
+                                background: listening ? '#dc2626' : '#1e1e1e',
+                                border:     '1px solid #2a2a2a',
+                                cursor:     isLoading ? 'not-allowed' : 'pointer',
+                                animation:  listening ? 'pulse 1.2s infinite' : 'none',
+                            }}
+                        >
+                            {listening ? <MicOff size={16} /> : <Mic size={16} />}
+                        </button>
+                    )}
                     <button
                         onClick={handleSend}
                         disabled={isLoading || !inputText.trim()}
-                        className="absolute right-2 p-2 rounded-xl text-white transition-colors"
+                        className="flex-shrink-0 p-2 rounded-xl text-white transition-colors"
                         style={{
                             background: isLoading || !inputText.trim() ? '#1e3a5f' : '#3b82f6',
                             cursor:     isLoading || !inputText.trim() ? 'not-allowed' : 'pointer',

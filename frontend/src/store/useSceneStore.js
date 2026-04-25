@@ -181,6 +181,12 @@ const useSceneStore = create((set, get) => ({
     selectedId:  null,
     setSelectedId: (id) => set({ selectedId: id }),
 
+    pendingRoomAttach: null,
+    setPendingRoomAttach: (value) => set({ pendingRoomAttach: value }),
+
+    pinnedDeviceId: null,
+    setPinnedDeviceId: (id) => set({ pinnedDeviceId: id }),
+
     // ─── Energy / spec setters ────────────────────────────────────────────────
     setEnergyData: (id, data) =>
         set((s) => ({ energyData: { ...s.energyData, [id]: data } })),
@@ -327,6 +333,8 @@ const useSceneStore = create((set, get) => ({
                 toast.error('Oda kaydedilemedi. İnternet bağlantınızı kontrol edin.');
             });
         }
+
+        return newRoom.id;
     },
 
     // ─── ADD DEVICE (persisted, domain-aware version of addObject) ───────────
@@ -423,7 +431,7 @@ const useSceneStore = create((set, get) => ({
         }
 
         const isRoom = state.rooms.some((r) => r.id === state.selectedId);
-        if (isRoom && state.rooms.length > 1) {
+        if (isRoom) {
             const roomId = state.selectedId;
             const removedObjectIds = state.objects.filter((o) => o.roomId === roomId).map((o) => o.id);
             const restEnergy = { ...state.energyData };
