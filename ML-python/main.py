@@ -12,6 +12,8 @@ from models.schemas import (
     DeviceInput, CalculateResponse, CompareResponse, SavingsResponse,
     ChatRequest, ChatResponse, HomeBuilderRequest, HomeBuilderResponse,
     BillDiagnoseRequest, BillDiagnoseResponse,
+    CalibrationRequest, CalibrationResponse,
+    HomeCompareRequest, HomeCompareResponse,
 )
 from ml.energy_model import EnergyPredictor
 from ml.clustering_model import HouseholdClusterer
@@ -21,6 +23,8 @@ from services.savings_service import generate_savings
 from services.chat_service import generate_chat_reply
 from services.home_builder_service import generate_home_plan
 from services.bill_diagnostics import diagnose, summarize_for_prompt, DiagnosticDevice
+from services.calibration_service import calibrate, CalibrationDeviceInput as CalibrationDevice
+from services.home_compare_service import compare_home
 
 # Initialize ML models
 energy_predictor = EnergyPredictor(settings.model_dir)
@@ -127,6 +131,45 @@ def diagnose_bill(request: BillDiagnoseRequest):
         **result,
         summary_tr=summarize_for_prompt(result),
     )
+
+
+@app.post("/compare/home", response_model=HomeCompareResponse)
+def compare_home_endpoint(request: HomeCompareRequest):
+    """
+    Home-level peer comparison — clusters by (city, occupants, area, n_devices)
+    and returns the user's percentile within that cluster against
+    `monthly_kwh`. The frontend should pass `source='bill'` when the kWh
+    comes from real bills (Phase A) and `source='predicted'` when it's a
+    sum of device-level predictions.
+    """
+    return compare_home(request, household_clusterer)
+
+
+@app.post("/calibration", response_model=CalibrationResponse)
+def calibration(request: CalibrationRequest):
+    """
+    Multi-bill calibration suggestions — given the user's averaged actual kWh
+    across the last N bills and their declared device list (with predictions),
+    return ranked daily_usage_hours adjustments that would reconcile predictions
+    with reality. Pure function; no DB writes. The frontend confirms each
+    suggestion with the user before applying.
+    """
+    devices = [
+        CalibrationDevice(
+            id=d.id,
+            name=d.name,
+            type=d.type,
+            predicted_monthly_kwh=d.predicted_monthly_kwh,
+            daily_usage_hours=d.daily_usage_hours,
+        )
+        for d in request.devices
+    ]
+    result = calibrate(
+        actual_kwh=request.actual_kwh,
+        devices=devices,
+        bill_count=request.bill_count,
+    )
+    return CalibrationResponse(**result)
 
 
 @app.post("/home-builder", response_model=HomeBuilderResponse)

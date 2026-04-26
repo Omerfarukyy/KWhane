@@ -9,6 +9,9 @@ import SceneContainer from '../../Simulation3D/SceneContainer';
 import RoomCreationModal from '../../Simulation3D/RoomCreationModal';
 import DeviceCatalogModal from '../DeviceCatalogModal';
 import SuggestionCards from '../SuggestionCards';
+import UpgradeQuickAction from '../UpgradeQuickAction';
+import HomeRanking from '../HomeRanking';
+import StreakCard from '../Goals/StreakCard';
 import useSceneStore from '../../../store/useSceneStore';
 import { useLanguage } from '../../../contexts/LanguageProvider';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -38,9 +41,6 @@ const DashboardLayout = () => {
     const [activeTab,           setActiveTab]           = useState('home');
     // Home panel sub-tabs
     const [homeTab,             setHomeTab]             = useState('ozet');
-    // Household ranking data
-    const [ranking,             setRanking]             = useState(null);
-    const [rankingLoading,      setRankingLoading]      = useState(false);
 
     const { t } = useLanguage();
     const { user } = useAuth();
@@ -113,25 +113,9 @@ const DashboardLayout = () => {
         return () => window.removeEventListener('keydown', onKey);
     }, [removeSelected]);
 
-    // Re-fetch ranking every time the Sıralama tab is opened so newly
-    // completed analyses are always reflected without a page reload.
-    useEffect(() => {
-        if (homeTab !== 'siralama' || !user?.id) return;
-        setRanking(null);
-        setRankingLoading(true);
-        supabase
-            .from('device_comparisons')
-            .select('percentile, comparison_label, cluster_id, cluster_size, user_monthly_kwh, cluster_avg_monthly_kwh, device_id')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-            .then(({ data, error }) => {
-                if (error) console.warn('[ranking] fetch error:', error.message);
-                setRanking(data ?? false);
-            })
-            .catch((e) => { console.warn('[ranking] threw:', e.message); setRanking(false); })
-            .finally(() => setRankingLoading(false));
-    }, [homeTab, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Phase D: HomeRanking handles its own fetching. The previous
+    // device_comparisons-based effect was per-device and never reflected
+    // real bills — superseded.
 
     // ── Computed: home totals ──────────────────────────────────────────────
     const homeTotals = useMemo(() => {
@@ -467,6 +451,9 @@ const DashboardLayout = () => {
                                             </span>
                                         </div>
 
+                                        {/* Phase E: monthly energy goal tracker */}
+                                        <StreakCard userId={user?.id} predictedKwh={homeTotals.kwh} />
+
                                         {/* Home builder CTA — shown only when there are no rooms yet */}
                                         {rooms.length === 0 && (
                                             <div onClick={openBuilder}
@@ -540,66 +527,13 @@ const DashboardLayout = () => {
                                     </div>
                                 )}
 
-                                {/* ── Sıralama tab ── */}
+                                {/* ── Sıralama tab (Phase D: home-level peer comparison) ── */}
                                 {homeTab === 'siralama' && (
-                                    <div className="flex flex-col gap-4">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest"
-                                            style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
-                                            Hanehalkı Sıralaması
-                                        </p>
-                                        {rankingLoading ? (
-                                            <div className="flex items-center justify-center py-8" style={{ color: 'var(--color-subtle)' }}>
-                                                <Loader2 size={20} className="animate-spin" />
-                                            </div>
-                                        ) : ranking ? (
-                                            <>
-                                                <div className="p-4 rounded-2xl text-center"
-                                                    style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}>
-                                                    <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-                                                        Eviniz benzer hane halkının
-                                                    </p>
-                                                    <p className="text-5xl font-black" style={{ color: '#3b82f6' }}>
-                                                        %{Math.round(ranking.percentile ?? 0)}
-                                                    </p>
-                                                    <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
-                                                        'inden daha az enerji kullanıyor
-                                                    </p>
-                                                </div>
-                                                {/* Percentile bar */}
-                                                <div>
-                                                    <div className="flex justify-between text-[10px] mb-1.5" style={{ color: 'var(--color-subtle)' }}>
-                                                        <span>Daha fazla tüketim</span>
-                                                        <span>Daha az tüketim</span>
-                                                    </div>
-                                                    <div className="h-3 rounded-full overflow-hidden"
-                                                        style={{ background: 'var(--color-border-2)' }}>
-                                                        <div className="h-full rounded-full transition-all duration-1000"
-                                                            style={{
-                                                                width: `${Math.min(100, ranking.percentile ?? 0)}%`,
-                                                                background: 'linear-gradient(90deg, #ef4444, #f59e0b, #22c55e)',
-                                                            }} />
-                                                    </div>
-                                                </div>
-                                                {ranking.comparison_label && (
-                                                    <p className="text-xs px-3 py-2 rounded-xl text-center"
-                                                        style={{ background: 'var(--color-surface-2)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
-                                                        Küme: <strong style={{ color: 'var(--color-text)' }}>{ranking.comparison_label}</strong>
-                                                    </p>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <div className="flex flex-col items-center justify-center py-8 gap-3"
-                                                style={{ color: 'var(--color-subtle)' }}>
-                                                <Zap size={28} />
-                                                <p className="text-xs text-center">
-                                                    Henüz karşılaştırma verisi yok.<br />
-                                                    <span style={{ color: 'var(--color-muted)' }}>
-                                                        Cihaz ekledikten sonra sıralama hesaplanır.
-                                                    </span>
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
+                                    <HomeRanking
+                                        userId={user?.id}
+                                        predictedKwh={homeTotals.kwh}
+                                        nDevices={objects.length}
+                                    />
                                 )}
 
                                 {/* ── Faturalar tab ── */}
@@ -919,6 +853,9 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                             <span>Gerçek: <span style={{ color: accentColor }}>{kwh.toFixed(1)} kWh</span></span>
                         </div>
                     )}
+
+                    {/* Phase B: top tasarruf önerileri (reads from recommendations table) */}
+                    <UpgradeQuickAction deviceId={obj.id} />
                 </>
             )}
         </div>

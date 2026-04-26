@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Receipt, Trash2, Loader2 } from 'lucide-react';
 import { listBills, deleteBill, getBillSummary } from '../../../services/billsService';
 import BillEntryModal from './BillEntryModal';
+import CalibrationCard from './CalibrationCard';
 
 const formatPeriod = (start, end) => {
     const fmt = (iso) => {
@@ -66,6 +67,11 @@ const BillsTab = ({ userId }) => {
                     <Plus size={12} /> Ekle
                 </button>
             </div>
+
+            {/* Phase C: calibration suggestions, only when at least one bill exists */}
+            {summary && summary.billCount >= 1 && (
+                <CalibrationCard summary={summary} onApplied={refresh} />
+            )}
 
             {/* Summary */}
             {summary && summary.billCount > 0 && (

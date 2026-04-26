@@ -1,6 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { USAGE_MODEL } from '../../utils/usageModels';
+import { calculate, buildDeviceInput } from '../../services/mlService';
+import DeltaPreviewPanel from './DeltaPreviewPanel';
+
+// Placeholder UUIDs for the preview /calculate call. The endpoint is
+// room-id-agnostic — it just echoes the device_id back — so any valid UUID works.
+const PREVIEW_DEVICE_ID = '00000000-0000-0000-0000-00000000beef';
+const PREVIEW_ROOM_ID   = '00000000-0000-0000-0000-00000000cafe';
 
 // ─── Fallback device profiles (used when Supabase returns 0 rows) ─────────────
 const DEVICE_PROFILES = {
@@ -59,6 +66,12 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
     // Usage state — hours for hours-type, cycles for cycle-type
     const [usageValue, setUsageValue] = useState(null);
 
+    // ── Phase B: live delta preview ────────────────────────────────────
+    const [previewData, setPreviewData] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const previewCache = useRef(new Map());      // keyed by JSON.stringify(spec)
+    const previewSeq = useRef(0);                // monotonic counter to drop stale responses
+
     // Sync category when modal is opened with an initialType (ghost click)
     useEffect(() => {
         if (isOpen) {
@@ -66,6 +79,8 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
             setPicked(null);
             setSearch('');
             setUsageValue(null);
+            setPreviewData(null);
+            previewCache.current.clear();
         }
     }, [isOpen, initialType]);
 
@@ -123,6 +138,66 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
         !search || c.name?.toLowerCase().includes(search.toLowerCase())
     );
 
+    // Build the spec we'd pass to addDevice if the user clicked "Ekle" right now.
+    // Re-derived on every render — cheap, used only as the preview fetch key.
+    const candidateSpec = (() => {
+        if (!picked) return null;
+        const model = USAGE_MODEL[selectedType];
+        let daily_usage_hours;
+        if (!model) {
+            daily_usage_hours = picked.daily_usage_hours || 4;
+        } else if (model.locked) {
+            daily_usage_hours = model.default_hours;
+        } else if (model.unit === 'cycles') {
+            const cycles = parseFloat(usageValue) || model.default_cycles;
+            daily_usage_hours = (cycles * model.cycle_hours) / 7;
+        } else {
+            const v = parseFloat(usageValue);
+            daily_usage_hours = Number.isFinite(v) ? v : (picked.daily_usage_hours || model.default_hours || 4);
+        }
+        return {
+            type:                 picked.type || selectedType,
+            name:                 picked.name,
+            nominal_power_watts:  picked.nominal_power_watts || 100,
+            daily_usage_hours:    Math.round(daily_usage_hours * 100) / 100,
+            standby_power_watts:  picked.standby_power_watts || 0,
+            efficiency_class:     picked.efficiency_class    || 'A',
+            year_of_purchase:     picked.year_of_purchase    || new Date().getFullYear(),
+        };
+    })();
+
+    // ── Debounced /calculate fetch (300 ms after spec last changed) ─────
+    // Cache by spec key so re-tweaking back to a known value is instant.
+    const candidateKey = candidateSpec ? JSON.stringify(candidateSpec) : null;
+    useEffect(() => {
+        if (!candidateKey || !candidateSpec) {
+            setPreviewData(null);
+            return;
+        }
+        // Cache hit — render immediately, no network.
+        if (previewCache.current.has(candidateKey)) {
+            setPreviewData(previewCache.current.get(candidateKey));
+            setPreviewLoading(false);
+            return;
+        }
+        const seq = ++previewSeq.current;
+        setPreviewLoading(true);
+        const t = setTimeout(async () => {
+            const input = buildDeviceInput(PREVIEW_DEVICE_ID, { ...candidateSpec, room_id: PREVIEW_ROOM_ID });
+            const result = await calculate(input);
+            // Drop stale responses if the user moved on
+            if (seq !== previewSeq.current) return;
+            if (result) {
+                previewCache.current.set(candidateKey, result);
+                setPreviewData(result);
+            } else {
+                setPreviewData(null);
+            }
+            setPreviewLoading(false);
+        }, 300);
+        return () => clearTimeout(t);
+    }, [candidateKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleAdd = () => {
         if (!picked) return;
         const model = USAGE_MODEL[selectedType] || { unit: 'hours', default_hours: picked.daily_usage_hours || 4 };
@@ -157,7 +232,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
             <div
                 className="bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl flex overflow-hidden"
-                style={{ width: 720, height: picked ? 580 : 520 }}
+                style={{ width: 720, height: picked ? 660 : 520, maxHeight: '92vh' }}
             >
                 {/* ── Left sidebar: categories ── */}
                 <div className="w-44 border-r border-white/10 flex flex-col py-3 overflow-y-auto flex-shrink-0">
@@ -262,9 +337,21 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                         )}
                     </div>
 
+                    {/* ── Live delta preview (Phase B) ───────────────── */}
+                    {picked && (
+                        <div className="px-5 pt-3 pb-1 border-t border-white/10 bg-white/[0.02]">
+                            <DeltaPreviewPanel
+                                data={previewData}
+                                loading={previewLoading}
+                                spec={candidateSpec}
+                                tariffSource="national"
+                            />
+                        </div>
+                    )}
+
                     {/* ── Usage configuration (visible when a card is picked) ── */}
                     {picked && usageModel && (
-                        <div className="px-5 py-3 border-t border-white/10 bg-white/[0.02]">
+                        <div className="px-5 pb-3 pt-2 bg-white/[0.02]">
                             <p className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2">Kullanım Ayarı</p>
                             {usageModel.unit === 'cycles' ? (
                                 <div className="flex items-center gap-4">

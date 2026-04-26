@@ -197,3 +197,63 @@ class BillDiagnoseResponse(BaseModel):
     residual_pct: float = 0.0
     diagnostics: list[DiagnosticFlag] = []
     summary_tr: str = ""
+
+
+# ─── Calibration (Phase C) ────────────────────────────────────────────────────
+
+class CalibrationDeviceInput(BaseModel):
+    """One declared device with its current ML prediction + declared hours."""
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    type: str
+    predicted_monthly_kwh: float
+    daily_usage_hours: float
+
+
+class CalibrationRequest(BaseModel):
+    actual_kwh: float
+    devices: list[CalibrationDeviceInput] = []
+    bill_count: int = 1
+
+
+class CalibrationSuggestion(BaseModel):
+    device_id: str
+    device_name: str
+    device_type_label: str
+    field: str                # always "daily_usage_hours" in MVP
+    from_value: float
+    to_value: float
+    impact_kwh_per_month: float
+
+
+class CalibrationResponse(BaseModel):
+    predicted_kwh: float
+    actual_kwh: float
+    residual_kwh: float
+    residual_pct: float
+    bill_count: int
+    suggested_adjustments: list[CalibrationSuggestion] = []
+    reconciled: bool = False
+
+
+# ─── Home-level peer comparison (Phase D) ─────────────────────────────────────
+
+class HomeCompareRequest(BaseModel):
+    city: str = "Istanbul"
+    occupants_count: int = 2
+    total_area_sqm: float = 80.0
+    n_devices: int = 1
+    monthly_kwh: float                    # total household kWh/month
+    source: str = "predicted"             # "bill" | "predicted"
+
+
+class HomeCompareResponse(BaseModel):
+    cluster_id: int
+    cluster_size: int
+    user_monthly_kwh: float
+    cluster_avg_monthly_kwh: float
+    percentile: int
+    comparison_label: str                 # below_average | average | above_average
+    source: str                           # echoes input — frontend uses this to label the chart
