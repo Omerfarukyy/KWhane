@@ -35,7 +35,23 @@
       "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx --log-level=error src/services/houseService.js --outfile=/dev/null)",
       "Bash(python -c \"import json; json.load\\(open\\('n8n-workflow.json'\\)\\); print\\('OK'\\)\")",
       "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx --log-level=error src/services/mlService.js src/components/Dashboard/Layout/DashboardLayout.jsx --outdir=/tmp/esbuild-check)",
-      "Bash(npx esbuild *)"
+      "Bash(npx esbuild *)",
+      "Bash(npx --yes esbuild --bundle=false --loader=jsx src/components/Dashboard/Bills/BillEntryModal.jsx)",
+      "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx src/components/Dashboard/Bills/BillDiagnosticCard.jsx)",
+      "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx src/components/Dashboard/Bills/BillsTab.jsx)",
+      "Bash(npx --yes esbuild --bundle=false src/services/billsService.js)",
+      "Bash(npx --yes esbuild --bundle=false --loader:.jsx=jsx src/components/Dashboard/AiAssistant.jsx)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('services/bill_diagnostics.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('models/schemas.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('main.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('services/chat_service.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('services/calibration_service.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('models/schemas.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('main.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('services/home_compare_service.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('models/schemas.py', encoding='utf-8'\\).read\\(\\)\\); ast.parse\\(open\\('main.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(node -e \"const d = require\\('@react-three/drei'\\); console.log\\(Object.keys\\(d\\).filter\\(k => k.toLowerCase\\(\\).includes\\('cloud'\\) || k.toLowerCase\\(\\).includes\\('star'\\)\\).join\\(','\\)\\)\")",
+      "Bash(node -e \"const d = require\\('@react-three/drei'\\); console.log\\(['Cloud','Clouds','Stars','Sky'].map\\(k => k+':'+\\(typeof d[k]\\)\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(python -c \"import sys; data = open\\('src/components/Dashboard/Bills/BillDiagnosticCard.jsx', 'rb'\\).read\\(\\); print\\(repr\\(data[3300:3700]\\)\\)\")",
+      "Bash(npx eslint *)",
+      "Bash(npx vite *)"
     ]
   }
 }

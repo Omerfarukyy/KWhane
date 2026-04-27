@@ -18,9 +18,11 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import useSceneStore from '../../store/useSceneStore';
 import { useSpeechToText } from '../../hooks/useSpeechToText';
+import { useLanguage } from '../../contexts/LanguageProvider';
 
-const AiAssistant = ({ isOpen, onOpen, onClose }) => {
+const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
     const { user } = useAuth();
+    const { t } = useLanguage();
 
     const [messages, setMessages] = useState([
         { role: 'assistant', content: 'Eviniz analiz ediliyor…' }
@@ -48,9 +50,9 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
         }
     }, [messages]);
 
-    // ── Load context once when panel opens ───────────────────────────────────
+    // ── Load context once when panel opens (or on mount when embedded) ──────
     useEffect(() => {
-        if (!isOpen || contextReady) return;
+        if ((!isOpen && !embedded) || contextReady) return;
 
         (async () => {
             // One-time snapshot — avoids subscription re-renders
@@ -117,15 +119,15 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
 
             setMessages([{ role: 'assistant', content: welcome }]);
         })();
-    }, [isOpen, contextReady, user]);
+    }, [isOpen, embedded, contextReady, user]);
 
-    // Reset context when panel is closed so it reloads fresh next time
+    // Reset context when panel is closed (skip when embedded — always mounted)
     useEffect(() => {
-        if (!isOpen) {
+        if (!isOpen && !embedded) {
             setContextReady(false);
             setMessages([{ role: 'assistant', content: 'Eviniz analiz ediliyor…' }]);
         }
-    }, [isOpen]);
+    }, [isOpen, embedded]);
 
     // ── Send handler ─────────────────────────────────────────────────────────
     const handleSend = async () => {
@@ -170,8 +172,11 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
         }
     };
 
-    // Floating circular launcher — always visible when the panel is closed.
-    if (!isOpen) {
+    // Embedded mode: skip launcher; always render the panel inline.
+    if (embedded) {
+        // fallthrough — render the panel below with embedded styles.
+    } else if (!isOpen) {
+        // Floating circular launcher — always visible when the panel is closed.
         return (
             <button
                 type="button"
@@ -206,16 +211,30 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
 
     return (
         <div
-            className="fixed bottom-6 right-6 z-50 flex flex-col rounded-3xl overflow-hidden"
-            style={{
-                width:     400,
-                height:    540,
-                background: '#111111',
-                border:    '1px solid #1e1e1e',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.85)',
-                fontFamily: "'Inter', ui-sans-serif",
-                backdropFilter: 'blur(24px)',
-            }}
+            className={
+                embedded
+                    ? "flex flex-col rounded-3xl overflow-hidden w-full h-full"
+                    : "fixed bottom-6 right-6 z-50 flex flex-col rounded-3xl overflow-hidden"
+            }
+            style={
+                embedded
+                    ? {
+                        background: 'var(--color-surface)',
+                        border:    '1px solid var(--color-border)',
+                        boxShadow: 'inset 0 1px 0 var(--color-highlight)',
+                        fontFamily: "'Inter', ui-sans-serif",
+                        minHeight: 360,
+                    }
+                    : {
+                        width:     400,
+                        height:    540,
+                        background: '#111111',
+                        border:    '1px solid #1e1e1e',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.85)',
+                        fontFamily: "'Inter', ui-sans-serif",
+                        backdropFilter: 'blur(24px)',
+                    }
+            }
         >
             {/* ── Header ─────────────────────────────────────────────────────── */}
             <div
@@ -230,19 +249,21 @@ const AiAssistant = ({ isOpen, onOpen, onClose }) => {
                         <h3 className="font-bold text-white text-sm leading-none">KWhane AI</h3>
                         <p className="text-[11px] mt-1 flex items-center gap-1.5" style={{ color: '#555555' }}>
                             <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
-                            Yapay Zeka Çevrimiçi
+                            {t('aiOnline')}
                         </p>
                     </div>
                 </div>
-                <button
-                    onClick={onClose}
-                    className="p-1 transition-colors"
-                    style={{ color: '#555555' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
-                >
-                    <X size={18} />
-                </button>
+                {!embedded && (
+                    <button
+                        onClick={onClose}
+                        className="p-1 transition-colors"
+                        style={{ color: '#555555' }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+                    >
+                        <X size={18} />
+                    </button>
+                )}
             </div>
 
             {/* ── Messages ───────────────────────────────────────────────────── */}

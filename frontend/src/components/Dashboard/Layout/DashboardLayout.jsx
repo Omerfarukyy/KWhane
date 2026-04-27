@@ -12,12 +12,15 @@ import SuggestionCards from '../SuggestionCards';
 import UpgradeQuickAction from '../UpgradeQuickAction';
 import HomeRanking from '../HomeRanking';
 import StreakCard from '../Goals/StreakCard';
+import HomeDashboard from '../Home/HomeDashboard';
 import useSceneStore from '../../../store/useSceneStore';
 import { useLanguage } from '../../../contexts/LanguageProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import { runFullAnalysis } from '../../../services/mlService';
+import { listBills } from '../../../services/billsService';
 import { supabase } from '../../../lib/supabase';
 import { USAGE_MODEL } from '../../../utils/usageModels';
+import { efficiencyColor } from '../../../utils/efficiencyColor';
 
 // Lazy-loaded modals
 const TicketSystem      = lazy(() => import('../TicketSystem'));
@@ -31,12 +34,14 @@ const DashboardLayout = () => {
     // ── Modal / tab state ──────────────────────────────────────────────────
     const [isTicketModalOpen,   setIsTicketModalOpen]   = useState(false);
     const [isProfileModalOpen,  setIsProfileModalOpen]  = useState(false);
+    const [isProfileMenuOpen,   setIsProfileMenuOpen]   = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isAiAssistantOpen,   setIsAiAssistantOpen]   = useState(false);
     const [isBuilderOpen,       setIsBuilderOpen]       = useState(false);
     const [isRoomModalOpen,     setIsRoomModalOpen]     = useState(false);
     const [isCatalogOpen,       setIsCatalogOpen]       = useState(false);
     const [catalogInitialType,  setCatalogInitialType]  = useState(null);
+    const [catalogInitialQuery, setCatalogInitialQuery] = useState('');
     const [pendingGhostId,      setPendingGhostId]      = useState(null);
     const [activeTab,           setActiveTab]           = useState('home');
     // Home panel sub-tabs
@@ -59,6 +64,7 @@ const DashboardLayout = () => {
     const setPendingRoomAttach   = useSceneStore((s) => s.setPendingRoomAttach);
     const pinnedDeviceId         = useSceneStore((s) => s.pinnedDeviceId);
     const setPinnedDeviceId      = useSceneStore((s) => s.setPinnedDeviceId);
+    const setHomeBillValidated   = useSceneStore((s) => s.setHomeBillValidated);
 
     // ── Store read ─────────────────────────────────────────────────────────
     const rooms          = useSceneStore((s) => s.rooms);
@@ -67,6 +73,15 @@ const DashboardLayout = () => {
     const selectedId     = useSceneStore((s) => s.selectedId);
     const deviceSpecs    = useSceneStore((s) => s.deviceSpecs);
     const isLoadingFromDB = useSceneStore((s) => s.isLoadingFromDB);
+
+    // ── Eagerly probe bills so device badges paint green from the first
+    //    paint, regardless of whether the user opens the home dashboard. ──
+    useEffect(() => {
+        if (!user?.id) return;
+        listBills(user.id)
+            .then((bills) => setHomeBillValidated((bills || []).length > 0))
+            .catch(() => { /* ignore — flag stays false */ });
+    }, [user?.id, setHomeBillValidated]);
 
     // ── Session persistence + ML restore ──────────────────────────────────
     useEffect(() => {
@@ -138,13 +153,22 @@ const DashboardLayout = () => {
     const pinnedData = pinnedDeviceId ? energyData[pinnedDeviceId] : undefined;
     const closePinnedPanel = useCallback(() => { setPinnedDeviceId(null); setSelectedId(null); }, [setPinnedDeviceId, setSelectedId]);
 
+    // Home view = the 60/40 split. Active when user is on the 'home' tab.
+    // When a device is pinned, the right column flips to DeviceDetailPanel
+    // but the split layout itself stays.
+    const homeView = activeTab === 'home';
+
     // ── Handlers ───────────────────────────────────────────────────────────
     const closeTicketModal  = useCallback(() => setIsTicketModalOpen(false),   []);
     const closeProfileModal = useCallback(() => setIsProfileModalOpen(false),  []);
     const closeSettingsModal = useCallback(() => setIsSettingsModalOpen(false), []);
     const closeAiAssistant  = useCallback(() => setIsAiAssistantOpen(false),   []);
     const handleTabChange   = useCallback((tab) => {
-        setActiveTab(tab);
+        // Pressing Home again exits home view (back to full-screen sim).
+        setActiveTab((current) => {
+            if (tab === 'home' && current === 'home') return 'sim';
+            return tab;
+        });
         if (tab === 'home') { setSelectedId(null); setPinnedDeviceId(null); }
     }, [setSelectedId, setPinnedDeviceId]);
     const openTicketModal   = useCallback(() => { setActiveTab('tickets');  setIsTicketModalOpen(true); },   []);
@@ -156,6 +180,7 @@ const DashboardLayout = () => {
     // Open catalog for "Add Device" toolbar button
     const openCatalog = useCallback(() => {
         setCatalogInitialType(null);
+        setCatalogInitialQuery('');
         setPendingGhostId(null);
         setIsCatalogOpen(true);
     }, []);
@@ -214,7 +239,6 @@ const DashboardLayout = () => {
         setPendingRoomAttach(null);
     }, [addRoom, setPendingRoomAttach]);
 
-    const timelineData = useMemo(() => [40, 60, 30, 80, 50, 90, 45, 70, 55, 65, 35, 75, 85, 40], []);
     const displayName  = user?.fullName || user?.email?.split('@')[0] || 'Kullanıcı';
 
     // Gauge offset — clamp totalKwh to 0-600 for visual
@@ -227,8 +251,12 @@ const DashboardLayout = () => {
         <div className="relative w-screen h-screen overflow-hidden font-sans"
             style={{ background: 'var(--color-bg)', fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" }}>
 
-            {/* LAYER 0: 3D SCENE */}
-            <div className="absolute inset-0 z-0 pointer-events-auto">
+            {/* LAYER 0: 3D SCENE — full-bleed by default, constrained to 40%
+                right column when in home view (dashboard takes the left). */}
+            <div
+                className="absolute top-0 bottom-0 right-0 z-0 pointer-events-auto transition-[left] duration-300"
+                style={{ left: homeView ? '60%' : 0 }}
+            >
                 <SceneContainer
                     onGhostClick={handleGhostClick}
                     onGhostDismiss={handleGhostDismiss}
@@ -239,14 +267,72 @@ const DashboardLayout = () => {
                         style={{ background: 'var(--color-bg-overlay)', backdropFilter: 'blur(4px)', zIndex: 5 }}>
                         <div className="w-8 h-8 rounded-full border-2 border-blue-500/20 border-t-blue-500 animate-spin" />
                         <span className="text-xs font-medium" style={{ color: 'var(--color-subtle)', letterSpacing: '0.08em' }}>
-                            Eviniz yükleniyor…
+                            {t('loadingHome')}
                         </span>
                     </div>
                 )}
             </div>
 
-            {/* LAYER 1: HUD OVERLAY */}
-            <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 sm:p-6 lg:p-8">
+            {/* LAYER 0.5: HOME COLUMN — dashboard on the left 60% by default;
+                flips to device-detail when a device is pinned. */}
+            {homeView && (
+                <div
+                    className="absolute top-0 bottom-0 left-0 z-0 pointer-events-auto p-4 sm:p-6 lg:p-8"
+                    style={{ width: '60%' }}
+                >
+                    {pinnedObj ? (
+                        <aside
+                            className="rounded-3xl p-6 flex flex-col gap-7 relative w-full h-full overflow-y-auto"
+                            style={{
+                                background: 'var(--color-surface-glass)',
+                                backdropFilter: 'blur(24px)',
+                                border: '1px solid var(--color-border)',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 var(--color-highlight)',
+                            }}
+                        >
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--color-subtle)' }}>
+                                    {t('deviceDetail')}
+                                </span>
+                                <button onClick={closePinnedPanel}
+                                    className="p-1 rounded-md transition-colors"
+                                    style={{ color: 'var(--color-subtle)', background: 'transparent', cursor: 'pointer' }}
+                                    onMouseEnter={e => e.currentTarget.style.color = 'var(--color-text)'}
+                                    onMouseLeave={e => e.currentTarget.style.color = 'var(--color-subtle)'}>
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <DeviceDetailPanel
+                                obj={pinnedObj}
+                                data={pinnedData}
+                                spec={deviceSpecs[pinnedObj.id]}
+                                onDelete={() => { closePinnedPanel(); removeSelected(); }}
+                                setEnergyData={setEnergyData}
+                                setDeviceSpec={setDeviceSpec}
+                                user={user}
+                            />
+                        </aside>
+                    ) : (
+                        <div className="w-full h-full">
+                            <HomeDashboard
+                                onCatalogSearch={(q) => {
+                                    setCatalogInitialType(null);
+                                    setCatalogInitialQuery(q);
+                                    setPendingGhostId(null);
+                                    setIsCatalogOpen(true);
+                                }}
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* LAYER 1: HUD OVERLAY — full-bleed by default; constrained to
+                the right 40% in home view so the dashboard owns the left. */}
+            <div
+                className="absolute top-0 bottom-0 right-0 z-10 pointer-events-none flex flex-col justify-between p-4 sm:p-6 lg:p-8 transition-[left] duration-300"
+                style={{ left: homeView ? '60%' : 0 }}
+            >
 
                 {/* HEADER */}
                 <header className="pointer-events-auto w-full h-16 flex items-center justify-between px-6 rounded-2xl"
@@ -269,7 +355,7 @@ const DashboardLayout = () => {
                     <div className="flex items-center gap-4">
                         <ThemeLangToggle />
                         <div className="w-px h-6" style={{ background: 'var(--color-border)' }} />
-                        <button onClick={() => setIsProfileModalOpen(true)} className="flex items-center gap-3 group">
+                        <button onClick={() => setIsProfileMenuOpen((v) => !v)} className="flex items-center gap-3 group">
                             <div className="text-right hidden sm:block">
                                 <p className="text-sm font-semibold text-white group-hover:text-blue-400 transition-colors">{displayName}</p>
                                 <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#3b82f6' }}>Premium</p>
@@ -287,7 +373,10 @@ const DashboardLayout = () => {
                 {/* MIDDLE: LEFT TOOLBAR + RIGHT PANEL */}
                 <div className="flex-1 flex items-center justify-between w-full my-6">
 
-                    {/* LEFT FLOATING TOOLBAR */}
+                    {/* LEFT FLOATING TOOLBAR
+                        - Home view: only the Home toggle.
+                        - Sim view: Home + Add Room + Add Device + Delete-when-selected.
+                        Tickets / Settings live in the profile dropdown now. */}
                     <aside className="pointer-events-auto flex flex-col gap-3 py-5 px-2.5 rounded-2xl h-fit"
                         style={{
                             background: 'var(--color-surface-glass)',
@@ -298,38 +387,38 @@ const DashboardLayout = () => {
                         <NavButton icon={<Home size={20} />} active={activeTab === 'home'}
                             onClick={() => handleTabChange('home')} tooltip={t('overview')} />
 
-                        {/* Add Room */}
-                        <NavButton icon={<SquarePlus size={20} />} active={isRoomModalOpen}
-                            onClick={() => setIsRoomModalOpen(true)} tooltip="Oda Ekle" />
-
-                        {/* Add Device */}
-                        <NavButton icon={<PackagePlus size={20} />} active={isCatalogOpen}
-                            onClick={openCatalog} tooltip={t('addDevice')} />
-
-                        <div className="w-7 h-px mx-auto my-1" style={{ background: 'var(--color-border)' }} />
-
-                        <NavButton icon={<TicketIcon size={20} />} active={activeTab === 'tickets'}
-                            onClick={openTicketModal} tooltip={t('support')} />
-                        <NavButton icon={<Settings size={20} />} active={activeTab === 'settings'}
-                            onClick={openSettingsModal} tooltip={t('settings')} />
-
-                        {/* Delete selected — only visible when something is selected */}
-                        {selectedId && (
+                        {!homeView && (
                             <>
-                                <div className="w-7 h-px mx-auto my-1" style={{ background: 'var(--color-border)' }} />
-                                <NavButton
-                                    icon={<Trash2 size={20} />}
-                                    active={false}
-                                    onClick={removeSelected}
-                                    tooltip="Seçiliyi Sil (Del)"
-                                    danger
-                                />
+                                {/* Add Room */}
+                                <NavButton icon={<SquarePlus size={20} />} active={isRoomModalOpen}
+                                    onClick={() => setIsRoomModalOpen(true)} tooltip={t('addRoom')} />
+
+                                {/* Add Device */}
+                                <NavButton icon={<PackagePlus size={20} />} active={isCatalogOpen}
+                                    onClick={openCatalog} tooltip={t('addDevice')} />
+
+                                {/* Delete selected — only visible when something is selected */}
+                                {selectedId && (
+                                    <>
+                                        <div className="w-7 h-px mx-auto my-1" style={{ background: 'var(--color-border)' }} />
+                                        <NavButton
+                                            icon={<Trash2 size={20} />}
+                                            active={false}
+                                            onClick={removeSelected}
+                                            tooltip={t('deleteSelected')}
+                                            danger
+                                        />
+                                    </>
+                                )}
                             </>
                         )}
                     </aside>
 
-                    {/* RIGHT ANALYSIS PANEL */}
-                    <aside className="pointer-events-auto w-80 lg:w-96 rounded-3xl p-6 flex flex-col gap-7 relative overflow-hidden"
+                    {/* RIGHT ANALYSIS PANEL — hidden entirely in home view
+                        (replaced by the left-column dashboard / device detail). */}
+                    {!homeView && (
+                    <aside
+                        className="pointer-events-auto w-80 lg:w-96 rounded-3xl p-6 flex flex-col gap-7 relative overflow-hidden"
                         style={{
                             background: 'var(--color-surface-glass)',
                             backdropFilter: 'blur(24px)',
@@ -345,7 +434,7 @@ const DashboardLayout = () => {
                             /* ── DEVICE DETAIL VIEW ── */
                             <>
                                 <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--color-subtle)' }}>Cihaz Detayı</span>
+                                    <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--color-subtle)' }}>{t('deviceDetail')}</span>
                                     <button onClick={closePinnedPanel}
                                         className="p-1 rounded-md transition-colors"
                                         title="Kapat"
@@ -373,7 +462,7 @@ const DashboardLayout = () => {
                                     <div className="flex items-center justify-between px-3 py-2 rounded-xl"
                                         style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.18)' }}>
                                         <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>
-                                            Seçili: <span style={{ color: 'var(--color-text)' }}>{selectedRoom.name}</span>
+                                            {t('selectedLabel')}: <span style={{ color: 'var(--color-text)' }}>{selectedRoom.name}</span>
                                         </span>
                                         <button onClick={removeSelected}
                                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
@@ -521,7 +610,7 @@ const DashboardLayout = () => {
                                     <div className="flex-1 overflow-y-auto">
                                         <p className="text-[10px] font-bold uppercase tracking-widest mb-3"
                                             style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
-                                            Tasarruf Önerileri
+                                            {t('savingsSuggestions')}
                                         </p>
                                         <SuggestionCards />
                                     </div>
@@ -549,40 +638,59 @@ const DashboardLayout = () => {
                             </>
                         )}
                     </aside>
+                    )}
                 </div>
 
-                {/* BOTTOM TIMELINE BAR */}
-                <div className="pointer-events-auto w-full flex justify-center">
-                    <div className="w-2/3 max-w-4xl h-24 rounded-2xl p-4 flex items-end justify-between gap-1.5 sm:gap-2.5"
-                        style={{
-                            background: 'var(--color-surface-glass)',
-                            backdropFilter: 'blur(24px)',
-                            border: '1px solid var(--color-border)',
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                        }}>
-                        {timelineData.map((h, i) => (
-                            <div key={i} className="flex-1 relative group cursor-pointer" style={{ height: '100%' }}>
-                                <div className="absolute -top-9 left-1/2 -translate-x-1/2 text-white text-[9px] font-bold py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20"
-                                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)' }}>
-                                    G{i + 1}: {Math.floor(h * 1.5)} kWh
-                                </div>
-                                <div className="absolute bottom-0 w-full rounded-t-sm transition-all duration-300"
-                                    style={{ height: `${h}%`, background: i === 8 ? '#3b82f6' : 'var(--color-border-2)' }}
-                                    onMouseEnter={e => { if (i !== 8) e.currentTarget.style.background = 'rgba(59,130,246,0.5)'; }}
-                                    onMouseLeave={e => { if (i !== 8) e.currentTarget.style.background = 'var(--color-border-2)'; }}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                </div>
             </div>
+
+            {/* PROFILE DROPDOWN — top-level fixed layer so backdrop-filter
+                stacking contexts inside the HUD can't hide it. */}
+            {isProfileMenuOpen && (
+                <>
+                    <div
+                        className="fixed inset-0"
+                        style={{ background: 'transparent', zIndex: 9998 }}
+                        onClick={() => setIsProfileMenuOpen(false)}
+                    />
+                    <div
+                        className="fixed rounded-xl overflow-hidden flex flex-col"
+                        style={{
+                            top: 80,
+                            right: 32,
+                            minWidth: 200,
+                            background: 'var(--color-surface)',
+                            border: '1px solid var(--color-border)',
+                            boxShadow: '0 16px 40px rgba(0,0,0,0.6), inset 0 1px 0 var(--color-highlight)',
+                            zIndex: 9999,
+                        }}
+                    >
+                        <ProfileMenuItem
+                            icon={<User size={14} />}
+                            label={t('accountInfo')}
+                            onClick={() => { setIsProfileMenuOpen(false); setIsProfileModalOpen(true); }}
+                        />
+                        <ProfileMenuItem
+                            icon={<Settings size={14} />}
+                            label={t('settings')}
+                            onClick={() => { setIsProfileMenuOpen(false); openSettingsModal(); }}
+                        />
+                        <ProfileMenuItem
+                            icon={<TicketIcon size={14} />}
+                            label={t('support')}
+                            onClick={() => { setIsProfileMenuOpen(false); openTicketModal(); }}
+                        />
+                    </div>
+                </>
+            )}
 
             {/* LAYER 2: MODALS */}
             <Suspense fallback={null}>
                 <ProfileModal  isOpen={isProfileModalOpen}  onClose={closeProfileModal} />
                 <SettingsModal isOpen={isSettingsModalOpen} onClose={closeSettingsModal} />
-                <AiAssistant       isOpen={isAiAssistantOpen} onOpen={openAiAssistant} onClose={closeAiAssistant} />
-                <HomeBuilderWizard isOpen={isBuilderOpen}     onOpen={openBuilder}     onClose={closeBuilder} />
+                {!homeView && (
+                    <AiAssistant   isOpen={isAiAssistantOpen} onOpen={openAiAssistant} onClose={closeAiAssistant} />
+                )}
+                <HomeBuilderWizard isOpen={isBuilderOpen}     onOpen={openBuilder}     onClose={closeBuilder}     hidden={isAiAssistantOpen} />
 
                 {isTicketModalOpen && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-auto"
@@ -623,9 +731,10 @@ const DashboardLayout = () => {
             {/* Device Catalog Modal */}
             <DeviceCatalogModal
                 isOpen={isCatalogOpen}
-                onClose={() => { setIsCatalogOpen(false); setPendingGhostId(null); }}
+                onClose={() => { setIsCatalogOpen(false); setPendingGhostId(null); setCatalogInitialQuery(''); }}
                 onDeviceSelect={handleDeviceSelect}
                 initialType={catalogInitialType}
+                initialQuery={catalogInitialQuery}
             />
         </div>
     );
@@ -669,14 +778,25 @@ const NavButton = React.memo(({ icon, active, onClick, tooltip, danger = false }
     </div>
 ));
 
+// ─── Profile Menu Item ───────────────────────────────────────────────────────
+const ProfileMenuItem = ({ icon, label, onClick }) => (
+    <button
+        onClick={onClick}
+        className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors text-left"
+        style={{ color: 'var(--color-text)', background: 'transparent', cursor: 'pointer' }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-surface-2)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+    >
+        <span style={{ color: 'var(--color-muted)' }}>{icon}</span>
+        {label}
+    </button>
+);
+
 // ─── Device Detail Panel ──────────────────────────────────────────────────────
-const EFFICIENCY_BAR_COLOR = (score) => {
-    if (score >= 80) return '#60a5fa';
-    if (score >= 60) return '#fbbf24';
-    return '#f87171';
-};
 
 const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDeviceSpec, user }) => {
+    const { t } = useLanguage();
+    const validated = useSceneStore((s) => s.homeBillValidated);
     const isLoading = data === null || data === undefined;
     const isError   = data === 'error';
 
@@ -685,7 +805,7 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
     const score       = (!isLoading && !isError) ? (data.efficiency_score   ?? 75) : 0;
     const theoretical = spec ? (spec.nominal_power_watts * spec.daily_usage_hours * 30) / 1000 : 0;
 
-    const accentColor = EFFICIENCY_BAR_COLOR(score);
+    const accentColor = efficiencyColor(score, validated);
 
     const usageModel   = USAGE_MODEL[obj.type];
     const isCycles     = usageModel?.unit === 'cycles';
@@ -837,7 +957,7 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                     {/* Efficiency score bar */}
                     <div>
                         <div className="flex justify-between text-[10px] mb-1.5" style={{ color: 'var(--color-subtle)' }}>
-                            <span>Verimlilik Skoru</span>
+                            <span>{t('efficiencyScore')}</span>
                             <span style={{ color: accentColor }}>{score}/100</span>
                         </div>
                         <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border-2)' }}>

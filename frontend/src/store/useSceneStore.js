@@ -187,6 +187,12 @@ const useSceneStore = create((set, get) => ({
     pinnedDeviceId: null,
     setPinnedDeviceId: (id) => set({ pinnedDeviceId: id }),
 
+    // House-level flag: true once at least one bill has been entered for this
+    // user. While true, every device with efficiency_score >= 80 renders in
+    // green instead of blue. Yellow/red are unchanged regardless.
+    homeBillValidated: false,
+    setHomeBillValidated: (v) => set({ homeBillValidated: !!v }),
+
     // ─── Energy / spec setters ────────────────────────────────────────────────
     setEnergyData: (id, data) =>
         set((s) => ({ energyData: { ...s.energyData, [id]: data } })),
@@ -511,12 +517,43 @@ const useSceneStore = create((set, get) => ({
         }),
 
     // ─── RESIZE ROOM ──────────────────────────────────────────────────────────
+    // Also re-positions every object inside the room: scaled relative to the
+    // old → new center so an item at the wall stays at the wall, an item at
+    // the center stays at the center.
     resizeRoom: (id, newSize, newPosition) =>
-        set((s) => ({
-            rooms: s.rooms.map((r) =>
-                r.id === id ? { ...r, size: newSize, position: newPosition || r.position } : r
-            ),
-        })),
+        set((s) => {
+            const oldRoom = s.rooms.find((r) => r.id === id);
+            if (!oldRoom) return s;
+            const oldCenter = oldRoom.position;
+            const oldW = oldRoom.size.width  || 1;
+            const oldD = oldRoom.size.depth  || 1;
+            const newCenter = newPosition || oldRoom.position;
+            const newW = newSize.width  || oldW;
+            const newD = newSize.depth  || oldD;
+            const sx = newW / oldW;
+            const sz = newD / oldD;
+
+            const updatedObjects = s.objects.map((o) => {
+                if (o.roomId !== id) return o;
+                const relX = o.position[0] - oldCenter[0];
+                const relZ = o.position[2] - oldCenter[2];
+                const nx = newCenter[0] + relX * sx;
+                const nz = newCenter[2] + relZ * sz;
+                const oref = objectRefs[o.id];
+                if (oref) {
+                    oref.position.x = nx;
+                    oref.position.z = nz;
+                }
+                return { ...o, position: [nx, o.position[1], nz] };
+            });
+
+            return {
+                rooms: s.rooms.map((r) =>
+                    r.id === id ? { ...r, size: newSize, position: newCenter } : r
+                ),
+                objects: updatedObjects,
+            };
+        }),
 
     updateRoomPosition: (id, newPosition) =>
         set((s) => ({

@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { USAGE_MODEL } from '../../utils/usageModels';
 import { calculate, buildDeviceInput } from '../../services/mlService';
 import DeltaPreviewPanel from './DeltaPreviewPanel';
+import { useLanguage } from '../../contexts/LanguageProvider';
 
 // Placeholder UUIDs for the preview /calculate call. The endpoint is
 // room-id-agnostic — it just echoes the device_id back — so any valid UUID works.
@@ -56,9 +57,10 @@ const EFFICIENCY_COLORS = {
  *   onDeviceSelect{(spec: DeviceSpec) => void}  — fires when user clicks "Ekle"
  *   initialType   {string|null}                 — pre-select a category (from ghost click)
  */
-const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = null }) => {
+const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = null, initialQuery = '' }) => {
+    const { t } = useLanguage();
     const [selectedType, setSelectedType] = useState(initialType || 'fridge');
-    const [search, setSearch]             = useState('');
+    const [search, setSearch]             = useState(initialQuery || '');
     const [cards, setCards]               = useState([]);
     const [loading, setLoading]           = useState(false);
     const [picked, setPicked]             = useState(null);
@@ -77,12 +79,12 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
         if (isOpen) {
             setSelectedType(initialType || 'fridge');
             setPicked(null);
-            setSearch('');
+            setSearch(initialQuery || '');
             setUsageValue(null);
             setPreviewData(null);
             previewCache.current.clear();
         }
-    }, [isOpen, initialType]);
+    }, [isOpen, initialType, initialQuery]);
 
     // Reset usage value when type or picked card changes
     useEffect(() => {
@@ -406,7 +408,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                     {/* Footer */}
                     <div className="flex items-center justify-between px-5 py-3 border-t border-white/10">
                         <span className="text-xs text-white/30">
-                            {picked ? `Seçili: ${picked.name}` : 'Bir model seçin'}
+                            {picked ? `${t('selectedLabel')}: ${picked.name}` : t('pickModel')}
                         </span>
                         <div className="flex gap-3">
                             <button

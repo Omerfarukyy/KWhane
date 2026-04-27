@@ -43,6 +43,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
 
     const setDeviceSpec = useSceneStore((s) => s.setDeviceSpec);
     const deviceSpecs = useSceneStore((s) => s.deviceSpecs);
+    const setHomeBillValidated = useSceneStore((s) => s.setHomeBillValidated);
 
     if (loading) {
         return (
@@ -87,6 +88,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                 await updateDeviceFields(action.device_id, { daily_usage_hours: action.suggested_hours });
                 const prev = deviceSpecs[action.device_id] || {};
                 setDeviceSpec(action.device_id, { ...prev, daily_usage_hours: action.suggested_hours });
+                setHomeBillValidated(true);
                 toast.success(`Kullanım saati ${action.suggested_hours} saat olarak güncellendi.`);
                 setAppliedActions((s) => ({ ...s, [key]: true }));
                 onApplied?.();
@@ -95,6 +97,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                 await updateDeviceFields(action.device_id, { year_of_purchase: newYear });
                 const prev = deviceSpecs[action.device_id] || {};
                 setDeviceSpec(action.device_id, { ...prev, year_of_purchase: newYear });
+                setHomeBillValidated(true);
                 toast.success(`Cihaz yılı ${newYear} olarak güncellendi. Doğru yılı Cihazlar sekmesinden de düzenleyebilirsiniz.`);
                 setAppliedActions((s) => ({ ...s, [key]: true }));
                 onApplied?.();

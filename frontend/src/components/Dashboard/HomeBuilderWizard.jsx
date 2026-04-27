@@ -10,7 +10,7 @@ const WELCOME =
     'Merhaba! Evinizi bana anlatın — kaç oda var, hangi cihazlar kullanıyorsunuz? ' +
     'Örn: "İki yatak odası, mutfak ve salon var. Salonumda TV ve klima, mutfakta buzdolabı ve bulaşık makinesi var."';
 
-const HomeBuilderWizard = ({ isOpen, onOpen, onClose }) => {
+const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
     const [messages, setMessages]       = useState([{ role: 'assistant', content: WELCOME }]);
     const [inputText, setInputText]     = useState('');
     const [isLoading, setIsLoading]     = useState(false);
@@ -145,6 +145,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose }) => {
 
     // ── Launcher button ───────────────────────────────────────────────────────
     if (!isOpen) {
+        if (hidden) return null;
         return (
             <button
                 type="button"

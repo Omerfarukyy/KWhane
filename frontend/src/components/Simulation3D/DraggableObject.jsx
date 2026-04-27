@@ -102,6 +102,9 @@ const DraggableObject = ({
     const offset = useRef(new THREE.Vector3());
     // Çarpışma öncesi son geçerli pozisyon
     const lastValidPos = useRef(new THREE.Vector3(...position));
+    // Click vs drag detection — pointer-down screen position + moved flag.
+    const downScreen = useRef({ x: 0, y: 0 });
+    const dragMoved = useRef(false);
 
     // Collision ve SceneStore Drag sistemine kayıt
     useEffect(() => {
@@ -151,6 +154,13 @@ const DraggableObject = ({
         (e) => {
             if (!isDragging) return;
             e.stopPropagation();
+
+            // Click-vs-drag: any movement past 4px qualifies as a drag.
+            if (!dragMoved.current) {
+                const dx = (e.clientX ?? 0) - downScreen.current.x;
+                const dy = (e.clientY ?? 0) - downScreen.current.y;
+                if (dx * dx + dy * dy > 16) dragMoved.current = true;
+            }
 
             raycaster.ray.intersectPlane(dragPlane.current, intersection.current);
 
@@ -314,11 +324,19 @@ const DraggableObject = ({
             onPointerDown={(e) => {
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
                 setSelectedId(objectId);
-                setPinnedDeviceId(objectId);
+                downScreen.current = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+                dragMoved.current = false;
                 handlePointerDown(e);
             }}
             onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
+            onPointerUp={(e) => {
+                handlePointerUp(e);
+                // Click (no drag) → pin so the device-detail UI persists.
+                if (!dragMoved.current) {
+                    setPinnedDeviceId(objectId);
+                }
+                dragMoved.current = false;
+            }}
             onPointerOver={(e) => {
                 e.stopPropagation();
                 if (!isDragging) gl.domElement.style.cursor = 'grab';

@@ -3,6 +3,7 @@ import { Plus, Receipt, Trash2, Loader2 } from 'lucide-react';
 import { listBills, deleteBill, getBillSummary } from '../../../services/billsService';
 import BillEntryModal from './BillEntryModal';
 import CalibrationCard from './CalibrationCard';
+import useSceneStore from '../../../store/useSceneStore';
 
 const formatPeriod = (start, end) => {
     const fmt = (iso) => {
@@ -18,6 +19,8 @@ const BillsTab = ({ userId }) => {
     const [loading,  setLoading]  = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
 
+    const setHomeBillValidated = useSceneStore((s) => s.setHomeBillValidated);
+
     const refresh = useCallback(async () => {
         if (!userId) return;
         setLoading(true);
@@ -27,8 +30,9 @@ const BillsTab = ({ userId }) => {
         ]);
         setBills(list);
         setSummary(sum);
+        setHomeBillValidated(list.length > 0);
         setLoading(false);
-    }, [userId]);
+    }, [userId, setHomeBillValidated]);
 
     useEffect(() => { refresh(); }, [refresh]);
 
@@ -43,6 +47,7 @@ const BillsTab = ({ userId }) => {
         // Refresh summary so headline stats reflect the deletion
         const sum = await getBillSummary(userId);
         setSummary(sum);
+        setHomeBillValidated((prev.length - 1) > 0);
     };
 
     return (

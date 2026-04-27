@@ -6,17 +6,18 @@
    ============================================================ */
 :root {
   --color-bg:           #080808;
-  --color-surface:      #111111;
-  --color-surface-2:    #161616;
-  --color-border:       #1e1e1e;
-  --color-border-2:     #2a2a2a;
+  --color-surface:      #141414;
+  --color-surface-2:    #1c1c1c;
+  --color-border:       #2a2a2a;
+  --color-border-2:     #3a3a3a;
   --color-text:         #ffffff;
   --color-muted:        #888888;
   --color-subtle:       #555555;
   --color-blue:         #3b82f6;
   --color-blue-dim:     #1d4ed8;
-  --color-surface-glass:  rgba(17,17,17,0.85);
+  --color-surface-glass:  rgba(20,20,20,0.85);
   --color-bg-overlay:     rgba(8,8,8,0.92);
+  --color-highlight:    rgba(255,255,255,0.06);
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -27,8 +28,8 @@ html.light {
   --color-bg:           #f0f2f5;
   --color-surface:      #ffffff;
   --color-surface-2:    #f8f9fa;
-  --color-border:       #e2e6ea;
-  --color-border-2:     #ced4da;
+  --color-border:       #d0d4d8;
+  --color-border-2:     #b8bec5;
   --color-text:         #111827;
   --color-muted:        #6b7280;
   --color-subtle:       #9ca3af;
@@ -36,6 +37,7 @@ html.light {
   --color-blue-dim:     #1d4ed8;
   --color-surface-glass:  rgba(255,255,255,0.88);
   --color-bg-overlay:     rgba(240,242,245,0.92);
+  --color-highlight:    rgba(0,0,0,0.04);
 }
 
 /* ============================================================
@@ -146,4 +148,20 @@ input:-webkit-autofill:focus {
 
 .stat-card-enter {
   animation: fadeIn 0.5s ease-out both;
+}
+
+/* ============================================================
+   CARD HIGHLIGHT (subtle inset edge using --color-highlight)
+   ============================================================ */
+.kw-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 var(--color-highlight);
+  border-radius: 14px;
+}
+.kw-card-2 {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 var(--color-highlight);
+  border-radius: 12px;
 }

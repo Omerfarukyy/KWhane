@@ -14,8 +14,10 @@
 
 import React, { useState } from 'react';
 import { Zap, Coins, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageProvider';
 
 const DeltaPreviewPanel = ({ data, loading, spec, tariffSource = 'national' }) => {
+    const { t } = useLanguage();
     const [showBreakdown, setShowBreakdown] = useState(false);
 
     const kwh  = data?.total_monthly_kwh  ?? data?.real_monthly_kwh ?? 0;
@@ -109,7 +111,7 @@ const DeltaPreviewPanel = ({ data, loading, spec, tariffSource = 'national' }) =
 
             {!data && !loading && (
                 <p className="text-[10px] text-center py-1" style={{ color: '#64748b' }}>
-                    Bir model seçince tahmin yüklenecek.
+                    {t('previewPlaceholder')}
                 </p>
             )}
         </div>

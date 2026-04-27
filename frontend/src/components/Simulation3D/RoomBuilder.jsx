@@ -83,6 +83,22 @@ const ResizeHandle = ({ position, onDragStart, onDrag, onDragEnd }) => {
 };
 
 
+// Wraps a subtree and disables raycasting on every descendant mesh, so the
+// children render visually but never intercept pointer events. Used to keep
+// decorative meshes (room furniture) from blocking clicks on devices behind
+// them.
+const NonRaycastable = ({ children }) => {
+    const ref = useRef();
+    useEffect(() => {
+        const root = ref.current;
+        if (!root) return;
+        root.traverse((child) => {
+            if (child.isMesh) child.raycast = () => null;
+        });
+    });
+    return <group ref={ref}>{children}</group>;
+};
+
 const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0], adjacentSides = {} }) => {
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
@@ -368,7 +384,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                         ? [DIVIDER_THICKNESS, wall.size[1], wall.size[2]]
                         : [wall.size[0], wall.size[1], DIVIDER_THICKNESS];
                     return (
-                        <mesh key={wall.name} name={wall.name} position={wall.position} receiveShadow>
+                        <mesh key={wall.name} name={wall.name} position={wall.position} receiveShadow raycast={() => null}>
                             <boxGeometry args={dividerSize} />
                             <meshStandardMaterial {...dividerMaterialProps} />
                         </mesh>
@@ -376,15 +392,18 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                 }
 
                 return (
-                    <mesh key={wall.name} name={wall.name} position={wall.position} castShadow receiveShadow>
+                    <mesh key={wall.name} name={wall.name} position={wall.position} castShadow receiveShadow raycast={() => null}>
                         <boxGeometry args={wall.size} />
                         <meshStandardMaterial {...wallMaterialProps} />
                     </mesh>
                 );
             })}
 
-            {/* Static decorative furniture for this room type */}
-            <RoomFurnishings roomType={roomType} width={width} depth={depth} height={height} />
+            {/* Static decorative furniture — non-interactive so raycasts pass
+                through to the devices placed inside the room. */}
+            <NonRaycastable>
+                <RoomFurnishings roomType={roomType} width={width} depth={depth} height={height} />
+            </NonRaycastable>
 
             {/* Yüzen Oda Adı */}
             <Html
@@ -405,18 +424,34 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
             {/* Hızlı Ekleme ve Yeniden Boyutlandırma Kontrolleri */}
             {isCreationMode && isSelected && !isDragging && (
                 <group>
-                    {/* Hızlı Duvar Butonları */}
-                    <WallAddBtn position={[0, height / 2, depth / 2 + 0.4]} onClick={() => handleQuickAdd('front')} />
-                    <WallAddBtn position={[0, height / 2, -depth / 2 - 0.4]} onClick={() => handleQuickAdd('back')} />
-                    <WallAddBtn position={[width / 2 + 0.4, height / 2, 0]} onClick={() => handleQuickAdd('right')} />
-                    <WallAddBtn position={[-width / 2 - 0.4, height / 2, 0]} onClick={() => handleQuickAdd('left')} />
+                    {/* Hızlı Duvar Butonları — komşu duvarlarda gizlenir */}
+                    {!adjacentSides.front && (
+                        <WallAddBtn position={[0, height / 2, depth / 2 + 0.4]} onClick={() => handleQuickAdd('front')} />
+                    )}
+                    {!adjacentSides.back && (
+                        <WallAddBtn position={[0, height / 2, -depth / 2 - 0.4]} onClick={() => handleQuickAdd('back')} />
+                    )}
+                    {!adjacentSides.right && (
+                        <WallAddBtn position={[width / 2 + 0.4, height / 2, 0]} onClick={() => handleQuickAdd('right')} />
+                    )}
+                    {!adjacentSides.left && (
+                        <WallAddBtn position={[-width / 2 - 0.4, height / 2, 0]} onClick={() => handleQuickAdd('left')} />
+                    )}
 
-                    {/* Köşe Boyutlandırma Tutamaçları */}
-                    {/* Yüksekliği height/2 veya 0.25 yaparak biraz yukarıda olmasını sağla */}
-                    <ResizeHandle position={[width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fr', pos)} onDragEnd={() => { }} />
-                    <ResizeHandle position={[-width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fl', pos)} onDragEnd={() => { }} />
-                    <ResizeHandle position={[width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('br', pos)} onDragEnd={() => { }} />
-                    <ResizeHandle position={[-width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('bl', pos)} onDragEnd={() => { }} />
+                    {/* Köşe Boyutlandırma Tutamaçları — köşeyi paylaşan iki duvarın
+                        ikisi de komşuysa gizle (köşe başka odanın içinde kalır) */}
+                    {!(adjacentSides.front && adjacentSides.right) && (
+                        <ResizeHandle position={[width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fr', pos)} onDragEnd={() => { }} />
+                    )}
+                    {!(adjacentSides.front && adjacentSides.left) && (
+                        <ResizeHandle position={[-width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fl', pos)} onDragEnd={() => { }} />
+                    )}
+                    {!(adjacentSides.back && adjacentSides.right) && (
+                        <ResizeHandle position={[width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('br', pos)} onDragEnd={() => { }} />
+                    )}
+                    {!(adjacentSides.back && adjacentSides.left) && (
+                        <ResizeHandle position={[-width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('bl', pos)} onDragEnd={() => { }} />
+                    )}
                 </group>
             )}
         </group>

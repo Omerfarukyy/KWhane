@@ -1,8 +1,9 @@
-import { Suspense, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { Grid, Sky } from '@react-three/drei';
+import { Suspense, useMemo, useEffect } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import { Grid, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import Lights, { SUN_POSITION } from './Lights';
+import { useTheme } from '../../contexts/ThemeProvider';
 import RoomBuilder from './RoomBuilder';
 import CameraControls from './CameraControls';
 import KeyboardCameraControls from './KeyboardCameraControls';
@@ -105,6 +106,8 @@ const SceneContainer = ({ children, onGhostClick, onGhostDismiss }) => {
  */
 const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
     const collision = useCollision();
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
 
     const rooms        = useSceneStore((state) => state.rooms);
     const objects      = useSceneStore((state) => state.objects);
@@ -126,15 +129,31 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
             {/* ─── Aydınlatma ─────────────────────────── */}
             <Lights />
 
-            {/* ─── Gökyüzü (prosedürel) ───────────────── */}
-            <Sky
-                distance={450000}
-                sunPosition={SUN_POSITION}
-                turbidity={6}
-                rayleigh={1.2}
-                mieCoefficient={0.005}
-                mieDirectionalG={0.8}
-            />
+            {/* ─── Gökyüzü (theme-synced: gündüz/gece) ─── */}
+            <SceneBackground isDark={isDark} />
+            {isDark ? (
+                <>
+                    <Stars radius={100} depth={50} count={4000} factor={4} saturation={0} fade speed={0.5} />
+                    {/* Moon disk near directional-light position */}
+                    <mesh position={SUN_POSITION}>
+                        <sphereGeometry args={[2.4, 24, 24]} />
+                        <meshBasicMaterial color="#e8edff" />
+                    </mesh>
+                </>
+            ) : (
+                <>
+                    <Sky
+                        distance={450000}
+                        sunPosition={SUN_POSITION}
+                        turbidity={6}
+                        rayleigh={1.2}
+                        mieCoefficient={0.005}
+                        mieDirectionalG={0.8}
+                    />
+                    {/* Decorative static cloud puffs — simple white spheres far above */}
+                    <DecorativeClouds />
+                </>
+            )}
 
             {/* ─── Bahçe Zemini (geniş çim alan) ──────── */}
             <mesh
@@ -143,7 +162,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 receiveShadow
             >
                 <planeGeometry args={[200, 200]} />
-                <meshStandardMaterial color="#5d8a4e" roughness={0.95} metalness={0} />
+                <meshStandardMaterial color={isDark ? '#2a3a26' : '#5d8a4e'} roughness={0.95} metalness={0} />
             </mesh>
 
             {/* ─── Bahçe Prop'ları (ağaçlar + çalılar) ── */}
@@ -238,5 +257,42 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
         </group>
     );
 };
+
+// ─── SceneBackground ────────────────────────────────────────────────────────
+// Imperative scene.background swap so the night color cleans up properly when
+// the user switches back to light mode (avoids a stuck black or white flash).
+const NIGHT_BG = new THREE.Color('#070b18');
+function SceneBackground({ isDark }) {
+    const { scene } = useThree();
+    useEffect(() => {
+        const prev = scene.background;
+        scene.background = isDark ? NIGHT_BG : null; // null lets <Sky> show through
+        return () => { scene.background = prev; };
+    }, [isDark, scene]);
+    return null;
+}
+
+// ─── DecorativeClouds ───────────────────────────────────────────────────────
+// A handful of low-opacity white spheres scattered in the sky as stylized
+// clouds. Static, no animation, no volumetric maths — replaces drei's
+// <Cloud>/<Clouds> which was filling the canvas white in this scene.
+function DecorativeClouds() {
+    const puffs = [
+        { p: [-22, 18, -14], r: 2.6 }, { p: [-18, 18, -14], r: 2.0 }, { p: [-20, 19, -16], r: 1.8 },
+        { p: [16, 22, -20],  r: 2.4 }, { p: [19, 22, -18], r: 1.9 },
+        { p: [4,  24, 22],   r: 2.2 }, { p: [7,  24, 22],  r: 1.7 }, { p: [5, 25, 20], r: 1.5 },
+        { p: [-8, 20, 24],   r: 2.0 }, { p: [-5, 20, 24],  r: 1.6 },
+    ];
+    return (
+        <group>
+            {puffs.map((c, i) => (
+                <mesh key={i} position={c.p}>
+                    <sphereGeometry args={[c.r, 16, 12]} />
+                    <meshBasicMaterial color="#ffffff" transparent opacity={0.85} depthWrite={false} />
+                </mesh>
+            ))}
+        </group>
+    );
+}
 
 export default SceneContainer;

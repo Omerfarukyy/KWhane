@@ -1,5 +1,7 @@
 import React from 'react';
 import { Html } from '@react-three/drei';
+import useSceneStore from '../../store/useSceneStore';
+import { efficiencyColor } from '../../utils/efficiencyColor';
 
 /**
  * EnergyBadge — floating HTML overlay above a device mesh.
@@ -13,6 +15,7 @@ import { Html } from '@react-three/drei';
 const EnergyBadge = ({ object, energyData, heightOffset = 0.3 }) => {
     const [x, y, z] = object.position;
     const topY = y + (object.size?.[1] || 1) / 2 + heightOffset;
+    const validated = useSceneStore((s) => s.homeBillValidated);
 
     return (
         <Html
@@ -21,12 +24,12 @@ const EnergyBadge = ({ object, energyData, heightOffset = 0.3 }) => {
             center
             style={{ pointerEvents: 'none' }}
         >
-            <BadgeContent energyData={energyData} />
+            <BadgeContent energyData={energyData} validated={validated} />
         </Html>
     );
 };
 
-const BadgeContent = ({ energyData }) => {
+const BadgeContent = ({ energyData, validated }) => {
     // Loading state
     if (energyData === null || energyData === undefined) {
         return (
@@ -49,10 +52,7 @@ const BadgeContent = ({ energyData }) => {
     const cost  = energyData.total_monthly_cost ?? energyData.monthly_cost ?? 0;
     const score = energyData.efficiency_score   ?? 75;
 
-    const accentColor =
-        score >= 80 ? '#60a5fa'  // blue  — efficient
-      : score >= 60 ? '#fbbf24'  // amber — moderate
-      :               '#f87171'; // red   — poor
+    const accentColor = efficiencyColor(score, validated);
 
     return (
         <div style={{ ...styles.badge, borderColor: `${accentColor}55` }}>
