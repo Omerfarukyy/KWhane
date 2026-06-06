@@ -1,4 +1,15 @@
-from pydantic import BaseModel, ConfigDict
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+CURRENT_YEAR = datetime.now().year
+
+
+def _reject_future_year(value: int) -> int:
+    if value > CURRENT_YEAR:
+        raise ValueError("year_of_purchase cannot be in the future")
+    return value
 
 
 class DeviceInput(BaseModel):
@@ -10,12 +21,17 @@ class DeviceInput(BaseModel):
     name: str
     type: str
     spatial_config: dict | None = None
-    nominal_power_watts: int
-    daily_usage_hours: float
-    standby_power_watts: int = 0
+    nominal_power_watts: int = Field(gt=0)
+    daily_usage_hours: float = Field(ge=0, le=24)
+    standby_power_watts: int = Field(default=0, ge=0)
     efficiency_class: str = "A"
     year_of_purchase: int = 2024
     created_at: str | None = None
+
+    @field_validator("year_of_purchase")
+    @classmethod
+    def year_cannot_be_future(cls, value: int) -> int:
+        return _reject_future_year(value)
 
 
 class TariffTier(BaseModel):
@@ -35,6 +51,12 @@ class CalculateResponse(BaseModel):
     tariff_breakdown: list[TariffTier]
     total_monthly_cost: float
     efficiency_score: float
+    prediction_source: str | None = None
+    model_version: str | None = None
+    confidence_label: str | None = None
+    top_factors: list[dict] = Field(default_factory=list)
+    active_estimated_kwh: float | None = None
+    input_warnings: list[str] = Field(default_factory=list)
 
 
 class CompareResponse(BaseModel):
@@ -45,6 +67,9 @@ class CompareResponse(BaseModel):
     cluster_avg_monthly_kwh: float
     percentile: int
     comparison_label: str
+    peer_group_summary: dict | None = None
+    cluster_features_used: dict | None = None
+    comparison_basis: str | None = None
 
 
 class RecommendationItem(BaseModel):
@@ -56,6 +81,9 @@ class RecommendationItem(BaseModel):
     potential_savings_amount: float
     status: str = "pending"
     description: str
+    current_monthly_kwh: float | None = None
+    projected_monthly_kwh: float | None = None
+    explanation_factors: list[dict] = Field(default_factory=list)
 
 
 class SavingsResponse(BaseModel):
@@ -64,10 +92,8 @@ class SavingsResponse(BaseModel):
     recommendations: list[RecommendationItem]
 
 
-# ─── Chat / AI Advisor ────────────────────────────────────────────────────────
-
 class ChatMessage(BaseModel):
-    role: str       # "user" | "assistant"
+    role: str
     content: str
 
 
@@ -92,21 +118,15 @@ class RecommendationContext(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
-    history: list[ChatMessage] = []           # last 6 messages (3 turns)
-    devices: list[DeviceContext] = []
-    recommendations: list[RecommendationContext] = []
-    total_monthly_kwh: float = 0
-    total_monthly_cost: float = 0
-    # Real bill data (populated when the user has entered at least one bill).
-    # When present, the advisor cites these numbers instead of synthetic predictions.
-    actual_monthly_kwh: float | None = None
-    actual_monthly_cost: float | None = None
-    bill_count: int = 0
-    effective_tariff_tl_per_kwh: float | None = None
-    # Optional pre-computed diagnostic narrative (Phase A.5). The frontend
-    # caches the summary from the most recent /bills/diagnose call and
-    # forwards it here so the advisor can reference per-device attribution
-    # without recomputing.
+    history: list[ChatMessage] = Field(default_factory=list)
+    devices: list[DeviceContext] = Field(default_factory=list)
+    recommendations: list[RecommendationContext] = Field(default_factory=list)
+    total_monthly_kwh: float = Field(default=0, ge=0)
+    total_monthly_cost: float = Field(default=0, ge=0)
+    actual_monthly_kwh: float | None = Field(default=None, ge=0)
+    actual_monthly_cost: float | None = Field(default=None, ge=0)
+    bill_count: int = Field(default=0, ge=0)
+    effective_tariff_tl_per_kwh: float | None = Field(default=None, ge=0)
     bill_diagnostic_summary: str | None = None
 
 
@@ -115,44 +135,45 @@ class ChatResponse(BaseModel):
     model: str = "llama3.2"
 
 
-# ─── Home Builder ─────────────────────────────────────────────────────────────
-
 class PlannedRoom(BaseModel):
     name: str
-    roomType: str   # one of: Mutfak, Oturma Odası, Yatak Odası, Banyo, Çamaşır Odası, Ofis, Genel
-    width: float = 5.0
-    depth: float = 4.0
-    height: float = 3.0
+    roomType: str
+    width: float = Field(default=5.0, gt=0)
+    depth: float = Field(default=4.0, gt=0)
+    height: float = Field(default=3.0, gt=0)
 
 
 class PlannedDevice(BaseModel):
-    roomName: str   # must match a PlannedRoom name
-    type: str       # one of canonical device types
+    roomName: str
+    type: str
     name: str
-    nominal_power_watts: int = 100
-    daily_usage_hours: float = 4.0
-    standby_power_watts: int = 0
+    nominal_power_watts: int = Field(default=100, gt=0)
+    daily_usage_hours: float = Field(default=4.0, ge=0, le=24)
+    standby_power_watts: int = Field(default=0, ge=0)
     efficiency_class: str = "A"
     year_of_purchase: int = 2024
 
+    @field_validator("year_of_purchase")
+    @classmethod
+    def planned_year_cannot_be_future(cls, value: int) -> int:
+        return _reject_future_year(value)
+
 
 class HomePlan(BaseModel):
-    rooms: list[PlannedRoom] = []
-    devices: list[PlannedDevice] = []
+    rooms: list[PlannedRoom] = Field(default_factory=list)
+    devices: list[PlannedDevice] = Field(default_factory=list)
 
 
 class HomeBuilderRequest(BaseModel):
     message: str
-    history: list[ChatMessage] = []
-    currentHome: dict = {}
+    history: list[ChatMessage] = Field(default_factory=list)
+    currentHome: dict = Field(default_factory=dict)
 
 
 class HomeBuilderResponse(BaseModel):
     reply: str
     plan: HomePlan | None = None
 
-
-# ─── Bill Diagnostics ─────────────────────────────────────────────────────────
 
 class DiagnosticDeviceInput(BaseModel):
     """One declared device with its current ML prediction, fed into diagnose()."""
@@ -161,17 +182,23 @@ class DiagnosticDeviceInput(BaseModel):
     id: str
     name: str
     type: str
-    predicted_monthly_kwh: float
+    predicted_monthly_kwh: float = Field(ge=0)
     efficiency_class: str = "A"
-    daily_usage_hours: float = 0.0
+    daily_usage_hours: float = Field(default=0.0, ge=0, le=24)
     year_of_purchase: int = 2024
+
+    @field_validator("year_of_purchase")
+    @classmethod
+    def diagnostic_year_cannot_be_future(cls, value: int) -> int:
+        return _reject_future_year(value)
 
 
 class BillDiagnoseRequest(BaseModel):
-    actual_kwh: float
-    actual_cost_tl: float
-    devices: list[DiagnosticDeviceInput] = []
-    predicted_tariff_tl_per_kwh: float | None = None
+    actual_kwh: float = Field(ge=0)
+    actual_cost_tl: float = Field(ge=0)
+    devices: list[DiagnosticDeviceInput] = Field(default_factory=list)
+    predicted_tariff_tl_per_kwh: float | None = Field(default=None, ge=0)
+    model_confidence_label: str | None = None
 
 
 class AttributionItem(BaseModel):
@@ -184,45 +211,52 @@ class AttributionItem(BaseModel):
 
 
 class DiagnosticFlag(BaseModel):
-    type: str        # missing_device_suspected | over_declared_usage | device_outlier | tariff_mismatch
-    severity: str    # low | medium | high
+    type: str
+    severity: str
     device_id: str | None = None
     message_tr: str
     suggested_action: dict
 
 
 class BillDiagnoseResponse(BaseModel):
-    attribution: list[AttributionItem] = []
+    attribution: list[AttributionItem] = Field(default_factory=list)
     residual_kwh: float = 0.0
     residual_pct: float = 0.0
-    diagnostics: list[DiagnosticFlag] = []
+    diagnostics: list[DiagnosticFlag] = Field(default_factory=list)
     summary_tr: str = ""
 
 
-# ─── Calibration (Phase C) ────────────────────────────────────────────────────
-
 class CalibrationDeviceInput(BaseModel):
-    """One declared device with its current ML prediction + declared hours."""
+    """One declared device with its current ML prediction and declared hours."""
     model_config = ConfigDict(extra="ignore")
 
     id: str
     name: str
     type: str
-    predicted_monthly_kwh: float
-    daily_usage_hours: float
+    predicted_monthly_kwh: float = Field(ge=0)
+    daily_usage_hours: float = Field(ge=0, le=24)
+    nominal_power_watts: int | None = Field(default=None, gt=0)
+    standby_power_watts: int | None = Field(default=None, ge=0)
+    efficiency_class: str = "A"
+    year_of_purchase: int = 2024
+
+    @field_validator("year_of_purchase")
+    @classmethod
+    def calibration_year_cannot_be_future(cls, value: int) -> int:
+        return _reject_future_year(value)
 
 
 class CalibrationRequest(BaseModel):
-    actual_kwh: float
-    devices: list[CalibrationDeviceInput] = []
-    bill_count: int = 1
+    actual_kwh: float = Field(ge=0)
+    devices: list[CalibrationDeviceInput] = Field(default_factory=list)
+    bill_count: int = Field(default=1, ge=1)
 
 
 class CalibrationSuggestion(BaseModel):
     device_id: str
     device_name: str
     device_type_label: str
-    field: str                # always "daily_usage_hours" in MVP
+    field: str
     from_value: float
     to_value: float
     impact_kwh_per_month: float
@@ -234,19 +268,17 @@ class CalibrationResponse(BaseModel):
     residual_kwh: float
     residual_pct: float
     bill_count: int
-    suggested_adjustments: list[CalibrationSuggestion] = []
+    suggested_adjustments: list[CalibrationSuggestion] = Field(default_factory=list)
     reconciled: bool = False
 
 
-# ─── Home-level peer comparison (Phase D) ─────────────────────────────────────
-
 class HomeCompareRequest(BaseModel):
     city: str = "Istanbul"
-    occupants_count: int = 2
-    total_area_sqm: float = 80.0
-    n_devices: int = 1
-    monthly_kwh: float                    # total household kWh/month
-    source: str = "predicted"             # "bill" | "predicted"
+    occupants_count: int = Field(default=2, ge=1)
+    total_area_sqm: float = Field(default=80.0, ge=1)
+    n_devices: int = Field(default=1, ge=1)
+    monthly_kwh: float = Field(ge=0)
+    source: str = "predicted"
 
 
 class HomeCompareResponse(BaseModel):
@@ -255,5 +287,8 @@ class HomeCompareResponse(BaseModel):
     user_monthly_kwh: float
     cluster_avg_monthly_kwh: float
     percentile: int
-    comparison_label: str                 # below_average | average | above_average
-    source: str                           # echoes input — frontend uses this to label the chart
+    comparison_label: str
+    source: str
+    peer_group_summary: dict | None = None
+    cluster_features_used: dict | None = None
+    comparison_basis: str | None = None

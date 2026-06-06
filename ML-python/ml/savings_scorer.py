@@ -4,6 +4,14 @@ Ranks upgrade alternatives and behavioral changes by monthly savings potential.
 """
 
 from data.device_profiles import DEVICE_PROFILES, EFFICIENCY_CLASS_MAP
+from services.energy_calculations import default_standby_watts, estimate_device_energy
+
+
+def _explain(energy_predictor, features: dict) -> list[dict]:
+    explain = getattr(energy_predictor, "explain_prediction", None)
+    if explain is None:
+        return []
+    return explain(features)
 
 
 def score_recommendations(
@@ -24,17 +32,21 @@ def score_recommendations(
     # 1. Catalog upgrade recommendations
     for alt in catalog_alternatives:
         eff_numeric = EFFICIENCY_CLASS_MAP.get(alt.get("efficiency_class", "A"), 0.15)
+        alt_standby = alt.get("standby_power_watts")
+        if alt_standby is None:
+            alt_standby = default_standby_watts(device.type)
 
-        features = {
+        overrides = {
             "nominal_power_watts": alt.get("nominal_power_watts", device.nominal_power_watts),
             "daily_usage_hours": device.daily_usage_hours,
-            "standby_power_watts": 2,  # assume new devices have low standby
+            "standby_power_watts": alt_standby,
             "efficiency_class_numeric": eff_numeric,
             "device_age_years": 0,  # new device
-            "device_type": device.type,
+            "device_type": alt.get("type", device.type),
         }
 
-        projected_kwh = energy_predictor.predict(features)
+        projected_estimate = estimate_device_energy(device, energy_predictor, overrides)
+        projected_kwh = projected_estimate.total_kwh
         projected_cost = tariff_calculator.calculate_cost(projected_kwh)
         savings = current_monthly_cost - projected_cost
 
@@ -53,6 +65,9 @@ def score_recommendations(
                 "projected_monthly_cost": round(projected_cost, 2),
                 "potential_savings_amount": round(savings, 2),
                 "status": "pending",
+                "current_monthly_kwh": round(current_monthly_kwh, 2),
+                "projected_monthly_kwh": round(projected_kwh, 2),
+                "explanation_factors": _explain(energy_predictor, projected_estimate.features),
                 "description": (
                     f"{brand} {model} ({eff}, {tier}) modeline gecis yaparak "
                     f"aylik {round(savings, 2)} TL tasarruf edebilirsiniz."
@@ -61,13 +76,16 @@ def score_recommendations(
 
     # 2. Standby reduction recommendation
     if device.standby_power_watts > 3:
-        standby_kwh = (device.standby_power_watts * (24 - device.daily_usage_hours) * 30) / 1000
-        reduced_standby_kwh = (1 * (24 - device.daily_usage_hours) * 30) / 1000  # ~1W with power strip
-        kwh_saved = standby_kwh - reduced_standby_kwh
+        projected_estimate = estimate_device_energy(
+            device,
+            energy_predictor,
+            {"standby_power_watts": 1},
+        )
+        projected_kwh = projected_estimate.total_kwh
+        kwh_saved = current_monthly_kwh - projected_kwh
 
         if kwh_saved > 0:
-            new_total_kwh = current_monthly_kwh - kwh_saved
-            projected_cost = tariff_calculator.calculate_cost(new_total_kwh)
+            projected_cost = tariff_calculator.calculate_cost(projected_kwh)
             savings = current_monthly_cost - projected_cost
 
             if savings > 0.1:
@@ -79,6 +97,9 @@ def score_recommendations(
                     "projected_monthly_cost": round(projected_cost, 2),
                     "potential_savings_amount": round(savings, 2),
                     "status": "pending",
+                    "current_monthly_kwh": round(current_monthly_kwh, 2),
+                    "projected_monthly_kwh": round(projected_kwh, 2),
+                    "explanation_factors": _explain(energy_predictor, projected_estimate.features),
                     "description": (
                         f"Akilli priz kullanarak bekleme modunda harcanan enerjiyi azaltin. "
                         f"Aylik {round(kwh_saved, 1)} kWh ve {round(savings, 2)} TL tasarruf."
@@ -90,8 +111,12 @@ def score_recommendations(
     if profile:
         typical_mid = (profile["daily_hours_range"][0] + profile["daily_hours_range"][1]) / 2
         if device.daily_usage_hours > typical_mid * 1.2:  # 20% above typical midpoint
-            ratio = typical_mid / device.daily_usage_hours
-            projected_kwh = current_monthly_kwh * ratio
+            projected_estimate = estimate_device_energy(
+                device,
+                energy_predictor,
+                {"daily_usage_hours": typical_mid},
+            )
+            projected_kwh = projected_estimate.total_kwh
             projected_cost = tariff_calculator.calculate_cost(projected_kwh)
             savings = current_monthly_cost - projected_cost
 
@@ -104,6 +129,9 @@ def score_recommendations(
                     "projected_monthly_cost": round(projected_cost, 2),
                     "potential_savings_amount": round(savings, 2),
                     "status": "pending",
+                    "current_monthly_kwh": round(current_monthly_kwh, 2),
+                    "projected_monthly_kwh": round(projected_kwh, 2),
+                    "explanation_factors": _explain(energy_predictor, projected_estimate.features),
                     "description": (
                         f"Gunluk kullanimi {round(device.daily_usage_hours, 1)} saatten "
                         f"{round(typical_mid, 1)} saate dusurerek "

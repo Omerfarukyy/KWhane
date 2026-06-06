@@ -1,30 +1,29 @@
 """Business logic for POST /savings — energy saving recommendations."""
 
+from typing import TYPE_CHECKING
+
 from models.schemas import DeviceInput, SavingsResponse, RecommendationItem
-from ml.energy_model import EnergyPredictor
 from ml.savings_scorer import score_recommendations
+from services.energy_calculations import estimate_device_energy
 from services.supabase_client import fetch_tariffs, fetch_device_catalog, fetch_home_context
 from services.tariff_service import TariffCalculator
+
+if TYPE_CHECKING:
+    from ml.energy_model import EnergyPredictor
 
 
 def generate_savings(
     device: DeviceInput,
-    energy_predictor: EnergyPredictor,
+    energy_predictor: "EnergyPredictor",
 ) -> SavingsResponse:
-    # 1. Calculate current device consumption and cost
-    features = EnergyPredictor.build_features(device)
-    current_kwh = energy_predictor.predict(features)
-
-    # Add standby
-    active_hours = min(device.daily_usage_hours, 24)
-    standby_hours = 24 - active_hours
-    standby_kwh = (device.standby_power_watts * standby_hours * 30) / 1000
-    total_current_kwh = current_kwh + standby_kwh
+    # 1. Calculate current device consumption and cost. The model prediction
+    # is already total monthly kWh, including standby.
+    current_estimate = estimate_device_energy(device, energy_predictor)
 
     # 2. Get tariffs and compute current cost
     tariffs = fetch_tariffs()
     tariff_calc = TariffCalculator(tariffs)
-    current_cost = tariff_calc.calculate_cost(total_current_kwh)
+    current_cost = tariff_calc.calculate_cost(current_estimate.total_kwh)
 
     # 3. Fetch catalog alternatives for this device type
     catalog_alternatives = fetch_device_catalog(device.type)
@@ -32,7 +31,7 @@ def generate_savings(
     # 4. Score and rank recommendations
     raw_recommendations = score_recommendations(
         device=device,
-        current_monthly_kwh=total_current_kwh,
+        current_monthly_kwh=current_estimate.total_kwh,
         current_monthly_cost=current_cost,
         catalog_alternatives=catalog_alternatives,
         tariff_calculator=tariff_calc,

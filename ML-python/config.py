@@ -1,10 +1,15 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BASE_DIR = Path(__file__).resolve().parent
 
 
 class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_key: str = ""
-    model_dir: str = "./trained_models"
+    model_dir: str = str(BASE_DIR / "trained_models")
     retrain_on_startup: bool = False
 
     # Local Ollama settings — no API key needed
@@ -15,3 +20,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+model_dir_path = Path(settings.model_dir)
+if not model_dir_path.is_absolute():
+    model_dir_path = BASE_DIR / model_dir_path
+settings.model_dir = str(model_dir_path.resolve())

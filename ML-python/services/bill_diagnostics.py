@@ -80,6 +80,7 @@ def diagnose(
     actual_cost: float,
     devices: list[DiagnosticDevice],
     predicted_tariff_tl_per_kwh: Optional[float] = None,
+    model_confidence_label: Optional[str] = None,
 ) -> dict:
     """Return attribution + residual + diagnostic flags.
 
@@ -237,11 +238,17 @@ def diagnose(
                 },
             })
 
+    if model_confidence_label == "low":
+        caution = "Model guveni dusuk; bu tespit temkinli yorumlanmali. "
+        for item in diagnostics:
+            item["message_tr"] = caution + item["message_tr"]
+
     return {
         "attribution":  attribution,
         "residual_kwh": round(residual_kwh, 1),
         "residual_pct": round(residual_pct, 1),
         "diagnostics":  diagnostics,
+        "model_confidence_label": model_confidence_label,
     }
 
 
@@ -257,6 +264,8 @@ def summarize_for_prompt(diag: dict) -> str:
     parts: list[str] = []
 
     residual_pct = diag.get("residual_pct", 0.0)
+    if diag.get("model_confidence_label"):
+        parts.append(f"Model guveni: {diag['model_confidence_label']}.")
     if abs(residual_pct) > 5:
         direction = "yüksek" if residual_pct > 0 else "düşük"
         parts.append(

@@ -7,6 +7,7 @@ import time
 import pandas as pd
 from config import settings
 from data.synthetic import generate_household_dataset
+from services.energy_calculations import deterministic_monthly_kwh
 
 _client = None
 _tariff_cache = {"data": None, "expires": 0}
@@ -99,7 +100,8 @@ def fetch_household_data() -> pd.DataFrame:
 
         # Fetch devices
         devices_resp = client.table("devices").select(
-            "room_id, nominal_power_watts, daily_usage_hours, year_of_purchase"
+            "room_id, type, nominal_power_watts, daily_usage_hours, "
+            "standby_power_watts, efficiency_class, year_of_purchase"
         ).execute()
         devices_df = pd.DataFrame(devices_resp.data) if devices_resp.data else pd.DataFrame()
 
@@ -110,11 +112,9 @@ def fetch_household_data() -> pd.DataFrame:
         devices_with_home = devices_df.merge(
             rooms_df, left_on="room_id", right_on="id", suffixes=("", "_room")
         )
-        # Rough monthly kwh per device
-        devices_with_home["monthly_kwh"] = (
-            devices_with_home["nominal_power_watts"]
-            * devices_with_home["daily_usage_hours"]
-            * 30 / 1000
+        devices_with_home["monthly_kwh"] = devices_with_home.apply(
+            lambda row: deterministic_monthly_kwh(row.to_dict()),
+            axis=1,
         )
         from datetime import datetime
         current_year = datetime.now().year
@@ -161,6 +161,28 @@ def fetch_device_catalog(device_type: str) -> list[dict]:
         return response.data if response.data else []
     except Exception as e:
         print(f"[supabase_client] fetch_device_catalog failed: {e}")
+        return []
+
+
+def fetch_home_devices(home_id: str) -> list[dict]:
+    """Fetch device rows for every room in a home."""
+    client = get_client()
+    if client is None:
+        return []
+
+    try:
+        rooms_resp = client.table("rooms").select("id").eq("home_id", home_id).execute()
+        room_ids = [r["id"] for r in rooms_resp.data] if rooms_resp.data else []
+        if not room_ids:
+            return []
+
+        devices_resp = client.table("devices").select(
+            "id, room_id, name, type, nominal_power_watts, daily_usage_hours, "
+            "standby_power_watts, efficiency_class, year_of_purchase"
+        ).in_("room_id", room_ids).execute()
+        return devices_resp.data if devices_resp.data else []
+    except Exception as e:
+        print(f"[supabase_client] fetch_home_devices failed: {e}")
         return []
 
 

@@ -34,8 +34,8 @@ household_clusterer = HouseholdClusterer(settings.model_dir)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load or train ML models at startup."""
-    energy_predictor.ensure_ready()
-    household_clusterer.ensure_ready()
+    energy_predictor.ensure_ready(retrain=settings.retrain_on_startup)
+    household_clusterer.ensure_ready(retrain=settings.retrain_on_startup)
     yield
 
 
@@ -84,7 +84,15 @@ def savings(device: DeviceInput):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "models_loaded": energy_predictor.pipeline is not None}
+    return {
+        "status": "ok",
+        "models_loaded": energy_predictor.pipeline is not None and household_clusterer.kmeans is not None,
+        "energy_model_loaded": energy_predictor.pipeline is not None,
+        "cluster_model_loaded": household_clusterer.kmeans is not None,
+        "energy_model_metadata_available": energy_predictor.metadata_available(),
+        "energy_model_version": energy_predictor.model_version(),
+        "model_dir": settings.model_dir,
+    }
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -126,6 +134,7 @@ def diagnose_bill(request: BillDiagnoseRequest):
         actual_cost=request.actual_cost_tl,
         devices=devices,
         predicted_tariff_tl_per_kwh=request.predicted_tariff_tl_per_kwh,
+        model_confidence_label=request.model_confidence_label,
     )
     return BillDiagnoseResponse(
         **result,
@@ -161,6 +170,10 @@ def calibration(request: CalibrationRequest):
             type=d.type,
             predicted_monthly_kwh=d.predicted_monthly_kwh,
             daily_usage_hours=d.daily_usage_hours,
+            nominal_power_watts=d.nominal_power_watts,
+            standby_power_watts=d.standby_power_watts,
+            efficiency_class=d.efficiency_class,
+            year_of_purchase=d.year_of_purchase,
         )
         for d in request.devices
     ]
@@ -168,6 +181,7 @@ def calibration(request: CalibrationRequest):
         actual_kwh=request.actual_kwh,
         devices=devices,
         bill_count=request.bill_count,
+        energy_predictor=energy_predictor,
     )
     return CalibrationResponse(**result)
 
