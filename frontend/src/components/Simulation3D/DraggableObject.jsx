@@ -9,7 +9,7 @@ import useSceneStore, { objectRefs, DEVICE_CONFIGS } from '../../store/useSceneS
 function snapToNearestWall(x, z, room, size) {
     const rx = room.position[0], rz = room.position[2];
     const hw = room.size.width / 2, hd = room.size.depth / 2;
-    const halfW = size[0] / 2, halfD = size[2] / 2;
+    const halfD = size[2] / 2;
 
     const dRight = Math.abs((rx + hw) - x);
     const dLeft  = Math.abs(x - (rx - hw));
@@ -17,8 +17,8 @@ function snapToNearestWall(x, z, room, size) {
     const dBack  = Math.abs(z - (rz - hd));
     const min = Math.min(dRight, dLeft, dFront, dBack);
 
-    if (min === dRight) return { x: rx + hw - halfW, z, rotation: -Math.PI / 2 };
-    if (min === dLeft)  return { x: rx - hw + halfW, z, rotation:  Math.PI / 2 };
+    if (min === dRight) return { x: rx + hw - halfD, z, rotation: -Math.PI / 2 };
+    if (min === dLeft)  return { x: rx - hw + halfD, z, rotation:  Math.PI / 2 };
     if (min === dFront) return { x, z: rz + hd - halfD, rotation: Math.PI };
     return { x, z: rz - hd + halfD, rotation: 0 };
 }

@@ -15,22 +15,37 @@ const floorMatNormal = { color: '#e0e0e0', side: 2 };
 const floorMatSelected = { color: '#cbd5e1', side: 2 };
 
 // Helper Components for UI
-const WallAddBtn = ({ position, onClick, rotation = [0, 0, 0] }) => {
+const WallAddBtn = ({ position, onClick }) => {
     const [hovered, setHovered] = useState(false);
     return (
-        <mesh
-            position={position}
-            rotation={rotation}
-            onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = 'pointer'; }}
-            onPointerOut={(e) => { e.stopPropagation(); setHovered(false); document.body.style.cursor = 'auto'; }}
-            onClick={(e) => { e.stopPropagation(); onClick(); }}
-        >
-            <boxGeometry args={[0.6, 0.6, 0.6]} />
-            <meshBasicMaterial color={hovered ? '#4ade80' : '#22c55e'} transparent opacity={0.8} />
-            <Html center style={{ pointerEvents: 'none', color: 'white', fontWeight: 'bold', fontSize: '1.5rem', userSelect: 'none' }}>
+        <Html position={position} center style={{ pointerEvents: 'none' }}>
+            <button
+                style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    background: hovered ? '#4ade80' : '#22c55e',
+                    border: 'none',
+                    color: 'white',
+                    fontSize: '1.35rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    pointerEvents: 'auto',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: 1,
+                    paddingBottom: 2,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    userSelect: 'none',
+                }}
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
+                onClick={(e) => { e.stopPropagation(); onClick(); }}
+            >
                 +
-            </Html>
-        </mesh>
+            </button>
+        </Html>
     );
 };
 
@@ -99,7 +114,18 @@ const NonRaycastable = ({ children }) => {
     return <group ref={ref}>{children}</group>;
 };
 
-const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0], adjacentSides = {} }) => {
+// Interpolates green→yellow→red based on t ∈ [0,1]
+function heatColor(t) {
+    const c = new THREE.Color();
+    if (t < 0.5) {
+        c.lerpColors(new THREE.Color('#22c55e'), new THREE.Color('#f59e0b'), t * 2);
+    } else {
+        c.lerpColors(new THREE.Color('#f59e0b'), new THREE.Color('#ef4444'), (t - 0.5) * 2);
+    }
+    return c;
+}
+
+const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0], adjacentSides = {}, heatLevel = 0 }) => {
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
 
@@ -371,6 +397,30 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                 <planeGeometry args={[width, depth]} />
                 <meshStandardMaterial {...floorMaterialProps} />
             </mesh>
+
+            {/* ── Enerji ısı haritası overlay ── */}
+            {heatLevel > 0 && (
+                <>
+                    {/* Zemin renk tonu */}
+                    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.013, 0]} renderOrder={1}>
+                        <planeGeometry args={[width - 0.12, depth - 0.12]} />
+                        <meshBasicMaterial
+                            color={heatColor(heatLevel)}
+                            transparent
+                            opacity={0.08 + heatLevel * 0.18}
+                            depthWrite={false}
+                        />
+                    </mesh>
+                    {/* Renkli zemin ışığı */}
+                    <pointLight
+                        position={[0, 0.4, 0]}
+                        color={heatColor(heatLevel)}
+                        intensity={heatLevel * 6}
+                        distance={Math.max(width, depth) * 1.2}
+                        decay={2}
+                    />
+                </>
+            )}
 
             {walls.map((wall) => {
                 const sideKey = wall.name.replace('wall-', ''); // 'back','front','left','right'

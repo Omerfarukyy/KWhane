@@ -1,9 +1,11 @@
 import React, { useState, Suspense, lazy, useCallback, useMemo, useEffect } from 'react';
 import {
     Home, PackagePlus, Settings, Ticket as TicketIcon,
-    Zap, User, Lightbulb, ChevronRight, SquarePlus, Loader2, Trash2, X,
+    Zap, User, Lightbulb, ChevronRight, ChevronLeft, SquarePlus, Loader2, Trash2, X,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import NumberTicker from '../../UI/NumberTicker';
 import ThemeLangToggle from '../../ThemeLangToggle';
 import SceneContainer from '../../Simulation3D/SceneContainer';
 import RoomCreationModal from '../../Simulation3D/RoomCreationModal';
@@ -17,7 +19,7 @@ import useSceneStore from '../../../store/useSceneStore';
 import { useLanguage } from '../../../contexts/LanguageProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import { runFullAnalysis } from '../../../services/mlService';
-import { listBills } from '../../../services/billsService';
+import { listBills, getBillSummary } from '../../../services/billsService';
 import { supabase } from '../../../lib/supabase';
 import { USAGE_MODEL } from '../../../utils/usageModels';
 import { efficiencyColor } from '../../../utils/efficiencyColor';
@@ -46,6 +48,8 @@ const DashboardLayout = () => {
     const [activeTab,           setActiveTab]           = useState('home');
     // Home panel sub-tabs
     const [homeTab,             setHomeTab]             = useState('ozet');
+    const [isPanelCollapsed,    setIsPanelCollapsed]    = useState(false);
+    const [billsAvgKwh,         setBillsAvgKwh]         = useState(null);
 
     const { t } = useLanguage();
     const { user } = useAuth();
@@ -82,6 +86,14 @@ const DashboardLayout = () => {
             .then((bills) => setHomeBillValidated((bills || []).length > 0))
             .catch(() => { /* ignore — flag stays false */ });
     }, [user?.id, setHomeBillValidated]);
+
+    // ── Bills average for trend indicator ─────────────────────────────────
+    useEffect(() => {
+        if (!user?.id) return;
+        getBillSummary(user.id)
+            .then((s) => setBillsAvgKwh(s?.avgMonthlyKwh ?? null))
+            .catch(() => {});
+    }, [user?.id]);
 
     // ── Session persistence + ML restore ──────────────────────────────────
     useEffect(() => {
@@ -199,6 +211,14 @@ const DashboardLayout = () => {
 
     // Device selected from catalog → add to scene + persist + call ML
     const handleDeviceSelect = useCallback(async (spec) => {
+        // Electric hub: persisted to Supabase like other devices (so position survives reload),
+        // but skips ML analysis since it has no energy consumption.
+        if (spec.type === 'electric_hub') {
+            const hasHub = useSceneStore.getState().objects.some((o) => o.type === 'electric_hub');
+            if (!hasHub) addDevice(spec);
+            return;
+        }
+
         // Capture ghost position + roomId BEFORE removing it so we can spawn there
         const ghost = pendingGhostId
             ? useSceneStore.getState().ghostObjects.find((g) => g.id === pendingGhostId)
@@ -240,6 +260,36 @@ const DashboardLayout = () => {
     }, [addRoom, setPendingRoomAttach]);
 
     const displayName  = user?.fullName || user?.email?.split('@')[0] || 'Kullanıcı';
+
+    // ── Cihaz tüketim sıralaması (bar chart için) ─────────────────────────
+    const DEVICE_LABELS = {
+        fridge:          'Buzdolabı',
+        tv:              'Televizyon',
+        ac:              'Klima',
+        washing_machine: 'Çamaşır Mak.',
+        dishwasher:      'Bulaşık Mak.',
+        oven:            'Fırın',
+        computer:        'Bilgisayar',
+        lighting:        'Aydınlatma',
+        water_heater:    'Su Isıtıcı',
+        dryer:           'Kurutma Mak.',
+    };
+    const devicesByKwh = useMemo(() => {
+        return [...objects]
+            .filter(o => o.type !== 'electric_hub')
+            .map(o => {
+                const ed = energyData[o.id];
+                const kwh = (ed && ed !== 'error')
+                    ? (ed.total_monthly_kwh ?? ed.monthly_kwh ?? 0) : 0;
+                return { ...o, kwh };
+            })
+            .filter(o => o.kwh > 0)
+            .sort((a, b) => b.kwh - a.kwh);
+    }, [objects, energyData]);
+
+    // ── Trend: tahmin vs fatura ortalaması (veya Türkiye ort. 280 kWh) ───
+    const trendRef  = billsAvgKwh && billsAvgKwh > 0 ? billsAvgKwh : 280;
+    const trendLabel = billsAvgKwh && billsAvgKwh > 0 ? 'Fatura ort.' : 'Türkiye ort.';
 
     // Gauge offset — clamp totalKwh to 0-600 for visual
     const gaugeKwh    = homeTotals.kwh;
@@ -417,8 +467,37 @@ const DashboardLayout = () => {
                     {/* RIGHT ANALYSIS PANEL — hidden entirely in home view
                         (replaced by the left-column dashboard / device detail). */}
                     {!homeView && (
+                    <div className="pointer-events-auto relative flex-shrink-0"
+                        style={{
+                            width: isPanelCollapsed ? 48 : 'clamp(320px, 24rem, 384px)',
+                            height: 'calc(100vh - 10rem)',
+                            maxHeight: '760px',
+                            transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1)',
+                        }}>
+
+                        {/* Collapse/expand toggle button — outside aside so overflow-hidden doesn't clip it */}
+                        <button
+                            onClick={() => setIsPanelCollapsed(v => !v)}
+                            className="absolute -left-3.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full flex items-center justify-center transition-all"
+                            title={isPanelCollapsed ? 'Paneli aç' : 'Paneli küçült'}
+                            style={{
+                                background: 'var(--color-surface)',
+                                border: '1px solid var(--color-border)',
+                                color: 'var(--color-subtle)',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                cursor: 'pointer',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.borderColor = 'rgba(59,130,246,0.5)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-subtle)'; e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+                        >
+                            {isPanelCollapsed
+                                ? <ChevronLeft size={14} />
+                                : <ChevronRight size={14} />
+                            }
+                        </button>
+
                     <aside
-                        className="pointer-events-auto w-80 lg:w-96 rounded-3xl p-6 flex flex-col gap-7 relative overflow-hidden"
+                        className="rounded-3xl flex flex-col relative overflow-hidden w-full h-full"
                         style={{
                             background: 'var(--color-surface-glass)',
                             backdropFilter: 'blur(24px)',
@@ -430,10 +509,38 @@ const DashboardLayout = () => {
                         <div className="absolute -top-16 -right-16 w-32 h-32 rounded-full pointer-events-none"
                             style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)', filter: 'blur(20px)' }} />
 
-                        {pinnedObj ? (
+                        {/* Collapsed strip — tab icons only */}
+                        {isPanelCollapsed && (
+                            <div className="flex flex-col items-center justify-center gap-3 h-full py-6">
+                                {[
+                                    { id: 'ozet',     label: 'Ö' },
+                                    { id: 'oneriler', label: 'İ' },
+                                    { id: 'siralama', label: 'S' },
+                                    { id: 'faturalar', label: 'F' },
+                                ].map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => { setHomeTab(tab.id); setIsPanelCollapsed(false); }}
+                                        title={tab.id === 'ozet' ? 'Özet' : tab.id === 'oneriler' ? 'Öneriler' : tab.id === 'siralama' ? 'Sıralama' : 'Faturalar'}
+                                        className="w-8 h-8 rounded-xl text-[11px] font-black transition-all"
+                                        style={{
+                                            background: homeTab === tab.id ? 'rgba(59,130,246,0.2)' : 'transparent',
+                                            color: homeTab === tab.id ? '#3b82f6' : 'var(--color-subtle)',
+                                            border: homeTab === tab.id ? '1px solid rgba(59,130,246,0.35)' : '1px solid transparent',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {!isPanelCollapsed && (pinnedObj ? (
                             /* ── DEVICE DETAIL VIEW ── */
-                            <>
-                                <div className="flex items-center justify-between mb-1">
+                            <div className="flex flex-col gap-4 p-6 flex-1 overflow-y-auto min-h-0"
+                                style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--color-border) transparent' }}>
+                                <div className="flex items-center justify-between">
                                     <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--color-subtle)' }}>{t('deviceDetail')}</span>
                                     <button onClick={closePinnedPanel}
                                         className="p-1 rounded-md transition-colors"
@@ -453,10 +560,10 @@ const DashboardLayout = () => {
                                     setDeviceSpec={setDeviceSpec}
                                     user={user}
                                 />
-                            </>
+                            </div>
                         ) : (
                             /* ── HOME PANEL (tabbed) ── */
-                            <>
+                            <div className="flex flex-col p-6 gap-4 flex-1 overflow-hidden min-h-0">
                                 {/* Room selected — show quick delete banner */}
                                 {selectedRoom && (
                                     <div className="flex items-center justify-between px-3 py-2 rounded-xl"
@@ -475,7 +582,7 @@ const DashboardLayout = () => {
                                 )}
 
                                 {/* Tab bar */}
-                                <div className="flex rounded-xl overflow-hidden"
+                                <div className="flex-shrink-0 flex rounded-xl overflow-hidden"
                                     style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: 3, gap: 2 }}>
                                     {[
                                         { id: 'ozet',     label: 'Özet' },
@@ -496,9 +603,21 @@ const DashboardLayout = () => {
                                     ))}
                                 </div>
 
+                                {/* Scrollable tab content */}
+                                <div className="flex-1 overflow-y-auto min-h-0"
+                                    style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--color-border) transparent' }}>
+                                <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={homeTab}
+                                    initial={{ opacity: 0, x: 14 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -14 }}
+                                    transition={{ duration: 0.17, ease: 'easeOut' }}
+                                >
+
                                 {/* ── Özet tab ── */}
                                 {homeTab === 'ozet' && (
-                                    <>
+                                    <div className="flex flex-col gap-6 pb-2">
                                         <div className="flex flex-col items-center">
                                             <h3 className="text-[10px] font-bold uppercase mb-5"
                                                 style={{ color: 'var(--color-subtle)', letterSpacing: '0.2em' }}>
@@ -508,9 +627,13 @@ const DashboardLayout = () => {
                                                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100"
                                                     style={{ filter: 'drop-shadow(0 0 12px rgba(59,130,246,0.25))' }}>
                                                     <circle cx="50" cy="50" r="45" fill="none" stroke="var(--color-border)" strokeWidth="6" />
-                                                    <circle cx="50" cy="50" r="45" fill="none" stroke="url(#blueGradient)"
-                                                        strokeWidth="6" strokeDasharray="283" strokeDashoffset={gaugeOffset}
-                                                        strokeLinecap="round" />
+                                                    <motion.circle
+                                                        cx="50" cy="50" r="45" fill="none" stroke="url(#blueGradient)"
+                                                        strokeWidth="6" strokeDasharray="283" strokeLinecap="round"
+                                                        initial={{ strokeDashoffset: 283 }}
+                                                        animate={{ strokeDashoffset: gaugeOffset }}
+                                                        transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                                                    />
                                                     <defs>
                                                         <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                                                             <stop offset="0%" stopColor="#60a5fa" />
@@ -519,9 +642,14 @@ const DashboardLayout = () => {
                                                     </defs>
                                                 </svg>
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                    <span className="text-4xl font-black" style={{ color: 'var(--color-text)' }}>
-                                                        {objects.length === 0 ? '—' : Math.round(gaugeKwh)}
-                                                    </span>
+                                                    {objects.length === 0
+                                                        ? <span className="text-4xl font-black" style={{ color: 'var(--color-text)' }}>—</span>
+                                                        : <NumberTicker
+                                                            value={Math.round(gaugeKwh)}
+                                                            className="text-4xl font-black"
+                                                            style={{ color: 'var(--color-text)' }}
+                                                          />
+                                                    }
                                                     <span className="text-xs font-bold tracking-widest mt-1" style={{ color: '#3b82f6' }}>
                                                         {t('kwh')}
                                                     </span>
@@ -535,21 +663,96 @@ const DashboardLayout = () => {
                                             <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-subtle)' }}>
                                                 {t('estimatedBill')}
                                             </span>
-                                            <span className="text-3xl font-black" style={{ color: '#3b82f6' }}>
-                                                {objects.length === 0 ? '₺—' : `₺${Math.round(homeTotals.cost)}`}
-                                            </span>
+                                            {objects.length === 0
+                                                ? <span className="text-3xl font-black" style={{ color: '#3b82f6' }}>₺—</span>
+                                                : <NumberTicker
+                                                    value={Math.round(homeTotals.cost)}
+                                                    prefix="₺"
+                                                    className="text-3xl font-black"
+                                                    style={{ color: '#3b82f6' }}
+                                                  />
+                                            }
+                                            {/* Trend indikatörü */}
+                                            {gaugeKwh > 0 && (() => {
+                                                const delta = ((gaugeKwh - trendRef) / trendRef) * 100;
+                                                const isBelow = delta <= 0;
+                                                return (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 4 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ delay: 0.6, duration: 0.4 }}
+                                                        className="flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold"
+                                                        style={{
+                                                            color:      isBelow ? '#22c55e' : '#f87171',
+                                                            background: isBelow ? 'rgba(34,197,94,0.1)' : 'rgba(248,113,113,0.1)',
+                                                            border:     `1px solid ${isBelow ? 'rgba(34,197,94,0.2)' : 'rgba(248,113,113,0.2)'}`,
+                                                        }}
+                                                    >
+                                                        <span>{isBelow ? '▼' : '▲'}</span>
+                                                        <span>{trendLabel}'ndan {Math.abs(delta).toFixed(0)}% {isBelow ? 'az' : 'fazla'}</span>
+                                                    </motion.div>
+                                                );
+                                            })()}
                                         </div>
 
                                         {/* Phase E: monthly energy goal tracker */}
                                         <StreakCard userId={user?.id} predictedKwh={homeTotals.kwh} />
 
+                                        {/* Cihaz tüketim sıralaması */}
+                                        {devicesByKwh.length > 0 && (
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-widest mb-3"
+                                                    style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
+                                                    Cihaz Tüketimi
+                                                </p>
+                                                <div className="flex flex-col gap-2.5">
+                                                    {devicesByKwh.map((obj, i) => {
+                                                        const maxKwh = devicesByKwh[0].kwh || 1;
+                                                        const pct    = (obj.kwh / maxKwh) * 100;
+                                                        const color  = obj.kwh > 150 ? '#ef4444' : obj.kwh > 60 ? '#f59e0b' : '#22c55e';
+                                                        const trend  = obj.kwh > 150 ? '▲' : obj.kwh > 60 ? '→' : '▼';
+                                                        const trendColor = obj.kwh > 150 ? '#f87171' : obj.kwh > 60 ? '#fbbf24' : '#4ade80';
+                                                        return (
+                                                            <div key={obj.id} className="flex items-center gap-2">
+                                                                <span className="text-[10px] w-24 truncate"
+                                                                    style={{ color: 'var(--color-muted)' }}>
+                                                                    {DEVICE_LABELS[obj.type] ?? obj.type}
+                                                                </span>
+                                                                <div className="flex-1 h-1.5 rounded-full overflow-hidden"
+                                                                    style={{ background: 'var(--color-border-2)' }}>
+                                                                    <motion.div
+                                                                        className="h-full rounded-full"
+                                                                        style={{ background: color }}
+                                                                        initial={{ width: 0 }}
+                                                                        animate={{ width: `${pct}%` }}
+                                                                        transition={{ duration: 0.9, delay: 0.1 + i * 0.07, ease: 'easeOut' }}
+                                                                    />
+                                                                </div>
+                                                                <span className="text-[10px] font-bold w-4 text-center"
+                                                                    style={{ color: trendColor }}>
+                                                                    {trend}
+                                                                </span>
+                                                                <span className="text-[10px] w-12 text-right tabular-nums"
+                                                                    style={{ color: 'var(--color-subtle)' }}>
+                                                                    {Math.round(obj.kwh)} kWh
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Home builder CTA — shown only when there are no rooms yet */}
                                         {rooms.length === 0 && (
-                                            <div onClick={openBuilder}
-                                                className="rounded-2xl p-4 relative overflow-hidden group cursor-pointer transition-all"
+                                            <motion.div
+                                                onClick={openBuilder}
+                                                className="rounded-2xl p-4 relative overflow-hidden cursor-pointer"
                                                 style={{ background: 'rgba(5,150,105,0.06)', border: '1px solid rgba(5,150,105,0.25)' }}
-                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(5,150,105,0.12)'}
-                                                onMouseLeave={e => e.currentTarget.style.background = 'rgba(5,150,105,0.06)'}>
+                                                whileHover={{ scale: 1.025, y: -2, boxShadow: '0 8px 24px rgba(5,150,105,0.18)' }}
+                                                whileTap={{ scale: 0.98 }}
+                                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                            >
                                                 <div className="absolute top-0 left-0 w-full h-0.5"
                                                     style={{ background: 'linear-gradient(to right, #059669, #047857)' }} />
                                                 <div className="flex items-start gap-3">
@@ -567,19 +770,22 @@ const DashboardLayout = () => {
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <div className="mt-3 flex items-center justify-end text-xs font-semibold gap-1 transition-colors"
+                                                <div className="mt-3 flex items-center justify-end text-xs font-semibold gap-1"
                                                     style={{ color: '#10b981' }}>
-                                                    Başla <ChevronRight size={13} className="group-hover:translate-x-1 transition-transform" />
+                                                    Başla <ChevronRight size={13} />
                                                 </div>
-                                            </div>
+                                            </motion.div>
                                         )}
 
                                         {/* AI chatbot entry */}
-                                        <div onClick={openAiAssistant}
-                                            className="rounded-2xl p-4 relative overflow-hidden group cursor-pointer transition-all"
+                                        <motion.div
+                                            onClick={openAiAssistant}
+                                            className="rounded-2xl p-4 relative overflow-hidden cursor-pointer"
                                             style={{ background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.2)' }}
-                                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,0.1)'}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(59,130,246,0.05)'}>
+                                            whileHover={{ scale: 1.025, y: -2, boxShadow: '0 8px 24px rgba(59,130,246,0.18)' }}
+                                            whileTap={{ scale: 0.98 }}
+                                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                                        >
                                             <div className="absolute top-0 left-0 w-full h-0.5"
                                                 style={{ background: 'linear-gradient(to right, #3b82f6, #1d4ed8)' }} />
                                             <div className="flex items-start gap-3">
@@ -597,17 +803,17 @@ const DashboardLayout = () => {
                                                         dangerouslySetInnerHTML={{ __html: t('aiRecommendationEx') }} />
                                                 </div>
                                             </div>
-                                            <div className="mt-3 flex items-center justify-end text-xs font-semibold gap-1 transition-colors"
+                                            <div className="mt-3 flex items-center justify-end text-xs font-semibold gap-1"
                                                 style={{ color: '#3b82f6' }}>
-                                                {t('seeDetails')} <ChevronRight size={13} className="group-hover:translate-x-1 transition-transform" />
+                                                {t('seeDetails')} <ChevronRight size={13} />
                                             </div>
-                                        </div>
-                                    </>
+                                        </motion.div>
+                                    </div>
                                 )}
 
                                 {/* ── Öneriler tab ── */}
                                 {homeTab === 'oneriler' && (
-                                    <div className="flex-1 overflow-y-auto">
+                                    <div>
                                         <p className="text-[10px] font-bold uppercase tracking-widest mb-3"
                                             style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
                                             {t('savingsSuggestions')}
@@ -635,9 +841,14 @@ const DashboardLayout = () => {
                                         <BillsTab userId={user?.id} />
                                     </Suspense>
                                 )}
-                            </>
-                        )}
+
+                                </motion.div>
+                                </AnimatePresence>
+                                </div>
+                            </div>
+                        ))}
                     </aside>
+                    </div>
                     )}
                 </div>
 
@@ -735,6 +946,7 @@ const DashboardLayout = () => {
                 onDeviceSelect={handleDeviceSelect}
                 initialType={catalogInitialType}
                 initialQuery={catalogInitialQuery}
+                disabledTypes={objects.some((o) => o.type === 'electric_hub') ? ['electric_hub'] : []}
             />
         </div>
     );

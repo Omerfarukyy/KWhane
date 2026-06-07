@@ -234,9 +234,11 @@ const StreakCard = ({ userId, predictedKwh }) => {
                                     onChange={(e) => setDraft(e.target.value)}
                                     placeholder="280"
                                     autoFocus
-                                    className="flex-1 bg-white/5 border border-white/10 rounded-l-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-400 transition"
+                                    className="flex-1 rounded-l-lg px-3 py-2 text-sm focus:outline-none transition"
+                                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
                                 />
-                                <span className="bg-white/5 border border-l-0 border-white/10 rounded-r-lg px-3 py-2 text-white/40 text-xs flex items-center">
+                                <span className="rounded-r-lg px-3 py-2 text-xs flex items-center"
+                                    style={{ background: 'var(--color-surface-2)', borderTop: '1px solid var(--color-border)', borderRight: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)', color: 'var(--color-subtle)' }}>
                                     kWh
                                 </span>
                             </div>
@@ -395,12 +397,12 @@ const StreakCard = ({ userId, predictedKwh }) => {
                         border:     '1px solid rgba(245,158,11,0.25)',
                     }}>
                     <Info size={12} style={{ color: '#f59e0b', marginTop: 2, flexShrink: 0 }} />
-                    <p className="text-[11px] leading-relaxed" style={{ color: '#fde68a' }}>
+                    <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
                         Simülasyonunuz ({Math.round(calibrationGap.simulationKwh)} kWh)
                         son faturanızdan ({Math.round(calibrationGap.billKwh)} kWh)
                         {' '}<strong>%{Math.abs(calibrationGap.deltaPct).toFixed(0)} {calibrationGap.deltaPct > 0 ? 'yüksek' : 'düşük'}</strong>.
                         İlerleme simülasyona göre hesaplanıyor — gerçek tüketimle uyum için
-                        {' '}<span style={{ color: '#fbbf24', fontWeight: 600 }}>Faturalar</span> sekmesinden kalibrasyon önerilerini uygulayın.
+                        {' '}<span style={{ color: '#f59e0b', fontWeight: 600 }}>Faturalar</span> sekmesinden kalibrasyon önerilerini uygulayın.
                     </p>
                 </div>
             )}

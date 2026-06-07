@@ -22,6 +22,7 @@ const DEVICE_PROFILES = {
     lighting:        { name: 'Standart Aydınlatma',      nominal_power_watts: 20,   daily_usage_hours: 8,   standby_power_watts: 0,   efficiency_class: 'A++' },
     water_heater:    { name: 'Standart Şofben',          nominal_power_watts: 2000, daily_usage_hours: 2,   standby_power_watts: 5,   efficiency_class: 'A'   },
     dryer:           { name: 'Standart Kurutma Mak.',    nominal_power_watts: 2500, daily_usage_hours: 1,   standby_power_watts: 3,   efficiency_class: 'A'   },
+    electric_hub:    { name: 'Sigorta / Elektrik Paneli', nominal_power_watts: 0,  daily_usage_hours: 0,   standby_power_watts: 0,   efficiency_class: null  },
 };
 
 
@@ -36,6 +37,7 @@ const DEVICE_CATEGORIES = [
     { type: 'lighting',        label: 'Aydınlatma',         icon: '💡' },
     { type: 'water_heater',    label: 'Su Isıtıcı',         icon: '🚿' },
     { type: 'dryer',           label: 'Kurutma Mak.',       icon: '🌀' },
+    { type: 'electric_hub',    label: 'Sigorta Kutusu',     icon: '⚡' },
 ];
 
 const EFFICIENCY_COLORS = {
@@ -52,12 +54,13 @@ const EFFICIENCY_COLORS = {
  * DeviceCatalogModal
  *
  * Props:
- *   isOpen        {boolean}
- *   onClose       {() => void}
- *   onDeviceSelect{(spec: DeviceSpec) => void}  — fires when user clicks "Ekle"
- *   initialType   {string|null}                 — pre-select a category (from ghost click)
+ *   isOpen           {boolean}
+ *   onClose          {() => void}
+ *   onDeviceSelect   {(spec: DeviceSpec) => void}  — fires when user clicks "Ekle"
+ *   initialType      {string|null}                 — pre-select a category (from ghost click)
+ *   disabledTypes    {string[]}                    — categories that cannot be added (e.g. already placed)
  */
-const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = null, initialQuery = '' }) => {
+const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = null, initialQuery = '', disabledTypes = [] }) => {
     const { t } = useLanguage();
     const [selectedType, setSelectedType] = useState(initialType || 'fridge');
     const [search, setSearch]             = useState(initialQuery || '');
@@ -170,7 +173,8 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
 
     // ── Debounced /calculate fetch (300 ms after spec last changed) ─────
     // Cache by spec key so re-tweaking back to a known value is instant.
-    const candidateKey = candidateSpec ? JSON.stringify(candidateSpec) : null;
+    // Skip for electric_hub — it doesn't consume energy, no ML needed.
+    const candidateKey = (candidateSpec && selectedType !== 'electric_hub') ? JSON.stringify(candidateSpec) : null;
     useEffect(() => {
         if (!candidateKey || !candidateSpec) {
             setPreviewData(null);
@@ -233,44 +237,81 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
             <div
-                className="bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl flex overflow-hidden"
-                style={{ width: 720, height: picked ? 660 : 520, maxHeight: '92vh' }}
+                className="rounded-xl shadow-2xl flex overflow-hidden"
+                style={{
+                    width: 720,
+                    height: picked ? 660 : 520,
+                    maxHeight: '92vh',
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                }}
             >
                 {/* ── Left sidebar: categories ── */}
-                <div className="w-44 border-r border-white/10 flex flex-col py-3 overflow-y-auto flex-shrink-0">
+                <div className="w-44 flex flex-col py-3 overflow-y-auto flex-shrink-0"
+                    style={{ borderRight: '1px solid var(--color-border)' }}>
                     <div className="px-4 py-2 mb-1">
-                        <span className="text-xs text-white/30 uppercase tracking-widest font-semibold">Kategori</span>
+                        <span className="text-xs uppercase tracking-widest font-semibold"
+                            style={{ color: 'var(--color-subtle)' }}>Kategori</span>
                     </div>
-                    {DEVICE_CATEGORIES.map((cat) => (
-                        <button
-                            key={cat.type}
-                            onClick={() => setSelectedType(cat.type)}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm text-left transition
-                                ${selectedType === cat.type
-                                    ? 'bg-blue-600/15 text-blue-300 border-r-2 border-blue-500'
-                                    : 'text-white/50 hover:text-white/80 hover:bg-white/5'
-                                }`}
-                        >
-                            <span className="text-base">{cat.icon}</span>
-                            <span>{cat.label}</span>
-                        </button>
-                    ))}
+                    {DEVICE_CATEGORIES.map((cat) => {
+                        const isDisabled = disabledTypes.includes(cat.type);
+                        const isActive = selectedType === cat.type;
+                        return (
+                            <button
+                                key={cat.type}
+                                onClick={() => !isDisabled && setSelectedType(cat.type)}
+                                disabled={isDisabled}
+                                className="flex items-center gap-2 px-4 py-2 text-sm text-left transition"
+                                style={{
+                                    color: isDisabled
+                                        ? 'var(--color-subtle)'
+                                        : isActive
+                                            ? '#93c5fd'
+                                            : 'var(--color-muted)',
+                                    background: isActive ? 'rgba(59,130,246,0.12)' : undefined,
+                                    borderRight: isActive ? '2px solid #3b82f6' : undefined,
+                                    opacity: isDisabled ? 0.5 : 1,
+                                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isDisabled && !isActive) {
+                                        e.currentTarget.style.color = 'var(--color-text)';
+                                        e.currentTarget.style.background = 'var(--color-surface-2)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!isDisabled && !isActive) {
+                                        e.currentTarget.style.color = 'var(--color-muted)';
+                                        e.currentTarget.style.background = '';
+                                    }
+                                }}
+                            >
+                                <span className="text-base">{cat.icon}</span>
+                                <span>{cat.label}</span>
+                                {isDisabled && <span className="ml-auto text-[10px]" style={{ color: 'var(--color-subtle)' }}>Eklendi</span>}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {/* ── Main area ── */}
                 <div className="flex flex-col flex-1 min-w-0">
                     {/* Header */}
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+                    <div className="flex items-center justify-between px-5 py-4"
+                        style={{ borderBottom: '1px solid var(--color-border)' }}>
                         <div>
-                            <h2 className="text-base font-semibold text-white">Cihaz Seç</h2>
-                            <p className="text-xs text-white/40">
+                            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Cihaz Seç</h2>
+                            <p className="text-xs" style={{ color: 'var(--color-subtle)' }}>
                                 {DEVICE_CATEGORIES.find((c) => c.type === selectedType)?.label} —&nbsp;
                                 {filtered.length} sonuç
                             </p>
                         </div>
                         <button
                             onClick={onClose}
-                            className="text-white/30 hover:text-white/70 transition text-xl leading-none"
+                            className="text-xl leading-none transition"
+                            style={{ color: 'var(--color-subtle)' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text)'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-subtle)'}
                         >
                             ×
                         </button>
@@ -283,18 +324,25 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                             placeholder="Model ara…"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-blue-500 transition"
+                            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none transition"
+                            style={{
+                                background: 'var(--color-surface-2)',
+                                border: '1px solid var(--color-border)',
+                                color: 'var(--color-text)',
+                            }}
                         />
                     </div>
 
                     {/* Card grid */}
                     <div className="flex-1 overflow-y-auto px-5 pb-3">
                         {loading ? (
-                            <div className="flex items-center justify-center h-full text-white/30 text-sm">
+                            <div className="flex items-center justify-center h-full text-sm"
+                                style={{ color: 'var(--color-subtle)' }}>
                                 Yükleniyor…
                             </div>
                         ) : filtered.length === 0 ? (
-                            <div className="flex items-center justify-center h-full text-white/30 text-sm">
+                            <div className="flex items-center justify-center h-full text-sm"
+                                style={{ color: 'var(--color-subtle)' }}>
                                 Sonuç bulunamadı
                             </div>
                         ) : (
@@ -306,14 +354,21 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                         <button
                                             key={card.id}
                                             onClick={() => setPicked(card)}
-                                            className={`text-left p-4 rounded-xl border transition
-                                                ${isSelected
-                                                    ? 'border-blue-500 bg-blue-500/10'
-                                                    : 'border-white/10 bg-white/5 hover:border-white/25 hover:bg-white/8'
-                                                }`}
+                                            className="text-left p-4 rounded-xl transition"
+                                            style={{
+                                                background: isSelected ? 'rgba(59,130,246,0.1)' : 'var(--color-surface-2)',
+                                                border: isSelected ? '1px solid #3b82f6' : '1px solid var(--color-border)',
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (!isSelected) e.currentTarget.style.border = '1px solid var(--color-border-2)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (!isSelected) e.currentTarget.style.border = '1px solid var(--color-border)';
+                                            }}
                                         >
                                             <div className="flex items-start justify-between gap-2">
-                                                <span className="text-sm font-medium text-white leading-snug">
+                                                <span className="text-sm font-medium leading-snug"
+                                                    style={{ color: 'var(--color-text)' }}>
                                                     {card.name}
                                                 </span>
                                                 {card.efficiency_class && (
@@ -325,7 +380,8 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="mt-2 text-xs text-white/40 flex gap-3">
+                                            <div className="mt-2 text-xs flex gap-3"
+                                                style={{ color: 'var(--color-subtle)' }}>
                                                 <span>{card.nominal_power_watts}W</span>
                                                 <span>{card.daily_usage_hours}h/gün</span>
                                                 {card.year_of_purchase && (
@@ -341,7 +397,8 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
 
                     {/* ── Live delta preview (Phase B) ───────────────── */}
                     {picked && (
-                        <div className="px-5 pt-3 pb-1 border-t border-white/10 bg-white/[0.02]">
+                        <div className="px-5 pt-3 pb-1"
+                            style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
                             <DeltaPreviewPanel
                                 data={previewData}
                                 loading={previewLoading}
@@ -353,12 +410,13 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
 
                     {/* ── Usage configuration (visible when a card is picked) ── */}
                     {picked && usageModel && (
-                        <div className="px-5 pb-3 pt-2 bg-white/[0.02]">
-                            <p className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2">Kullanım Ayarı</p>
+                        <div className="px-5 pb-3 pt-2" style={{ background: 'var(--color-surface-2)' }}>
+                            <p className="text-xs font-medium uppercase tracking-wider mb-2"
+                                style={{ color: 'var(--color-subtle)' }}>Kullanım Ayarı</p>
                             {usageModel.unit === 'cycles' ? (
                                 <div className="flex items-center gap-4">
                                     <div className="flex items-center gap-2">
-                                        <label className="text-xs text-white/60">Haftalık kullanım (kez)</label>
+                                        <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Haftalık kullanım (kez)</label>
                                         <input
                                             type="number"
                                             min={1}
@@ -366,10 +424,15 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                             step={1}
                                             value={usageValue ?? usageModel.default_cycles}
                                             onChange={(e) => setUsageValue(e.target.value)}
-                                            className="w-16 bg-white/5 border border-white/15 rounded-lg px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-blue-500 transition"
+                                            className="w-16 rounded-lg px-2 py-1 text-sm text-center focus:outline-none transition"
+                                            style={{
+                                                background: 'var(--color-surface)',
+                                                border: '1px solid var(--color-border)',
+                                                color: 'var(--color-text)',
+                                            }}
                                         />
                                     </div>
-                                    <span className="text-xs text-white/30">
+                                    <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>
                                         ≈ {(((parseFloat(usageValue) || usageModel.default_cycles) * usageModel.cycle_hours) / 7).toFixed(2)} saat/gün (enerji hesabı için)
                                     </span>
                                 </div>
@@ -379,14 +442,19 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                         type="number"
                                         value={24}
                                         disabled
-                                        className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white/40 text-sm text-center cursor-not-allowed"
+                                        className="w-16 rounded-lg px-2 py-1 text-sm text-center cursor-not-allowed"
+                                        style={{
+                                            background: 'var(--color-surface)',
+                                            border: '1px solid var(--color-border)',
+                                            color: 'var(--color-subtle)',
+                                        }}
                                     />
-                                    <span className="text-xs text-white/30">saat/gün — Buzdolabı her zaman açıktır</span>
+                                    <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>saat/gün — Buzdolabı her zaman açıktır</span>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-3">
                                     <div className="flex items-center gap-2">
-                                        <label className="text-xs text-white/60">Günlük kullanım (saat)</label>
+                                        <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Günlük kullanım (saat)</label>
                                         <input
                                             type="number"
                                             min={0}
@@ -394,10 +462,15 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                             step={0.5}
                                             value={usageValue ?? (picked.daily_usage_hours || usageModel.default_hours)}
                                             onChange={(e) => setUsageValue(e.target.value)}
-                                            className="w-16 bg-white/5 border border-white/15 rounded-lg px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-blue-500 transition"
+                                            className="w-16 rounded-lg px-2 py-1 text-sm text-center focus:outline-none transition"
+                                            style={{
+                                                background: 'var(--color-surface)',
+                                                border: '1px solid var(--color-border)',
+                                                color: 'var(--color-text)',
+                                            }}
                                         />
                                     </div>
-                                    <span className="text-xs text-white/30">
+                                    <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>
                                         {(((parseFloat(usageValue) || usageModel.default_hours) * 30)).toFixed(0)} saat/ay
                                     </span>
                                 </div>
@@ -406,14 +479,18 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                     )}
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between px-5 py-3 border-t border-white/10">
-                        <span className="text-xs text-white/30">
+                    <div className="flex items-center justify-between px-5 py-3"
+                        style={{ borderTop: '1px solid var(--color-border)' }}>
+                        <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>
                             {picked ? `${t('selectedLabel')}: ${picked.name}` : t('pickModel')}
                         </span>
                         <div className="flex gap-3">
                             <button
                                 onClick={onClose}
-                                className="px-4 py-2 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition"
+                                className="px-4 py-2 rounded-lg text-sm transition"
+                                style={{ color: 'var(--color-muted)' }}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'var(--color-surface-2)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; e.currentTarget.style.background = 'transparent'; }}
                             >
                                 İptal
                             </button>

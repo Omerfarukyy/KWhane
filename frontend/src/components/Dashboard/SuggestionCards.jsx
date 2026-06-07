@@ -106,6 +106,7 @@ const SuggestionCards = ({ compact = false }) => {
     const [cards, setCards] = useState([]);
     const [loading, setLoading] = useState(true);
     const [idx, setIdx] = useState(0);
+    const [direction, setDirection] = useState('left');
     const [paused, setPaused] = useState(false);
     const timerRef = useRef(null);
 
@@ -131,8 +132,15 @@ const SuggestionCards = ({ compact = false }) => {
             .finally(() => setLoading(false));
     }, [user?.id]);
 
-    const prev = useCallback(() => setIdx(i => (i === 0 ? cards.length - 1 : i - 1)), [cards.length]);
-    const next = useCallback(() => setIdx(i => (i === cards.length - 1 ? 0 : i + 1)), [cards.length]);
+    const prev = useCallback(() => {
+        setDirection('right');
+        setIdx(i => (i === 0 ? cards.length - 1 : i - 1));
+    }, [cards.length]);
+
+    const next = useCallback(() => {
+        setDirection('left');
+        setIdx(i => (i === cards.length - 1 ? 0 : i + 1));
+    }, [cards.length]);
 
     // Auto-advance
     useEffect(() => {
@@ -157,9 +165,11 @@ const SuggestionCards = ({ compact = false }) => {
             onMouseLeave={() => setPaused(false)}>
 
             {/* Card area */}
-            <div className="p-4 rounded-2xl"
+            <div className="rounded-2xl overflow-hidden"
                 style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', minHeight: compact ? 100 : 160 }}>
-                <Card rec={cards[idx]} />
+                <div key={idx} className={`p-4 h-full suggestion-slide-${direction}`}>
+                    <Card rec={cards[idx]} />
+                </div>
             </div>
 
             {/* Navigation */}
@@ -176,7 +186,7 @@ const SuggestionCards = ({ compact = false }) => {
                     {/* Dot indicators */}
                     <div className="flex gap-1.5">
                         {cards.map((_, i) => (
-                            <button key={i} onClick={() => setIdx(i)}
+                            <button key={i} onClick={() => { setDirection(i > idx ? 'left' : 'right'); setIdx(i); }}
                                 className="rounded-full transition-all"
                                 style={{
                                     width: i === idx ? 20 : 6,

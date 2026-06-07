@@ -165,3 +165,17 @@ input:-webkit-autofill:focus {
   box-shadow: inset 0 1px 0 var(--color-highlight);
   border-radius: 12px;
 }
+
+/* ============================================================
+   SUGGESTION CARD SLIDE ANIMATIONS
+   ============================================================ */
+@keyframes slideInFromRight {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInFromLeft {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.suggestion-slide-left  { animation: slideInFromRight 0.28s ease-out both; }
+.suggestion-slide-right { animation: slideInFromLeft  0.28s ease-out both; }

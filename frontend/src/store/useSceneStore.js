@@ -22,6 +22,7 @@ export const DEVICE_CONFIGS = {
     water_heater:    { size: [0.5, 1.5, 0.5],  color: '#dbeafe', defaultY: null },
     dryer:           { size: [0.6, 0.85, 0.6], color: '#f8fafc', defaultY: null },
     box:             { size: [0.6, 1.0, 0.6],  color: '#f59e0b', defaultY: null },
+    electric_hub:    { size: [0.54, 1.04, 0.13], color: '#1e293b', defaultY: 0, mount: 'wall' },
 };
 
 // AABB overlap test for two rooms (small epsilon so touching edges don't count).

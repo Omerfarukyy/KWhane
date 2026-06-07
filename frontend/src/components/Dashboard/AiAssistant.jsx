@@ -228,8 +228,8 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                     : {
                         width:     400,
                         height:    540,
-                        background: '#111111',
-                        border:    '1px solid #1e1e1e',
+                        background: 'var(--color-surface)',
+                        border:    '1px solid var(--color-border)',
                         boxShadow: '0 20px 60px rgba(0,0,0,0.85)',
                         fontFamily: "'Inter', ui-sans-serif",
                         backdropFilter: 'blur(24px)',
@@ -239,15 +239,15 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
             {/* ── Header ─────────────────────────────────────────────────────── */}
             <div
                 className="flex items-center justify-between px-5 py-4 flex-shrink-0"
-                style={{ background: '#0d0d0d', borderBottom: '1px solid #1e1e1e' }}
+                style={{ background: 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}
             >
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-xl" style={{ background: 'rgba(59,130,246,0.1)' }}>
                         <Sparkles className="w-4 h-4" style={{ color: '#3b82f6' }} />
                     </div>
                     <div>
-                        <h3 className="font-bold text-white text-sm leading-none">KWhane AI</h3>
-                        <p className="text-[11px] mt-1 flex items-center gap-1.5" style={{ color: '#555555' }}>
+                        <h3 className="font-bold text-sm leading-none" style={{ color: 'var(--color-text)' }}>KWhane AI</h3>
+                        <p className="text-[11px] mt-1 flex items-center gap-1.5" style={{ color: 'var(--color-subtle)' }}>
                             <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
                             {t('aiOnline')}
                         </p>
@@ -257,9 +257,9 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                     <button
                         onClick={onClose}
                         className="p-1 transition-colors"
-                        style={{ color: '#555555' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+                        style={{ color: 'var(--color-subtle)' }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-subtle)')}
                     >
                         <X size={18} />
                     </button>
@@ -286,13 +286,13 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                                         background:   'rgba(59,130,246,0.15)',
                                         border:       '1px solid rgba(59,130,246,0.3)',
                                         borderRadius: '16px 16px 4px 16px',
-                                        color:        '#e2e8f0',
+                                        color:        'var(--color-text)',
                                     }
                                     : {
-                                        background:   '#161616',
-                                        border:       '1px solid #1e1e1e',
+                                        background:   'var(--color-surface-2)',
+                                        border:       '1px solid var(--color-border)',
                                         borderRadius: '16px 16px 16px 4px',
-                                        color:        '#a0aec0',
+                                        color:        'var(--color-muted)',
                                     }
                             }
                         >
@@ -307,8 +307,8 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                         <div
                             className="px-4 py-3 flex items-center gap-1"
                             style={{
-                                background:   '#161616',
-                                border:       '1px solid #1e1e1e',
+                                background:   'var(--color-surface-2)',
+                                border:       '1px solid var(--color-border)',
                                 borderRadius: '16px 16px 16px 4px',
                             }}
                         >
@@ -330,7 +330,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
             {/* ── Input ──────────────────────────────────────────────────────── */}
             <div
                 className="px-4 pt-3 pb-4 flex-shrink-0"
-                style={{ borderTop: '1px solid #1e1e1e', background: '#0d0d0d' }}
+                style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}
             >
                 <div className="relative flex items-center gap-2">
                     <input
@@ -340,26 +340,27 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                         onKeyDown={handleKeyDown}
                         placeholder="Bir şey sor… (Enter ile gönder)"
                         disabled={isLoading}
-                        className="flex-1 text-sm py-3 pl-4 pr-4 rounded-xl outline-none text-white transition-colors"
+                        className="flex-1 text-sm py-3 pl-4 pr-4 rounded-xl outline-none transition-colors"
                         style={{
-                            background:  '#161616',
-                            border:      '1px solid #1e1e1e',
+                            background:  'var(--color-surface)',
+                            border:      '1px solid var(--color-border)',
                             fontFamily:  "'Inter', ui-sans-serif",
-                            color:       '#ffffff',
+                            color:       'var(--color-text)',
                             opacity:     isLoading ? 0.6 : 1,
                         }}
                         onFocus={(e)  => (e.target.style.borderColor = '#3b82f6')}
-                        onBlur={(e)   => (e.target.style.borderColor = '#1e1e1e')}
+                        onBlur={(e)   => (e.target.style.borderColor = 'var(--color-border)')}
                     />
                     {micSupported && (
                         <button
                             onClick={listening ? stopMic : startMic}
                             disabled={isLoading}
                             title={listening ? 'Mikrofonu durdur' : 'Sesle yaz'}
-                            className="flex-shrink-0 p-2 rounded-xl text-white transition-colors"
+                            className="flex-shrink-0 p-2 rounded-xl transition-colors"
                             style={{
-                                background: listening ? '#dc2626' : '#1e1e1e',
-                                border:     '1px solid #2a2a2a',
+                                color:      listening ? '#ffffff' : 'var(--color-text)',
+                                background: listening ? '#dc2626' : 'var(--color-surface)',
+                                border:     '1px solid var(--color-border)',
                                 cursor:     isLoading ? 'not-allowed' : 'pointer',
                                 animation:  listening ? 'pulse 1.2s infinite' : 'none',
                             }}
@@ -370,8 +371,9 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                     <button
                         onClick={handleSend}
                         disabled={isLoading || !inputText.trim()}
-                        className="flex-shrink-0 p-2 rounded-xl text-white transition-colors"
+                        className="flex-shrink-0 p-2 rounded-xl transition-colors"
                         style={{
+                            color:      '#ffffff',
                             background: isLoading || !inputText.trim() ? '#1e3a5f' : '#3b82f6',
                             cursor:     isLoading || !inputText.trim() ? 'not-allowed' : 'pointer',
                         }}
@@ -387,7 +389,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                         <Send size={16} />
                     </button>
                 </div>
-                <p className="text-[10px] text-center mt-2 italic" style={{ color: '#333333' }}>
+                <p className="text-[10px] text-center mt-2 italic" style={{ color: 'var(--color-subtle)' }}>
                     Llama 3.2 (Ollama) ile desteklenmektedir
                 </p>
             </div>

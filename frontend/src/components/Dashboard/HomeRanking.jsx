@@ -233,31 +233,36 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
 
             {/* Distribution bar — user vs cluster average */}
             <div>
-                <div className="flex justify-between text-[10px] mb-1.5" style={{ color: 'var(--color-subtle)' }}>
+                <div className="flex justify-between text-[10px] mb-1" style={{ color: 'var(--color-subtle)' }}>
                     <span>Az tüketim</span>
                     <span>Çok tüketim</span>
                 </div>
+
+                {/* "Sen" marker ABOVE the bar so it never overlaps "Ortalama" */}
+                <div className="relative h-5">
+                    <div className="absolute -translate-x-1/2 flex flex-col items-center leading-none"
+                        style={{ left: `${userOnBar}%` }}>
+                        <span className="text-[10px] font-bold whitespace-nowrap"
+                            style={{ color: labelInfo.color }}>Ben</span>
+                        <span style={{ color: labelInfo.color, fontSize: 8, lineHeight: 1 }}>▼</span>
+                    </div>
+                </div>
+
                 <div className="relative h-3 rounded-full overflow-hidden" style={{ background: 'var(--color-border-2)' }}>
-                    {/* Background gradient: green → amber → red as consumption grows */}
                     <div className="absolute inset-0"
                         style={{ background: 'linear-gradient(90deg, #22c55e, #f59e0b 50%, #ef4444)' }}
                     />
-                    {/* Cluster average marker */}
                     <div className="absolute top-0 bottom-0 w-px"
                         style={{ left: `${avgOnBar}%`, background: 'rgba(255,255,255,0.6)' }}
                         title="Küme ortalaması"
                     />
                 </div>
+
+                {/* "Ortalama" label BELOW the bar */}
                 <div className="relative mt-1 h-3">
-                    {/* Cluster avg label */}
-                    <div className="absolute -translate-x-1/2 text-[9px] uppercase tracking-wider"
+                    <div className="absolute -translate-x-1/2 text-[9px] uppercase tracking-wider whitespace-nowrap"
                         style={{ left: `${avgOnBar}%`, color: 'var(--color-subtle)' }}>
                         Ortalama
-                    </div>
-                    {/* User marker */}
-                    <div className="absolute -translate-x-1/2 text-[10px] font-bold whitespace-nowrap"
-                        style={{ left: `${userOnBar}%`, color: labelInfo.color, top: -16 }}>
-                        ▲ Sen
                     </div>
                 </div>
             </div>

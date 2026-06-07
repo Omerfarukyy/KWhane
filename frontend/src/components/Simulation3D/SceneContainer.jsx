@@ -12,6 +12,8 @@ import ProceduralDevices from './ProceduralDevices';
 import GhostDevice from './GhostDevice';
 import EnergyBadge from './EnergyBadge';
 import GardenProps from './GardenProps';
+import ElectricHub from './ElectricHub';
+import ElectricWiring from './ElectricWiring';
 import useCollision from './useCollision';
 import useSceneStore from '../../store/useSceneStore';
 import './SceneContainer.css';
@@ -118,6 +120,28 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
 
     const adjacencies = useMemo(() => computeAdjacencies(rooms), [rooms]);
 
+    // Per-room heat levels (0=cool, 1=hot) derived from energyData
+    const roomHeatLevels = useMemo(() => {
+        const roomKwh = {};
+        rooms.forEach(r => { roomKwh[r.id] = 0; });
+        objects.forEach(obj => {
+            const kwh = energyData[obj.id]?.monthly_kwh ?? 0;
+            if (obj.roomId && roomKwh[obj.roomId] !== undefined) {
+                roomKwh[obj.roomId] += kwh;
+            }
+        });
+        const values = Object.values(roomKwh);
+        const maxKwh = Math.max(...values);
+        const minKwh = Math.min(...values);
+        if (maxKwh < 1) return {}; // no meaningful data yet
+        const range = maxKwh - minKwh;
+        const levels = {};
+        Object.entries(roomKwh).forEach(([id, kwh]) => {
+            levels[id] = range < 0.5 ? 0.5 : (kwh - minKwh) / range;
+        });
+        return levels;
+    }, [rooms, objects, energyData]);
+
     const handlePointerMissed = () => { setSelectedId(null); setPinnedDeviceId(null); };
 
     return (
@@ -184,6 +208,10 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 position={[0, -0.001, 0]}
             />
 
+            {/* ─── Elektrik Tesisatı ───────────────────── */}
+            <ElectricHub />
+            <ElectricWiring />
+
             {/* ─── Dinamik Odalar ──────────────────────── */}
             {rooms.map((r) => (
                 <RoomBuilder
@@ -196,6 +224,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                     depth={r.size.depth}
                     height={r.size.height}
                     adjacentSides={adjacencies.get(r.id) || {}}
+                    heatLevel={roomHeatLevels[r.id] ?? 0}
                 />
             ))}
 
@@ -243,7 +272,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
             })}
 
             {/* ─── Enerji Rozeti Overlayları ───────────── */}
-            {objects.map((obj) => (
+            {objects.filter(obj => obj.type !== 'electric_hub').map((obj) => (
                 <EnergyBadge
                     key={`badge-${obj.id}`}
                     object={obj}
