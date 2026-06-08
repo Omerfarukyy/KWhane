@@ -157,7 +157,7 @@ async def generate_home_plan(request: HomeBuilderRequest) -> HomeBuilderResponse
 
     try:
         completion = await client.chat.completions.create(
-            model=settings.llama_model,
+            model=settings.llm_model,
             messages=messages,
             max_tokens=1200,
             temperature=0.4,

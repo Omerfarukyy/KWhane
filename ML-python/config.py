@@ -12,9 +12,12 @@ class Settings(BaseSettings):
     model_dir: str = str(BASE_DIR / "trained_models")
     retrain_on_startup: bool = False
 
-    # Local Ollama settings — no API key needed
-    ollama_base_url: str = "http://localhost:11434/v1"
-    llama_model: str = "llama3.2"
+    # LLM provider — works with Ollama (local) or any OpenAI-compatible API
+    # For Groq:  base_url=https://api.groq.com/openai/v1  model=llama-3.3-70b-versatile
+    # For Ollama: base_url=http://localhost:11434/v1       model=llama3.2
+    llm_base_url: str = "http://localhost:11434/v1"
+    llm_api_key: str = "ollama"
+    llm_model: str = "llama3.2"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

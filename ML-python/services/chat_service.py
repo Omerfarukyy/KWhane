@@ -139,7 +139,7 @@ async def generate_chat_reply(request: ChatRequest) -> str:
 
     try:
         completion = await client.chat.completions.create(
-            model=settings.llama_model,
+            model=settings.llm_model,
             messages=messages,
             max_tokens=500,
             temperature=0.7,
@@ -160,8 +160,8 @@ async def generate_chat_reply(request: ChatRequest) -> str:
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    f"'{settings.llama_model}' modeli bulunamadı. "
-                    f"Terminalde çalıştırın: 'ollama pull {settings.llama_model}'"
+                    f"'{settings.llm_model}' modeli bulunamadı. "
+                    f"Terminalde çalıştırın: 'ollama pull {settings.llm_model}'"
                 ),
             )
         raise HTTPException(
