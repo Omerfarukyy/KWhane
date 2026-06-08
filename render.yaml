@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: kwhane-ml-backend
+    runtime: docker
+    rootDir: ML-python
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false

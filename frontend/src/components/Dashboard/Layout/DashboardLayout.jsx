@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import NumberTicker from '../../UI/NumberTicker';
+import NumberTicker from '../../ui/NumberTicker';
 import ThemeLangToggle from '../../ThemeLangToggle';
 import SceneContainer from '../../Simulation3D/SceneContainer';
 import RoomCreationModal from '../../Simulation3D/RoomCreationModal';
