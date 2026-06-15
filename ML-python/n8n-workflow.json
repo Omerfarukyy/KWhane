@@ -143,9 +143,15 @@
             { "name": "category", "value": "={{ $json.category }}" },
             { "name": "title", "value": "={{ $json.title }}" },
             { "name": "description", "value": "={{ $json.description }}" },
+            { "name": "device_name", "value": "={{ $json.device_name }}" },
+            { "name": "device_type", "value": "={{ $json.device_type }}" },
             { "name": "current_monthly_cost", "value": "={{ $json.current_monthly_cost }}" },
             { "name": "projected_monthly_cost", "value": "={{ $json.projected_monthly_cost }}" },
+            { "name": "current_monthly_kwh", "value": "={{ $json.current_monthly_kwh }}" },
+            { "name": "projected_monthly_kwh", "value": "={{ $json.projected_monthly_kwh }}" },
             { "name": "potential_savings_amount", "value": "={{ $json.potential_savings_amount }}" },
+            { "name": "recommendation_source", "value": "={{ $json.recommendation_source || 'rule_based' }}" },
+            { "name": "explanation_factors", "value": "={{ $json.explanation_factors }}" },
             { "name": "status", "value": "={{ $json.status || 'pending' }}" }
           ]
         },

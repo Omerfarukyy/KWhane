@@ -12,6 +12,15 @@ def _reject_future_year(value: int) -> int:
     return value
 
 
+def _validate_usage_basis(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = (value or "hours").strip().lower()
+    if normalized not in {"hours", "cycles"}:
+        raise ValueError("usage_basis must be 'hours' or 'cycles'")
+    return normalized
+
+
 class DeviceInput(BaseModel):
     """Matches the devices table row that n8n sends on new device creation."""
     model_config = ConfigDict(extra="ignore")
@@ -27,11 +36,20 @@ class DeviceInput(BaseModel):
     efficiency_class: str = "A"
     year_of_purchase: int = 2024
     created_at: str | None = None
+    usage_basis: str | None = None
+    cycles_per_week: float | None = Field(default=None, ge=0)
+    cycle_hours: float | None = Field(default=None, gt=0)
+    billing_scale_factor: float | None = Field(default=None, gt=0)
 
     @field_validator("year_of_purchase")
     @classmethod
     def year_cannot_be_future(cls, value: int) -> int:
         return _reject_future_year(value)
+
+    @field_validator("usage_basis")
+    @classmethod
+    def usage_basis_must_be_known(cls, value: str | None) -> str | None:
+        return _validate_usage_basis(value)
 
 
 class TariffTier(BaseModel):
@@ -57,6 +75,13 @@ class CalculateResponse(BaseModel):
     top_factors: list[dict] = Field(default_factory=list)
     active_estimated_kwh: float | None = None
     input_warnings: list[str] = Field(default_factory=list)
+    effective_daily_usage_hours: float | None = None
+    usage_basis: str | None = None
+    cycles_per_week: float | None = None
+    cycle_hours: float | None = None
+    billing_scale_factor: float | None = None
+    scaled_monthly_kwh: float | None = None
+    scaled_monthly_cost: float | None = None
 
 
 class CompareResponse(BaseModel):
@@ -84,6 +109,12 @@ class RecommendationItem(BaseModel):
     current_monthly_kwh: float | None = None
     projected_monthly_kwh: float | None = None
     explanation_factors: list[dict] = Field(default_factory=list)
+    device_name: str | None = None
+    device_type: str | None = None
+    recommendation_source: str = "rule_based"
+    usage_basis: str | None = None
+    from_cycles_per_week: float | None = None
+    to_cycles_per_week: float | None = None
 
 
 class SavingsResponse(BaseModel):
@@ -103,9 +134,24 @@ class DeviceContext(BaseModel):
     efficiency_class: str
     nominal_power_watts: int
     daily_usage_hours: float
+    standby_power_watts: int | None = None
+    theoretical_monthly_kwh: float | None = None
+    total_monthly_kwh: float | None = None
+    total_monthly_cost: float | None = None
     monthly_kwh: float | None = None
     monthly_cost: float | None = None
     efficiency_score: float | None = None
+    usage_basis: str | None = None
+    cycles_per_week: float | None = Field(default=None, ge=0)
+    cycle_hours: float | None = Field(default=None, gt=0)
+    billing_scale_factor: float | None = Field(default=None, gt=0)
+    scaled_monthly_kwh: float | None = None
+    scaled_monthly_cost: float | None = None
+
+    @field_validator("usage_basis")
+    @classmethod
+    def context_usage_basis_must_be_known(cls, value: str | None) -> str | None:
+        return _validate_usage_basis(value)
 
 
 class RecommendationContext(BaseModel):
@@ -114,6 +160,13 @@ class RecommendationContext(BaseModel):
     potential_savings_amount: float
     current_monthly_cost: float
     projected_monthly_cost: float
+    title: str | None = None
+    description: str | None = None
+    device_name: str | None = None
+    device_type: str | None = None
+    current_monthly_kwh: float | None = None
+    projected_monthly_kwh: float | None = None
+    recommendation_source: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -128,6 +181,7 @@ class ChatRequest(BaseModel):
     bill_count: int = Field(default=0, ge=0)
     effective_tariff_tl_per_kwh: float | None = Field(default=None, ge=0)
     bill_diagnostic_summary: str | None = None
+    billing_scale_factor: float | None = Field(default=None, gt=0)
 
 
 class ChatResponse(BaseModel):
@@ -186,11 +240,19 @@ class DiagnosticDeviceInput(BaseModel):
     efficiency_class: str = "A"
     daily_usage_hours: float = Field(default=0.0, ge=0, le=24)
     year_of_purchase: int = 2024
+    usage_basis: str | None = None
+    cycles_per_week: float | None = Field(default=None, ge=0)
+    cycle_hours: float | None = Field(default=None, gt=0)
 
     @field_validator("year_of_purchase")
     @classmethod
     def diagnostic_year_cannot_be_future(cls, value: int) -> int:
         return _reject_future_year(value)
+
+    @field_validator("usage_basis")
+    @classmethod
+    def diagnostic_usage_basis_must_be_known(cls, value: str | None) -> str | None:
+        return _validate_usage_basis(value)
 
 
 class BillDiagnoseRequest(BaseModel):
@@ -239,11 +301,19 @@ class CalibrationDeviceInput(BaseModel):
     standby_power_watts: int | None = Field(default=None, ge=0)
     efficiency_class: str = "A"
     year_of_purchase: int = 2024
+    usage_basis: str | None = None
+    cycles_per_week: float | None = Field(default=None, ge=0)
+    cycle_hours: float | None = Field(default=None, gt=0)
 
     @field_validator("year_of_purchase")
     @classmethod
     def calibration_year_cannot_be_future(cls, value: int) -> int:
         return _reject_future_year(value)
+
+    @field_validator("usage_basis")
+    @classmethod
+    def calibration_usage_basis_must_be_known(cls, value: str | None) -> str | None:
+        return _validate_usage_basis(value)
 
 
 class CalibrationRequest(BaseModel):
@@ -260,6 +330,14 @@ class CalibrationSuggestion(BaseModel):
     from_value: float
     to_value: float
     impact_kwh_per_month: float
+    usage_basis: str | None = None
+
+
+class ScaledCalibrationDevice(BaseModel):
+    device_id: str
+    device_name: str
+    raw_monthly_kwh: float
+    scaled_monthly_kwh: float
 
 
 class CalibrationResponse(BaseModel):
@@ -268,7 +346,10 @@ class CalibrationResponse(BaseModel):
     residual_kwh: float
     residual_pct: float
     bill_count: int
+    scale_factor: float | None = None
+    scaled_devices: list[ScaledCalibrationDevice] = Field(default_factory=list)
     suggested_adjustments: list[CalibrationSuggestion] = Field(default_factory=list)
+    efficiency_review: dict | None = None
     reconciled: bool = False
 
 

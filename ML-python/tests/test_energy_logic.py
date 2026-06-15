@@ -21,9 +21,13 @@ sys.modules.setdefault("openai", openai_stub)
 
 from ml.savings_scorer import score_recommendations
 from models.schemas import DeviceInput
+from models.schemas import ChatRequest, DeviceContext, RecommendationContext
 from services.calculate_service import calculate_energy
+from services.bill_diagnostics import DiagnosticDevice, diagnose
 from services.calibration_service import CalibrationDeviceInput, calibrate
+from services.chat_service import _build_system_prompt
 from services.compare_service import compare_device
+from services.energy_calculations import normalize_usage
 from services.home_builder_service import _normalize_plan
 from services.tariff_service import TariffCalculator
 
@@ -72,6 +76,21 @@ class RowSumPredictor:
         return features["nominal_power_watts"] / 10
 
 
+class FeatureCapturePredictor:
+    def __init__(self, value=10.0):
+        self.value = value
+        self.features = None
+
+    def predict(self, features):
+        self.features = dict(features)
+        return self.value
+
+
+class UsageLinearPredictor:
+    def predict(self, features):
+        return features["daily_usage_hours"] * 10
+
+
 class DummyClusterer:
     def predict_cluster(self, household_features):
         self.household_features = household_features
@@ -112,6 +131,66 @@ class EnergyLogicTests(unittest.TestCase):
         self.assertEqual(result.confidence_label, "high")
         self.assertEqual(result.top_factors[0]["feature"], "daily_usage_hours")
 
+    def test_cycle_usage_normalizes_weekly_cycles_to_daily_hours(self):
+        usage = normalize_usage(
+            device_type="dishwasher",
+            daily_usage_hours=0,
+            usage_basis="cycles",
+            cycles_per_week=5,
+            cycle_hours=2,
+        )
+
+        self.assertEqual(usage.usage_basis, "cycles")
+        self.assertAlmostEqual(usage.effective_daily_hours, 10 / 7, places=2)
+
+    def test_calculate_uses_hour_mode_when_explicit(self):
+        device = DeviceInput(
+            id="d1",
+            room_id="r1",
+            name="Dishwasher",
+            type="dishwasher",
+            nominal_power_watts=1800,
+            daily_usage_hours=3,
+            standby_power_watts=3,
+            efficiency_class="A",
+            year_of_purchase=2024,
+            usage_basis="hours",
+            cycles_per_week=5,
+            cycle_hours=2,
+        )
+        predictor = FeatureCapturePredictor(20.0)
+
+        with patch("services.calculate_service.fetch_tariffs", return_value=TARIFFS):
+            result = calculate_energy(device, predictor)
+
+        self.assertEqual(predictor.features["usage_basis"], "hours")
+        self.assertEqual(predictor.features["daily_usage_hours"], 3)
+        self.assertEqual(result.effective_daily_usage_hours, 3)
+
+    def test_calculate_uses_cycle_mode_when_sent(self):
+        device = DeviceInput(
+            id="d1",
+            room_id="r1",
+            name="Dishwasher",
+            type="dishwasher",
+            nominal_power_watts=1800,
+            daily_usage_hours=3,
+            standby_power_watts=3,
+            efficiency_class="A",
+            year_of_purchase=2024,
+            usage_basis="cycles",
+            cycles_per_week=5,
+            cycle_hours=2,
+        )
+        predictor = FeatureCapturePredictor(20.0)
+
+        with patch("services.calculate_service.fetch_tariffs", return_value=TARIFFS):
+            result = calculate_energy(device, predictor)
+
+        self.assertEqual(predictor.features["usage_basis"], "cycles")
+        self.assertAlmostEqual(predictor.features["daily_usage_hours"], 10 / 7, places=2)
+        self.assertAlmostEqual(result.effective_daily_usage_hours, 1.43, places=2)
+
     def test_savings_repredicts_each_recommendation(self):
         device = DeviceInput(
             id="d1",
@@ -147,6 +226,75 @@ class EnergyLogicTests(unittest.TestCase):
         self.assertEqual(by_category["device_upgrade"]["potential_savings_amount"], 30.0)
         self.assertEqual(by_category["usage_optimization"]["projected_monthly_cost"], 80.0)
         self.assertEqual(by_category["standby_reduction"]["projected_monthly_cost"], 95.0)
+
+    def test_cycle_recommendation_uses_weekly_cycle_language(self):
+        device = DeviceInput(
+            id="d1",
+            room_id="r1",
+            name="Bulasik",
+            type="dishwasher",
+            nominal_power_watts=1800,
+            daily_usage_hours=0,
+            standby_power_watts=3,
+            efficiency_class="A",
+            year_of_purchase=2024,
+            usage_basis="cycles",
+            cycles_per_week=10,
+            cycle_hours=2,
+        )
+
+        recommendations = score_recommendations(
+            device=device,
+            current_monthly_kwh=100.0,
+            current_monthly_cost=100.0,
+            catalog_alternatives=[],
+            tariff_calculator=TariffCalculator(TARIFFS),
+            energy_predictor=UsageLinearPredictor(),
+        )
+
+        usage_rec = next(r for r in recommendations if r["category"] == "usage_optimization")
+        self.assertIn("Haftalik", usage_rec["title"])
+        self.assertNotIn("Gunluk", usage_rec["title"])
+        self.assertEqual(usage_rec["device_name"], "Bulasik")
+        self.assertEqual(usage_rec["to_cycles_per_week"], 5.0)
+
+    def test_chat_prompt_includes_device_and_recommendation_context(self):
+        prompt = _build_system_prompt(ChatRequest(
+            message="Ne onerirsin?",
+            devices=[DeviceContext(
+                name="Bulasik",
+                type="dishwasher",
+                efficiency_class="A",
+                nominal_power_watts=1800,
+                standby_power_watts=3,
+                daily_usage_hours=0,
+                usage_basis="cycles",
+                cycles_per_week=5,
+                cycle_hours=2,
+                monthly_kwh=42,
+                monthly_cost=120,
+                efficiency_score=84,
+            )],
+            recommendations=[RecommendationContext(
+                category="usage_optimization",
+                slug="reduce-weekly-cycles",
+                title="Haftalik kullanimi azalt",
+                device_name="Bulasik",
+                device_type="dishwasher",
+                potential_savings_amount=25,
+                current_monthly_cost=120,
+                projected_monthly_cost=95,
+                current_monthly_kwh=42,
+                projected_monthly_kwh=33,
+            )],
+            total_monthly_kwh=42,
+            total_monthly_cost=120,
+        ))
+
+        self.assertIn("Bulasik", prompt)
+        self.assertIn("1800W", prompt)
+        self.assertIn("5.0 sefer/hafta", prompt)
+        self.assertIn("42.0 -> 33.0 kWh", prompt)
 
     def test_compare_sums_home_devices_instead_of_multiplying_one_device(self):
         device = DeviceInput(
@@ -237,6 +385,24 @@ class EnergyLogicTests(unittest.TestCase):
                 year_of_purchase=9999,
             )
 
+    def test_bill_diagnostics_positive_residual_still_suggests_missing_device(self):
+        result = diagnose(
+            actual_kwh=200,
+            actual_cost=400,
+            devices=[
+                DiagnosticDevice(
+                    id="tv1",
+                    name="TV",
+                    type="tv",
+                    predicted_monthly_kwh=100,
+                    daily_usage_hours=4,
+                )
+            ],
+        )
+
+        self.assertGreater(result["residual_pct"], 0)
+        self.assertEqual(result["diagnostics"][0]["type"], "missing_device_suspected")
+
     def test_cluster_features_exclude_total_kwh(self):
         path = os.path.join(os.path.dirname(__file__), "..", "ml", "clustering_model.py")
         with open(path, "r", encoding="utf-8") as f:
@@ -272,6 +438,26 @@ class EnergyLogicTests(unittest.TestCase):
         suggestion = result["suggested_adjustments"][0]
         self.assertLess(suggestion["to_value"], suggestion["from_value"])
         self.assertLess(suggestion["impact_kwh_per_month"], 0)
+
+    def test_calibration_returns_scale_and_efficiency_review_fallback(self):
+        result = calibrate(
+            actual_kwh=200,
+            bill_count=2,
+            devices=[
+                CalibrationDeviceInput(
+                    id="fridge1",
+                    name="Fridge",
+                    type="fridge",
+                    predicted_monthly_kwh=100,
+                    daily_usage_hours=24,
+                )
+            ],
+        )
+
+        self.assertEqual(result["scale_factor"], 2.0)
+        self.assertEqual(result["scaled_devices"][0]["scaled_monthly_kwh"], 200.0)
+        self.assertEqual(result["suggested_adjustments"], [])
+        self.assertEqual(result["efficiency_review"]["type"], "efficiency_review")
 
 
 if __name__ == "__main__":

@@ -101,7 +101,8 @@ def fetch_household_data() -> pd.DataFrame:
         # Fetch devices
         devices_resp = client.table("devices").select(
             "room_id, type, nominal_power_watts, daily_usage_hours, "
-            "standby_power_watts, efficiency_class, year_of_purchase"
+            "standby_power_watts, efficiency_class, year_of_purchase, "
+            "usage_basis, cycles_per_week, cycle_hours"
         ).execute()
         devices_df = pd.DataFrame(devices_resp.data) if devices_resp.data else pd.DataFrame()
 
@@ -178,7 +179,8 @@ def fetch_home_devices(home_id: str) -> list[dict]:
 
         devices_resp = client.table("devices").select(
             "id, room_id, name, type, nominal_power_watts, daily_usage_hours, "
-            "standby_power_watts, efficiency_class, year_of_purchase"
+            "standby_power_watts, efficiency_class, year_of_purchase, "
+            "usage_basis, cycles_per_week, cycle_hours"
         ).in_("room_id", room_ids).execute()
         return devices_resp.data if devices_resp.data else []
     except Exception as e:

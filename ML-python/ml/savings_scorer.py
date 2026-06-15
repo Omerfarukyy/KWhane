@@ -4,7 +4,13 @@ Ranks upgrade alternatives and behavioral changes by monthly savings potential.
 """
 
 from data.device_profiles import DEVICE_PROFILES, EFFICIENCY_CLASS_MAP
-from services.energy_calculations import default_standby_watts, estimate_device_energy
+from services.energy_calculations import (
+    default_cycle_hours,
+    default_cycles_per_week,
+    default_standby_watts,
+    estimate_device_energy,
+    normalize_device_usage,
+)
 
 
 def _explain(energy_predictor, features: dict) -> list[dict]:
@@ -12,6 +18,19 @@ def _explain(energy_predictor, features: dict) -> list[dict]:
     if explain is None:
         return []
     return explain(features)
+
+
+def _base_recommendation(device, current_monthly_kwh: float, current_monthly_cost: float) -> dict:
+    usage = normalize_device_usage(device)
+    return {
+        "device_name": getattr(device, "name", None),
+        "device_type": getattr(device, "type", None),
+        "current_monthly_cost": round(current_monthly_cost, 2),
+        "status": "pending",
+        "current_monthly_kwh": round(current_monthly_kwh, 2),
+        "recommendation_source": "rule_based",
+        "usage_basis": usage.usage_basis,
+    }
 
 
 def score_recommendations(
@@ -28,6 +47,8 @@ def score_recommendations(
     Returns a sorted list of recommendation dicts (highest savings first).
     """
     recommendations = []
+    base_context = _base_recommendation(device, current_monthly_kwh, current_monthly_cost)
+    usage = normalize_device_usage(device)
 
     # 1. Catalog upgrade recommendations
     for alt in catalog_alternatives:
@@ -38,11 +59,14 @@ def score_recommendations(
 
         overrides = {
             "nominal_power_watts": alt.get("nominal_power_watts", device.nominal_power_watts),
-            "daily_usage_hours": device.daily_usage_hours,
+            "daily_usage_hours": usage.effective_daily_hours,
             "standby_power_watts": alt_standby,
             "efficiency_class_numeric": eff_numeric,
             "device_age_years": 0,  # new device
             "device_type": alt.get("type", device.type),
+            "usage_basis": usage.usage_basis,
+            "cycles_per_week": usage.cycles_per_week,
+            "cycle_hours": usage.cycle_hours,
         }
 
         projected_estimate = estimate_device_energy(device, energy_predictor, overrides)
@@ -58,14 +82,12 @@ def score_recommendations(
             slug = f"upgrade-{brand}-{model}-{eff}".lower().replace(" ", "-")
 
             recommendations.append({
+                **base_context,
                 "slug": slug,
                 "category": "device_upgrade",
                 "title": f"{brand} {model} modeline gecis ({eff})".strip(),
-                "current_monthly_cost": round(current_monthly_cost, 2),
                 "projected_monthly_cost": round(projected_cost, 2),
                 "potential_savings_amount": round(savings, 2),
-                "status": "pending",
-                "current_monthly_kwh": round(current_monthly_kwh, 2),
                 "projected_monthly_kwh": round(projected_kwh, 2),
                 "explanation_factors": _explain(energy_predictor, projected_estimate.features),
                 "description": (
@@ -90,14 +112,12 @@ def score_recommendations(
 
             if savings > 0.1:
                 recommendations.append({
+                    **base_context,
                     "slug": "reduce-standby-power",
                     "category": "standby_reduction",
                     "title": "Akilli priz ile bekleme tuketimini azalt",
-                    "current_monthly_cost": round(current_monthly_cost, 2),
                     "projected_monthly_cost": round(projected_cost, 2),
                     "potential_savings_amount": round(savings, 2),
-                    "status": "pending",
-                    "current_monthly_kwh": round(current_monthly_kwh, 2),
                     "projected_monthly_kwh": round(projected_kwh, 2),
                     "explanation_factors": _explain(energy_predictor, projected_estimate.features),
                     "description": (
@@ -109,35 +129,60 @@ def score_recommendations(
     # 3. Usage optimization recommendation
     profile = DEVICE_PROFILES.get(device.type)
     if profile:
-        typical_mid = (profile["daily_hours_range"][0] + profile["daily_hours_range"][1]) / 2
-        if device.daily_usage_hours > typical_mid * 1.2:  # 20% above typical midpoint
-            projected_estimate = estimate_device_energy(
-                device,
-                energy_predictor,
-                {"daily_usage_hours": typical_mid},
+        is_cycle_mode = usage.usage_basis == "cycles"
+        cycle_hours = usage.cycle_hours or default_cycle_hours(device.type)
+        typical_cycles = default_cycles_per_week(device.type)
+
+        if is_cycle_mode and cycle_hours and typical_cycles is not None and usage.cycles_per_week is not None:
+            current_usage_value = usage.cycles_per_week
+            target_usage_value = typical_cycles
+            trigger = current_usage_value > target_usage_value * 1.2
+            overrides = {
+                "usage_basis": "cycles",
+                "cycles_per_week": target_usage_value,
+                "cycle_hours": cycle_hours,
+            }
+            title = f"Haftalik kullanimi {round(target_usage_value, 1)} sefere dusur"
+            description_prefix = (
+                f"Haftalik kullanimi {round(current_usage_value, 1)} seferden "
+                f"{round(target_usage_value, 1)} sefere dusurerek "
             )
+            slug = "reduce-weekly-cycles"
+        else:
+            typical_mid = (profile["daily_hours_range"][0] + profile["daily_hours_range"][1]) / 2
+            current_usage_value = usage.effective_daily_hours
+            target_usage_value = typical_mid
+            trigger = current_usage_value > target_usage_value * 1.2
+            overrides = {"daily_usage_hours": target_usage_value, "usage_basis": "hours"}
+            title = f"Gunluk kullanimi {round(target_usage_value, 1)} saate dusur"
+            description_prefix = (
+                f"Gunluk kullanimi {round(current_usage_value, 1)} saatten "
+                f"{round(target_usage_value, 1)} saate dusurerek "
+            )
+            slug = "reduce-daily-usage"
+
+        if trigger:  # 20% above typical midpoint/default cycles
+            projected_estimate = estimate_device_energy(device, energy_predictor, overrides)
             projected_kwh = projected_estimate.total_kwh
             projected_cost = tariff_calculator.calculate_cost(projected_kwh)
             savings = current_monthly_cost - projected_cost
 
             if savings > 0.5:
-                recommendations.append({
-                    "slug": "reduce-daily-usage",
+                item = {
+                    **base_context,
+                    "slug": slug,
                     "category": "usage_optimization",
-                    "title": f"Gunluk kullanimi {round(typical_mid, 1)} saate dusur",
-                    "current_monthly_cost": round(current_monthly_cost, 2),
+                    "title": title,
                     "projected_monthly_cost": round(projected_cost, 2),
                     "potential_savings_amount": round(savings, 2),
-                    "status": "pending",
-                    "current_monthly_kwh": round(current_monthly_kwh, 2),
                     "projected_monthly_kwh": round(projected_kwh, 2),
                     "explanation_factors": _explain(energy_predictor, projected_estimate.features),
-                    "description": (
-                        f"Gunluk kullanimi {round(device.daily_usage_hours, 1)} saatten "
-                        f"{round(typical_mid, 1)} saate dusurerek "
-                        f"aylik {round(savings, 2)} TL tasarruf edebilirsiniz."
-                    ),
-                })
+                    "description": description_prefix + f"aylik {round(savings, 2)} TL tasarruf edebilirsiniz.",
+                }
+                if is_cycle_mode:
+                    item["from_cycles_per_week"] = round(current_usage_value, 2)
+                    item["to_cycles_per_week"] = round(target_usage_value, 2)
+                recommendations.append(item)
 
     # Sort by savings descending, return top 5
     recommendations.sort(key=lambda r: r["potential_savings_amount"], reverse=True)

@@ -51,7 +51,10 @@
       "Bash(node -e \"const d = require\\('@react-three/drei'\\); console.log\\(['Cloud','Clouds','Stars','Sky'].map\\(k => k+':'+\\(typeof d[k]\\)\\).join\\('\\\\n'\\)\\)\")",
       "Bash(python -c \"import sys; data = open\\('src/components/Dashboard/Bills/BillDiagnosticCard.jsx', 'rb'\\).read\\(\\); print\\(repr\\(data[3300:3700]\\)\\)\")",
       "Bash(npx eslint *)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(git checkout *)",
+      "Bash(rm -f .claude/settings.local.json.bak)",
+      "Bash(git stash *)"
     ]
   }
 }

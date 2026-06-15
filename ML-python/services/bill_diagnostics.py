@@ -14,6 +14,8 @@ narrative the user can act on.
 from dataclasses import dataclass
 from typing import Optional
 
+from services.energy_calculations import normalize_usage
+
 
 # Type-median daily usage hours, mirroring frontend USAGE_MODEL defaults.
 # Cycle-based devices (washer, oven, etc.) are converted to a daily average
@@ -25,10 +27,10 @@ _TYPE_MEDIAN_HOURS: dict[str, float] = {
     "computer":        8.0,
     "lighting":        8.0,
     "water_heater":    2.0,
-    "washing_machine": 1.5 * 4 / 30,
-    "dishwasher":      2.0 * 5 / 30,
-    "dryer":           1.25 * 3 / 30,
-    "oven":            1.0 * 4 / 30,
+    "washing_machine": 1.5 * 4 / 7,
+    "dishwasher":      2.0 * 5 / 7,
+    "dryer":           1.25 * 3 / 7,
+    "oven":            1.0 * 4 / 7,
 }
 
 # Device types most often missing from declared inventories. When the residual
@@ -59,6 +61,9 @@ class DiagnosticDevice:
     efficiency_class: str = "A"
     daily_usage_hours: float = 0.0
     year_of_purchase: int = 2024
+    usage_basis: str | None = None
+    cycles_per_week: float | None = None
+    cycle_hours: float | None = None
 
 
 def _label(device_type: str) -> str:
@@ -72,6 +77,16 @@ def _severity_from_pct(pct: float) -> str:
     if abs_pct >= 20:
         return "medium"
     return "low"
+
+
+def _device_usage(d: DiagnosticDevice):
+    return normalize_usage(
+        device_type=d.type,
+        daily_usage_hours=d.daily_usage_hours,
+        usage_basis=d.usage_basis,
+        cycles_per_week=d.cycles_per_week,
+        cycle_hours=d.cycle_hours,
+    )
 
 
 def diagnose(
@@ -163,14 +178,39 @@ def diagnose(
         candidate: Optional[DiagnosticDevice] = None
         for d in devices:
             median = _TYPE_MEDIAN_HOURS.get(d.type, 4.0)
+            usage = _device_usage(d)
             # Fridge etc. that's locked at 24h shouldn't trigger this flag.
             if median >= 23:
                 continue
-            if d.daily_usage_hours > median * 1.2:
+            if usage.effective_daily_hours > median * 1.2:
                 if candidate is None or d.predicted_monthly_kwh > candidate.predicted_monthly_kwh:
                     candidate = d
         if candidate:
             median = _TYPE_MEDIAN_HOURS.get(candidate.type, 4.0)
+            usage = _device_usage(candidate)
+            if usage.usage_basis == "cycles" and usage.cycle_hours:
+                suggested_cycles = round(median * 7 / usage.cycle_hours, 1)
+                current_cycles = usage.cycles_per_week or 0.0
+                usage_message = (
+                    f"{candidate.name} icin haftada {current_cycles:.1f} sefer fazla gorunuyor - "
+                    f"~{suggested_cycles:.1f} sefer daha gercekci olabilir."
+                )
+                suggested_action = {
+                    "type": "adjust_cycles",
+                    "device_id": candidate.id,
+                    "suggested_cycles_per_week": suggested_cycles,
+                    "cycle_hours": usage.cycle_hours,
+                }
+            else:
+                usage_message = (
+                    f"{candidate.name} icin gunde {usage.effective_daily_hours:.1f} saat fazla gorunuyor - "
+                    f"~{median:.1f} saat daha gercekci olabilir."
+                )
+                suggested_action = {
+                    "type": "adjust_hours",
+                    "device_id": candidate.id,
+                    "suggested_hours": round(median, 1),
+                }
             diagnostics.append({
                 "type":      "over_declared_usage",
                 "severity":  _severity_from_pct(residual_pct),
@@ -185,6 +225,7 @@ def diagnose(
                     "device_id":        candidate.id,
                     "suggested_hours":  round(median, 1),
                 },
+                "suggested_action": suggested_action,
             })
 
     # ── device_outlier ───────────────────────────────────────────────────

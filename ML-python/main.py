@@ -126,6 +126,9 @@ def diagnose_bill(request: BillDiagnoseRequest):
             efficiency_class=d.efficiency_class,
             daily_usage_hours=d.daily_usage_hours,
             year_of_purchase=d.year_of_purchase,
+            usage_basis=d.usage_basis,
+            cycles_per_week=d.cycles_per_week,
+            cycle_hours=d.cycle_hours,
         )
         for d in request.devices
     ]
@@ -174,6 +177,9 @@ def calibration(request: CalibrationRequest):
             standby_power_watts=d.standby_power_watts,
             efficiency_class=d.efficiency_class,
             year_of_purchase=d.year_of_purchase,
+            usage_basis=d.usage_basis,
+            cycles_per_week=d.cycles_per_week,
+            cycle_hours=d.cycle_hours,
         )
         for d in request.devices
     ]
