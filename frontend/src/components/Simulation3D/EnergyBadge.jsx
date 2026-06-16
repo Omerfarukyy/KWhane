@@ -95,4 +95,4 @@ const styles = {
     },
 };
 
-export default EnergyBadge;
+export default React.memo(EnergyBadge);

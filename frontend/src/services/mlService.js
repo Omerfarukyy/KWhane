@@ -7,6 +7,7 @@
 
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
+import { lsCacheGet, lsCacheSet, lsCacheDelete } from '../lib/cache';
 
 const BASE_URL = import.meta.env.VITE_ML_API_URL || 'http://localhost:8000';
 
@@ -145,7 +146,24 @@ export async function runFullAnalysis(deviceId, spec, userId) {
         }
     }
 
+    if (calcRes) {
+        lsCacheSet(`ml:${deviceId}`, calcRes, 1_800_000);
+    }
+
     return calcRes;
+}
+
+/**
+ * Return a cached /calculate result for this device, or undefined.
+ * Used on session restore to paint energy badges instantly while the
+ * background refresh runs.
+ */
+export function getCachedResult(deviceId) {
+    return lsCacheGet(`ml:${deviceId}`);
+}
+
+export function clearCachedResult(deviceId) {
+    lsCacheDelete(`ml:${deviceId}`);
 }
 
 /**

@@ -9,6 +9,7 @@
 
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
+import { cacheGet, cacheSet } from '../lib/cache';
 
 const ML_API_URL = import.meta.env.VITE_ML_API_URL || 'http://localhost:8000';
 
@@ -18,6 +19,10 @@ const ML_API_URL = import.meta.env.VITE_ML_API_URL || 'http://localhost:8000';
  */
 export async function getHomeMeta(userId) {
     if (!userId) return null;
+    const ck = `homeMeta:${userId}`;
+    const cached = cacheGet(ck);
+    if (cached) return cached;
+
     const { data, error } = await supabase
         .from('homes')
         .select('city, occupants_count, total_area_sqm')
@@ -28,7 +33,9 @@ export async function getHomeMeta(userId) {
         console.warn('[peerComparisonService] getHomeMeta failed:', error.message);
         return null;
     }
-    return data ?? null;
+    const result = data ?? null;
+    if (result) cacheSet(ck, result, 600_000);
+    return result;
 }
 
 /**
@@ -51,6 +58,10 @@ export async function fetchHomeComparison({
     monthlyKwh,
     source = 'predicted',
 }) {
+    const ck = `homeComp:${Math.round(monthlyKwh)}:${nDevices}:${source}`;
+    const cached = cacheGet(ck);
+    if (cached) return cached;
+
     try {
         const { data } = await axios.post(
             `${ML_API_URL}/compare/home`,
@@ -64,6 +75,7 @@ export async function fetchHomeComparison({
             },
             { timeout: 10000 },
         );
+        if (data) cacheSet(ck, data, 300_000);
         return data;
     } catch (err) {
         console.warn('[peerComparisonService] /compare/home failed:', err.message);

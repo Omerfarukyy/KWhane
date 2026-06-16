@@ -12,6 +12,12 @@ const monthAgoISO = () => {
     return d.toISOString().slice(0, 10);
 };
 
+const inputStyle = {
+    background: 'var(--color-surface-2)',
+    border: '1px solid var(--color-border)',
+    color: 'var(--color-text)',
+};
+
 const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
     const { user } = useAuth();
 
@@ -24,8 +30,6 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
     const [error,       setError]       = useState(null);
 
     // ── Diagnostic stage (Phase A.5) ─────────────────────────────────────
-    // After a successful insert, we flip to 'diagnostic' view inside the same
-    // modal: BillDiagnosticCard renders attribution + flags + apply buttons.
     const [stage, setStage]                   = useState('form');     // 'form' | 'diagnostic'
     const [diagnostic, setDiagnostic]         = useState(null);
     const [diagnosticLoading, setDiagnosticLoading] = useState(false);
@@ -112,9 +116,6 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
             actualKwh:    kwhNum,
             actualCostTl: costNum,
             devices:      diagnosticDevices,
-            // Compare bill tariff vs. the rate we used in predictions. We don't
-            // currently store the predicted tariff anywhere, so leave null —
-            // tariff_mismatch flag stays dormant until Phase B wires it up.
             predictedTariffTlPerKwh: null,
         });
 
@@ -127,20 +128,22 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl w-[440px] p-6">
+            <div className="rounded-xl shadow-2xl w-[440px] p-6"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                 {/* Header */}
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2.5">
                         <div className="p-2 rounded-lg" style={{ background: 'rgba(59,130,246,0.12)' }}>
                             <Receipt size={16} style={{ color: '#60a5fa' }} />
                         </div>
-                        <h2 className="text-lg font-semibold text-white">
+                        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
                             {stage === 'diagnostic' ? 'Fatura Kaydedildi' : 'Fatura Ekle'}
                         </h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-white/40 hover:text-white/80 transition text-xl leading-none"
+                        className="transition text-xl leading-none"
+                        style={{ color: 'var(--color-subtle)' }}
                     >
                         ×
                     </button>
@@ -155,7 +158,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                     />
                 ) : (
                 <>
-                <p className="text-xs text-white/40 mb-5">
+                <p className="text-xs mb-5" style={{ color: 'var(--color-subtle)' }}>
                     Son elektrik faturanızı girin. Bu sayede tahminler yerine gerçek tüketiminize dayalı öneriler verebiliriz.
                 </p>
 
@@ -163,7 +166,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                     {/* Period */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">
+                            <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
                                 Dönem Başlangıcı
                             </label>
                             <input
@@ -171,11 +174,12 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                                 required
                                 value={periodStart}
                                 onChange={(e) => setPeriodStart(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition"
+                                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"
+                                style={inputStyle}
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">
+                            <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
                                 Dönem Bitişi
                             </label>
                             <input
@@ -183,7 +187,8 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                                 required
                                 value={periodEnd}
                                 onChange={(e) => setPeriodEnd(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition"
+                                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"
+                                style={inputStyle}
                             />
                         </div>
                     </div>
@@ -191,7 +196,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                     {/* kWh + ₺ */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">
+                            <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
                                 Toplam Tüketim
                             </label>
                             <div className="flex">
@@ -203,19 +208,22 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                                     value={totalKwh}
                                     onChange={(e) => setTotalKwh(e.target.value)}
                                     placeholder="312"
-                                    className="w-full bg-white/5 border border-white/10 rounded-l-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition"
+                                    className="w-full rounded-l-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"
+                                    style={inputStyle}
                                 />
-                                <span className="bg-white/5 border border-l-0 border-white/10 rounded-r-lg px-3 py-2 text-white/40 text-xs flex items-center">
+                                <span className="rounded-r-lg px-3 py-2 text-xs flex items-center"
+                                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderLeft: 'none', color: 'var(--color-subtle)' }}>
                                     kWh
                                 </span>
                             </div>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">
+                            <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
                                 Toplam Tutar
                             </label>
                             <div className="flex">
-                                <span className="bg-white/5 border border-r-0 border-white/10 rounded-l-lg px-3 py-2 text-white/40 text-xs flex items-center">
+                                <span className="rounded-l-lg px-3 py-2 text-xs flex items-center"
+                                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRight: 'none', color: 'var(--color-subtle)' }}>
                                     ₺
                                 </span>
                                 <input
@@ -226,7 +234,8 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                                     value={totalCost}
                                     onChange={(e) => setTotalCost(e.target.value)}
                                     placeholder="745"
-                                    className="w-full bg-white/5 border border-white/10 rounded-r-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition"
+                                    className="w-full rounded-r-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"
+                                    style={inputStyle}
                                 />
                             </div>
                         </div>
@@ -234,15 +243,16 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
 
                     {/* Provider (optional) */}
                     <div>
-                        <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">
-                            Sağlayıcı <span className="text-white/30 normal-case font-normal">(opsiyonel)</span>
+                        <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
+                            Sağlayıcı <span className="normal-case font-normal" style={{ opacity: 0.6 }}>(opsiyonel)</span>
                         </label>
                         <input
                             type="text"
                             value={provider}
                             onChange={(e) => setProvider(e.target.value)}
                             placeholder="Örn: BEDAŞ, EnerjiSA, CK Enerji"
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-blue-500 transition"
+                            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition"
+                            style={inputStyle}
                         />
                     </div>
 
@@ -263,11 +273,12 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                     )}
 
                     {/* Footer */}
-                    <div className="flex justify-end gap-3 mt-1 pt-4 border-t border-white/10">
+                    <div className="flex justify-end gap-3 mt-1 pt-4" style={{ borderTop: '1px solid var(--color-border)' }}>
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5 text-sm transition"
+                            className="px-4 py-2 rounded-lg text-sm transition"
+                            style={{ color: 'var(--color-muted)' }}
                         >
                             İptal
                         </button>

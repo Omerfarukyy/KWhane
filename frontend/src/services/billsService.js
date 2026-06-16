@@ -8,6 +8,7 @@
 
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
+import { cacheGet, cacheSet, cacheDeletePrefix } from '../lib/cache';
 
 const ML_API_URL = import.meta.env.VITE_ML_API_URL || 'http://localhost:8000';
 
@@ -51,6 +52,7 @@ export async function insertBill({
         console.warn('[billsService] insert failed:', error.message);
         return { error };
     }
+    cacheDeletePrefix('bills:');
     return { data };
 }
 
@@ -62,6 +64,10 @@ export async function insertBill({
  */
 export async function listBills(userId, limit = 24) {
     if (!userId) return [];
+    const ck = `bills:list:${userId}:${limit}`;
+    const cached = cacheGet(ck);
+    if (cached) return cached;
+
     const { data, error } = await supabase
         .from('electricity_bills')
         .select('*')
@@ -73,7 +79,9 @@ export async function listBills(userId, limit = 24) {
         console.warn('[billsService] list failed:', error.message);
         return [];
     }
-    return data ?? [];
+    const result = data ?? [];
+    cacheSet(ck, result, 120_000);
+    return result;
 }
 
 /**
@@ -89,6 +97,7 @@ export async function deleteBill(id) {
         console.warn('[billsService] delete failed:', error.message);
         return { error };
     }
+    cacheDeletePrefix('bills:');
     return { ok: true };
 }
 
@@ -101,26 +110,34 @@ export async function deleteBill(id) {
  * with billCount = 0 and nulls when the user has no bills yet.
  */
 export async function getBillSummary(userId, lastN = 3) {
+    const ck = `bills:summary:${userId}:${lastN}`;
+    const cached = cacheGet(ck);
+    if (cached) return cached;
+
     const bills = await listBills(userId, lastN);
     if (!bills.length) {
-        return {
+        const empty = {
             billCount:                0,
             avgMonthlyKwh:            null,
             avgMonthlyCost:           null,
             effectiveTariffTlPerKwh:  null,
         };
+        cacheSet(ck, empty, 120_000);
+        return empty;
     }
 
     const totalKwh  = bills.reduce((s, b) => s + (b.total_kwh      || 0), 0);
     const totalCost = bills.reduce((s, b) => s + (b.total_cost_tl  || 0), 0);
     const n         = bills.length;
 
-    return {
+    const result = {
         billCount:                n,
         avgMonthlyKwh:            totalKwh  / n,
         avgMonthlyCost:           totalCost / n,
         effectiveTariffTlPerKwh:  totalKwh > 0 ? totalCost / totalKwh : null,
     };
+    cacheSet(ck, result, 120_000);
+    return result;
 }
 
 /**

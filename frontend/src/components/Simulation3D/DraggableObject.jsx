@@ -323,6 +323,7 @@ const DraggableObject = ({
             position={position}
             onPointerDown={(e) => {
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
+                e.stopPropagation();
                 setSelectedId(objectId);
                 downScreen.current = { x: e.clientX ?? 0, y: e.clientY ?? 0 };
                 dragMoved.current = false;
@@ -330,12 +331,16 @@ const DraggableObject = ({
             }}
             onPointerMove={handlePointerMove}
             onPointerUp={(e) => {
+                e.stopPropagation();
                 handlePointerUp(e);
                 // Click (no drag) → pin so the device-detail UI persists.
                 if (!dragMoved.current) {
                     setPinnedDeviceId(objectId);
                 }
                 dragMoved.current = false;
+            }}
+            onClick={(e) => {
+                e.stopPropagation();
             }}
             onPointerOver={(e) => {
                 e.stopPropagation();

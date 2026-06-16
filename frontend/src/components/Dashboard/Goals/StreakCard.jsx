@@ -328,10 +328,11 @@ const StreakCard = ({ userId, predictedKwh }) => {
                             value={draft}
                             onChange={(e) => setDraft(e.target.value)}
                             autoFocus
-                            className="flex-1 bg-white/5 border border-white/10 rounded-l-lg px-3 py-1.5 text-white text-sm focus:outline-none transition"
-                            style={{ borderColor: styleSet.border }}
+                            className="flex-1 rounded-l-lg px-3 py-1.5 text-sm focus:outline-none transition"
+                            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)', borderColor: styleSet.border }}
                         />
-                        <span className="bg-white/5 border border-l-0 border-white/10 rounded-r-lg px-3 py-1.5 text-white/40 text-xs flex items-center">
+                        <span className="rounded-r-lg px-3 py-1.5 text-xs flex items-center"
+                            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderLeft: 'none', color: 'var(--color-subtle)' }}>
                             kWh
                         </span>
                     </div>

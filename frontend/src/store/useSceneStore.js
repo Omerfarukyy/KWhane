@@ -166,7 +166,7 @@ const useSceneStore = create((set, get) => ({
 
     // Persistence state
     homeId:         null,
-    isLoadingFromDB: false,
+    isLoadingFromDB: true,
 
     // Scene state — starts EMPTY; populated by loadFromSupabase on login
     rooms:        [],

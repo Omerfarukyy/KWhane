@@ -11,6 +11,7 @@ import DraggableObject from './DraggableObject';
 import ProceduralDevices from './ProceduralDevices';
 import GhostDevice from './GhostDevice';
 import EnergyBadge from './EnergyBadge';
+import DeviceInfoPopup from './DeviceInfoPopup';
 import GardenProps from './GardenProps';
 import ElectricHub from './ElectricHub';
 import ElectricWiring from './ElectricWiring';
@@ -142,6 +143,11 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
         return levels;
     }, [rooms, objects, energyData]);
 
+    const filteredGhosts = useMemo(() =>
+        ghostObjects.filter((g) => !objects.some((o) => o.roomId === g.roomId && o.type === g.type)),
+        [ghostObjects, objects]
+    );
+
     const handlePointerMissed = () => { setSelectedId(null); setPinnedDeviceId(null); };
 
     return (
@@ -230,9 +236,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
 
 
             {/* ─── Ghost (Hologram) Cihazlar ───────────── */}
-            {ghostObjects.filter((g) =>
-                !objects.some((o) => o.roomId === g.roomId && o.type === g.type)
-            ).map((ghost) => (
+            {filteredGhosts.map((ghost) => (
                 <GhostDevice
                     key={ghost.id}
                     ghost={ghost}
@@ -278,6 +282,15 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                     object={obj}
                     energyData={energyData[obj.id]}
                     heightOffset={0.3}
+                />
+            ))}
+
+            {/* ─── Cihaz Bilgi Popup (tıklanınca) ─────── */}
+            {objects.filter(obj => obj.type !== 'electric_hub').map((obj) => (
+                <DeviceInfoPopup
+                    key={`popup-${obj.id}`}
+                    object={obj}
+                    energyData={energyData[obj.id]}
                 />
             ))}
 

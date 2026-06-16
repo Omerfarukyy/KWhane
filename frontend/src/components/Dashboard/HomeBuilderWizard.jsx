@@ -525,13 +525,14 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                             type="text"
                                                             value={room.name}
                                                             onChange={(e) => updateCustomRoom(room.id, 'name', e.target.value)}
-                                                            className="w-full text-sm py-2 px-3 rounded-lg outline-none text-white"
+                                                            className="w-full text-sm py-2 px-3 rounded-lg outline-none"
                                                             style={{
-                                                                background: '#1e1e1e',
-                                                                border: '1px solid #2a2a2a',
+                                                                background: 'var(--color-surface-2)',
+                                                                border: '1px solid var(--color-border)',
+                                                                color: 'var(--color-text)',
                                                             }}
                                                             onFocus={(e) => (e.target.style.borderColor = '#10b981')}
-                                                            onBlur={(e) => (e.target.style.borderColor = '#2a2a2a')}
+                                                            onBlur={(e) => (e.target.style.borderColor = 'var(--color-border)')}
                                                         />
                                                     </div>
                                                     {/* Room type */}

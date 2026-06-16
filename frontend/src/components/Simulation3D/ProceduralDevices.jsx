@@ -436,4 +436,4 @@ const ProceduralDevices = ({ type, size }) => {
     }
 };
 
-export default ProceduralDevices;
+export default React.memo(ProceduralDevices);

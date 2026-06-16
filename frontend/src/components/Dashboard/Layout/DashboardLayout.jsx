@@ -1,7 +1,7 @@
 import React, { useState, Suspense, lazy, useCallback, useMemo, useEffect } from 'react';
 import {
     Home, PackagePlus, Settings, Ticket as TicketIcon,
-    Zap, User, Lightbulb, ChevronRight, ChevronLeft, SquarePlus, Loader2, Trash2, X,
+    Zap, User, Lightbulb, ChevronRight, ChevronLeft, SquarePlus, Loader2, Trash2, X, LogOut,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -18,7 +18,7 @@ import HomeDashboard from '../Home/HomeDashboard';
 import useSceneStore from '../../../store/useSceneStore';
 import { useLanguage } from '../../../contexts/LanguageProvider';
 import { useAuth } from '../../../contexts/AuthContext';
-import { runFullAnalysis } from '../../../services/mlService';
+import { runFullAnalysis, getCachedResult } from '../../../services/mlService';
 import { listBills, getBillSummary } from '../../../services/billsService';
 import { supabase } from '../../../lib/supabase';
 import { USAGE_MODEL } from '../../../utils/usageModels';
@@ -52,7 +52,7 @@ const DashboardLayout = () => {
     const [billsAvgKwh,         setBillsAvgKwh]         = useState(null);
 
     const { t } = useLanguage();
-    const { user } = useAuth();
+    const { user, signOut } = useAuth();
 
     // ── Store actions ──────────────────────────────────────────────────────
     const addRoom                = useSceneStore((s) => s.addRoom);
@@ -100,17 +100,22 @@ const DashboardLayout = () => {
         if (!user?.id) return;
         loadFromSupabase(user.id)
             .then(() => {
-                // Re-trigger ML for every device restored from DB
                 const state = useSceneStore.getState();
                 state.objects.forEach(async (obj) => {
                     const spec = state.deviceSpecs[obj.id];
                     if (!spec) return;
-                    setEnergyData(obj.id, null); // badge shows spinner
+                    // Show cached result instantly, then refresh in background
+                    const cached = getCachedResult(obj.id);
+                    if (cached) {
+                        setEnergyData(obj.id, cached);
+                    } else {
+                        setEnergyData(obj.id, null);
+                    }
                     try {
                         const result = await runFullAnalysis(obj.id, spec, user?.id);
                         setEnergyData(obj.id, result ?? 'error');
                     } catch {
-                        setEnergyData(obj.id, 'error');
+                        if (!cached) setEnergyData(obj.id, 'error');
                     }
                 });
             })
@@ -399,7 +404,11 @@ const DashboardLayout = () => {
                         border: '1px solid var(--color-border)',
                         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                     }}>
-                    <div className="flex items-center gap-3">
+                    <button
+                        className="flex items-center gap-3 transition-opacity hover:opacity-80"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        onClick={() => handleTabChange('home')}
+                    >
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                             style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', boxShadow: '0 0 14px rgba(59,130,246,0.15)' }}>
                             <Zap size={16} style={{ color: '#3b82f6' }} />
@@ -407,7 +416,7 @@ const DashboardLayout = () => {
                         <h1 className="text-lg font-black tracking-widest uppercase text-white" style={{ letterSpacing: '0.15em' }}>
                             KWhane
                         </h1>
-                    </div>
+                    </button>
 
                     <div className="flex items-center gap-4">
                         <ThemeLangToggle />
@@ -897,6 +906,13 @@ const DashboardLayout = () => {
                             label={t('support')}
                             onClick={() => { setIsProfileMenuOpen(false); openTicketModal(); }}
                         />
+                        <div style={{ height: 1, background: 'var(--color-border)' }} />
+                        <ProfileMenuItem
+                            icon={<LogOut size={14} />}
+                            label="Çıkış Yap"
+                            onClick={() => { setIsProfileMenuOpen(false); signOut(); }}
+                            danger
+                        />
                     </div>
                 </>
             )}
@@ -998,15 +1014,15 @@ const NavButton = React.memo(({ icon, active, onClick, tooltip, danger = false }
 ));
 
 // ─── Profile Menu Item ───────────────────────────────────────────────────────
-const ProfileMenuItem = ({ icon, label, onClick }) => (
+const ProfileMenuItem = ({ icon, label, onClick, danger = false }) => (
     <button
         onClick={onClick}
         className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors text-left"
-        style={{ color: 'var(--color-text)', background: 'transparent', cursor: 'pointer' }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-surface-2)'; }}
+        style={{ color: danger ? '#f87171' : 'var(--color-text)', background: 'transparent', cursor: 'pointer' }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = danger ? 'rgba(239,68,68,0.08)' : 'var(--color-surface-2)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
     >
-        <span style={{ color: 'var(--color-muted)' }}>{icon}</span>
+        <span style={{ color: danger ? '#f87171' : 'var(--color-muted)' }}>{icon}</span>
         {label}
     </button>
 );

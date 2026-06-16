@@ -289,9 +289,9 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
                     style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
                     <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>Fark</span>
                     <span className="text-lg font-black mt-0.5" style={{ color: labelInfo.color }}>
-                        {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(0)}%
+                        {deltaVsAvg >= 0 ? '+' : ''}{Math.round(deltaVsAvg)}
                     </span>
-                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>vs ort.</span>
+                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>kWh/ay</span>
                 </div>
             </div>
 
