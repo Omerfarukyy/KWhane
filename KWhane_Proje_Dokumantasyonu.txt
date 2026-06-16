@@ -1,0 +1,712 @@
+================================================================================
+                    KWhane — Proje Dokümantasyonu
+           Akıllı Ev Enerji Simülasyonu ve Tasarruf Platformu
+================================================================================
+
+
+1. PROJE TANIMI VE VİZYON
+================================================================================
+
+KWhane, Türk haneleri için geliştirilmiş, yapay zeka destekli bir enerji
+tüketim simülasyonu ve tasarruf platformudur. Kullanıcılar evlerini üç boyutlu
+bir sahne üzerinde modelleyerek, her cihazın gerçek enerji tüketimini makine
+öğrenmesi ile tahmin eder, faturalarını analiz eder, benzer hanelerle kendini
+karşılaştırır ve kişiselleştirilmiş tasarruf önerileri alır.
+
+Platform üç temel katmandan oluşur:
+  - 3D Ev Simülasyonu (React Three Fiber)
+  - Makine Öğrenmesi Motoru (Python FastAPI)
+  - Gerçek Zamanlı Veritabanı ve Auth (Supabase)
+
+
+2. SİSTEM MİMARİSİ — GENEL BAKIŞ
+================================================================================
+
+  Kullanıcı (Tarayıcı)
+        |
+        v
+  ┌─────────────────────────────────────┐
+  │  FRONTEND — Netlify (CDN + HTTPS)   │
+  │  React 19 + Vite 7 + Tailwind CSS  │
+  │  React Three Fiber (3D Motor)       │
+  │  Zustand (State Management)         │
+  └───────────┬────────────┬────────────┘
+              |            |
+         API Calls     Realtime
+              |            |
+  ┌───────────v──┐   ┌────v───────────┐
+  │  ML BACKEND  │   │   SUPABASE     │
+  │  Render.com  │   │  (PostgreSQL + │
+  │  Python 3.12 │   │   Auth + RLS)  │
+  │  FastAPI     │   └────────────────┘
+  │  scikit-learn│
+  │  Groq LLM   │
+  └──────────────┘
+
+Deployment Topolojisi:
+  - Frontend:    Netlify (ücretsiz tier, global CDN, otomatik HTTPS)
+  - ML Backend:  Render.com (ücretsiz tier, Python native runtime)
+  - Veritabanı:  Supabase (ücretsiz tier, PostgreSQL, Auth, Row Level Security)
+  - LLM:         Groq API (ücretsiz tier, Llama 3.3 70B Versatile)
+
+
+3. FRONTEND MİMARİSİ
+================================================================================
+
+3.1 Teknoloji Yığını
+---------------------
+  - React 19 + React Router 7
+  - Vite 7 (build tooling)
+  - Tailwind CSS 4 (utility-first styling)
+  - Zustand 5 (lightweight global state)
+  - Framer Motion 12 (animasyonlar)
+  - React Three Fiber 9 + Three.js 0.183 (3D motor)
+  - @react-three/drei 10 (3D yardımcılar: OrbitControls, Sky, Stars, Html, Grid)
+  - Axios (HTTP client)
+  - @supabase/supabase-js 2 (auth + veritabanı)
+  - Lucide React + React Icons (ikonlar)
+  - Radix UI (erişilebilir UI primitifleri)
+  - react-hot-toast (bildirimler)
+
+3.2 Sayfa ve Routing Yapısı
+-----------------------------
+  /login       → AuthPage (Supabase Auth ile giriş)
+  /register    → AuthPage (yeni hesap oluşturma)
+  /dashboard   → DashboardLayout (ana uygulama kabuğu)
+
+  DashboardLayout, soldaki sekmeli menü ile şu bölümleri barındırır:
+    - Ev (HomeDashboard)         → 3D sahne + cihaz yönetimi
+    - Faturalar (BillsTab)       → fatura girişi, analiz, kalibrasyon
+    - Tasarruf Önerileri         → ML tabanlı öneri kartları
+    - Sıralama (HomeRanking)     → hanehalkı karşılaştırması
+    - Hedefler (StreakCard)      → tasarruf hedefleri ve streak takibi
+    - AI Asistan (AiAssistant)   → LLM tabanlı enerji danışmanı
+    - Ayarlar (SettingsModal)    → tema, dil, profil
+
+3.3 State Management — Zustand Store
+--------------------------------------
+  useSceneStore.js — Uygulamanın merkezi state deposu.
+
+  Temel state parçaları:
+    rooms[]          → oda tanımları (id, name, roomType, position, size)
+    objects[]        → 3D sahnedeki cihazlar (id, type, roomId, position, rotation, size)
+    ghostObjects[]   → hologram cihaz önerileri (oda tipine göre otomatik)
+    energyData{}     → ML backend'den dönen cihaz bazlı enerji verileri
+    deviceSpecs{}    → cihaz teknik özellikleri (watt, saat, verimlilik sınıfı)
+    selectedId       → seçili oda/cihaz ID'si
+    pinnedDeviceId   → sağ panelde detayı gösterilen cihaz
+    isCreationMode   → oda düzenleme modu açık/kapalı
+
+  Zustand, React'in context API'sine göre daha performanslı çalışır çünkü
+  sadece ilgili state dilimi değiştiğinde re-render tetikler. Bu özellikle
+  60fps 3D sahne ile birlikte çalışırken kritiktir.
+
+3.4 Servis Katmanı (API Bağlantıları)
+---------------------------------------
+  Tüm dış iletişim /services/ klasöründeki wrapper modülleri üzerinden yapılır:
+
+  mlService.js
+    → ML Backend'e bağlanır (VITE_ML_API_URL)
+    → Fonksiyonlar: calculate(), compare(), savings(), runFullAnalysis()
+    → runFullAnalysis() tek bir cihaz için /calculate, /compare ve /savings
+      endpoint'lerini paralel çağırır; sonuçları Supabase'e persist eder
+
+  chatService.js
+    → ML Backend /chat endpoint'ine POST atar
+    → Ev bağlamı (tüm cihazlar, tüketimler, fatura verileri) gönderir
+    → LLM'den Türkçe enerji danışmanlığı yanıtı alır
+
+  homeBuilderService.js
+    → ML Backend /home-builder endpoint'ine POST atar
+    → Doğal dilde ev tarifi gönderir, yapılandırılmış oda/cihaz planı alır
+
+  billsService.js
+    → Supabase "bills" tablosundan CRUD işlemleri
+    → Fatura ortalaması, birim fiyat hesabı, diagnostic summary cache
+
+  calibrationService.js
+    → ML Backend /calibration endpoint'ine POST atar
+    → Çoklu fatura verileriyle cihaz kullanım süresi düzeltme önerileri alır
+
+  peerComparisonService.js
+    → ML Backend /compare/home endpoint'ine POST atar
+    → Supabase'den ev meta verisi (şehir, kişi sayısı, alan) çeker
+    → Hanehalkı sıralaması ve yüzdelik dilim bilgisi döndürür
+
+  houseService.js
+    → Supabase "homes", "rooms", "devices" tablolarıyla CRUD
+    → Ev oluşturma, oda ekleme, cihaz kaydetme/silme
+
+  goalsService.js
+    → Supabase "goals" ve "goal_logs" tablolarıyla hedef takibi
+
+  authService.js
+    → Supabase Auth ile giriş/çıkış/kayıt
+
+  Environment Variables (Frontend — build-time):
+    VITE_ML_API_URL         → ML Backend URL (ör: https://kwhane.onrender.com)
+    VITE_SUPABASE_URL       → Supabase proje URL'i
+    VITE_SUPABASE_ANON_KEY  → Supabase anonim (public) anahtar
+
+
+4. ÜÇ BOYUTLU SİMÜLASYON SİSTEMİ (Detaylı)
+================================================================================
+
+KWhane'nin en ayırt edici özelliği, kullanıcıların evlerini interaktif bir 3D
+sahne üzerinde modelleyebilmesidir. Bu sistem React Three Fiber (R3F)
+üzerine inşa edilmiştir — Three.js'in React deklaratif wrapper'ıdır.
+
+4.1 Sahne Mimarisi (SceneContainer.jsx)
+-----------------------------------------
+  Canvas bileşeni WebGL renderer'ı başlatır:
+    - shadows="soft"        → yumuşak gölge haritaları
+    - 50 derece FOV kamera → izometrik bakış açısı
+    - Gökyüzü sistemi:
+      - Gündüz modu: drei Sky bileşeni (fiziksel güneş simülasyonu)
+                     + dekoratif bulut küreleri
+      - Gece modu:  drei Stars (4000 yıldız parçacığı)
+                     + ay diski (mesh sphere)
+
+  Sahne zemin planı:
+    - 200x200 metre çim alan (yeşil plane mesh)
+    - 100x100 metre grid overlay (0.5m hücre boyutu)
+    - GardenProps bileşeni: dekoratif ağaçlar ve çalılar
+
+4.2 Oda Sistemi (RoomBuilder.jsx)
+-----------------------------------
+  Her oda bir <group> içinde render edilir:
+    - Zemin: PlaneGeometry (genişlik x derinlik)
+    - 4 Duvar: BoxGeometry (yarı saydam cam efekti)
+    - Isı haritası overlay: enerji tüketimine göre yeşil→sarı→kırmızı renk geçişi
+    - Dekoratif mobilyalar: RoomFurnishings bileşeni (oda tipine göre)
+    - Yüzen oda adı: drei Html bileşeni (3D→2D overlay)
+
+  Oda Etkileşimleri:
+    - Sürükle-bırak: PointerDown/Move/Up ile raycast tabanlı drag
+    - Oda çakışma kontrolü: AABB (Axis-Aligned Bounding Box) overlap testi
+    - Köşe boyutlandırma: ResizeHandle bileşeni (sarı küp tutamaçları)
+    - Hızlı oda ekleme: duvar kenarlarındaki yeşil "+" butonları
+
+  Bitişik Oda Tespiti:
+    - computeAdjacencies() fonksiyonu oda pozisyonlarını tarayarak
+      hangi odaların duvar paylaştığını belirler (DOOR_THRESHOLD: 0.35 birim)
+    - Paylaşılan duvarlarda ince saydam bölme duvar render edilir
+    - Tek taraflı render: id karşılaştırmasıyla aynı duvar iki kez çizilmez
+
+4.3 Cihaz Sistemi (ProceduralDevices.jsx)
+-------------------------------------------
+  10 farklı cihaz türü için prosedürel 3D modeller:
+
+  ┌────────────────────┬──────────────────────────────────────────────┐
+  │ Cihaz Türü         │ 3D Görselleştirme ve Animasyon               │
+  ├────────────────────┼──────────────────────────────────────────────┤
+  │ TV (tv)            │ Düz panel + emissive ekran renk kayması      │
+  │ Klima (ac)         │ Beyaz ünite + mavi LED nefes alma animasyonu │
+  │ Buzdolabı (fridge) │ Metal kasa + kapı kolu + yeşil kompresör LED │
+  │ Çamaşır M. (wash.) │ Beyaz kasa + dönen tambur + mavi program LED│
+  │ Bulaşık M. (dish.) │ Metal kasa + kontrol paneli + cyan LED       │
+  │ Fırın (oven)       │ Koyu kasa + turuncu cam nabzı + düğmeler    │
+  │ Bilgisayar (comp.) │ Kasa + monitör + ekran renk kayması + LED   │
+  │ Aydınlatma (light.)│ Silindir armatür + flicker PointLight       │
+  │ Su Isıtıcı (w.h.)  │ Silindir boyler + turuncu gösterge nabzı   │
+  │ Kurutucu (dryer)   │ Çamaşır m. benzeri + sarı LED + tambur dönüşü│
+  └────────────────────┴──────────────────────────────────────────────┘
+
+  Performans Stratejisi:
+    - Tüm animasyonlar useFrame hook'u ile çalışır (RAF döngüsü)
+    - Material ref'lerine doğrudan yazılır → React re-render tetiklenmez
+    - setState kullanılmaz → sabit performans maliyeti per-device
+
+  GLTF/GLB Desteği (DeviceModel.jsx):
+    - Gelecekte gerçek 3D modeller yüklenebilir
+    - useGLTF ile lazy loading + preload desteği
+    - Otomatik BoundingBox hesaplama ve collision kaydı
+    - Model klonlama (aynı model birden fazla instance)
+
+4.4 Sürükle-Bırak Sistemi (DraggableObject.jsx)
+--------------------------------------------------
+  Cihazlar oda içinde serbestçe hareket ettirilebilir:
+    - Raycast tabanlı düzlem projeksiyonu (Y=0 düzlemi)
+    - Grid snap: 0.5 metre ızgaraya otomatik yapışma
+    - Oda sınır kontrolü: cihaz odanın dışına çıkamaz
+    - Collision detection: useCollision hook ile çakışma önleme
+    - Duvar montajı: Bazı cihazlar (klima, TV) duvara snap olur
+    - Tavan montajı: Aydınlatma tavana sabitlenir
+
+4.5 Elektrik Tesisat Sistemi
+-------------------------------
+  ElectricHub.jsx — Sigorta Kutusu:
+    - Detaylı prosedürel 3D model (montaj plakası, devre kesiciler, LED, vidalar)
+    - Nefes alan yeşil durum LED'i
+    - Kullanıcı tarafından odaya yerleştirilir
+
+  ElectricWiring.jsx — Kablo Tesisatı:
+    - Ağaç topolojisi ile kablo rotalaması
+    - Algoritmik yapı:
+      1. Odalar arası bağlantılar deriveRoomLinks() ile tespit edilir
+      2. BFS (Breadth-First Search) ile oda grafiğinde en kısa yol bulunur
+      3. Baseboard routing: kablolar duvar diplerinde ilerler
+      4. Her odada kavşak kutusu (JunctionBox) render edilir
+
+    - Kablo tipleri:
+      - Dal kablo (ince, r=0.007): cihaz → oda kavşağı
+      - Trunk kablo (kalın, r=0.013): oda kavşağı → sigorta kutusu
+      - Doğrudan kablo: hub odası veya izole cihazlar
+
+    - Görsel efektler:
+      - GLSL Shader ile kayan elektrik darbesi animasyonu
+      - Güce göre renk kodlaması: yeşil (<500W) → sarı (500-1500W) → kırmızı (>1500W)
+      - CatmullRomCurve3 ile pürüzsüz kablo eğrileri
+      - TubeGeometry ile 3D boru render
+
+4.6 Enerji Rozeti Sistemi (EnergyBadge.jsx)
+----------------------------------------------
+  Her cihazın üzerinde yüzen HTML overlay:
+    - ML backend'den gelen gerçek kWh/ay ve ₺/ay değerleri
+    - Verimlilik skoruna göre renk kodlaması (yeşil→sarı→kırmızı)
+    - Loading spinner (hesaplanıyor durumu)
+    - Hata durumu ("ML bağlanamadı")
+    - drei Html ile 3D→2D dönüşüm (distanceFactor: 8)
+
+4.7 Ghost (Hologram) Cihaz Sistemi (GhostDevice.jsx)
+-------------------------------------------------------
+  Oda tipine göre otomatik cihaz önerileri:
+    - Mutfak      → buzdolabı, bulaşık makinesi, fırın
+    - Oturma Odası → TV, klima
+    - Yatak Odası  → klima, bilgisayar
+    - Banyo        → su ısıtıcı
+    - Çamaşır Odası → çamaşır makinesi, kurutucu
+    - Ofis         → bilgisayar, aydınlatma
+
+  Ghost cihazlar yarı saydam hologram olarak render edilir.
+  Tıklandığında gerçek cihaza dönüşür ve ML analizi başlar.
+
+4.8 Oda Isı Haritası
+-----------------------
+  SceneContainer.jsx içinde roomHeatLevels hesaplanır:
+    - Her odadaki cihazların toplam kWh tüketimi toplanır
+    - Normalize edilir (0-1 aralığı, min-max scaling)
+    - RoomBuilder'a heatLevel olarak aktarılır
+    - Zemin üzerine yarı saydam renk overlay + PointLight render edilir
+    - Renk skalası: yeşil (düşük tüketim) → sarı → kırmızı (yüksek tüketim)
+
+
+5. MAKİNE ÖĞRENMESİ MOTORU (Detaylı)
+================================================================================
+
+ML backend, FastAPI üzerinde çalışan bir Python uygulamasıdır. İki temel ML
+modeli ve bir LLM entegrasyonu barındırır.
+
+5.1 Enerji Tahmin Modeli (EnergyPredictor)
+--------------------------------------------
+  Algoritma: GradientBoostingRegressor (scikit-learn)
+  Eğitim verisi: 5000 sentetik örnek (gerçek dünya parametrelerine dayalı)
+  Hedef değişken: real_monthly_kwh (standby dahil toplam aylık tüketim)
+
+  Feature'lar:
+    - nominal_power_watts      → cihazın nominal gücü (Watt)
+    - daily_usage_hours        → günlük kullanım süresi (saat)
+    - standby_power_watts      → bekleme gücü (Watt)
+    - efficiency_class_numeric → verimlilik sınıfı (A+++→0.92 ... G→0.00)
+    - device_age_years         → cihaz yaşı (yıl)
+    - device_type              → cihaz türü (kategorik, OrdinalEncoder)
+
+  Pipeline:
+    ColumnTransformer
+      ├── Numerik feature'lar → StandardScaler
+      └── Kategorik feature'lar → OrdinalEncoder
+    → GradientBoostingRegressor (200 ağaç, max_depth=5, lr=0.1)
+
+  Model Çıktıları:
+    - Tahmin edilen aylık kWh
+    - Güven etiketi (high/medium/low — MAE/tahmin oranına göre)
+    - Feature önem sıralaması (hangi parametre tahmini en çok etkiler)
+    - Model versiyon bilgisi ve metadata
+
+  Modelin Çalışma Prensibi:
+    Basit watt*saat hesabı yerine, model gerçek dünya davranışlarını öğrenir:
+    - Buzdolabı 24 saat açıktır ama kompresörün duty cycle'ı %35'tir
+    - Eski cihazlar (device_age_years yüksek) daha çok enerji harcar
+    - Verimlilik sınıfı A+++ ile G arasında 5-10x fark yaratır
+    - Standby tüketimi (TV: 2W, klima: 5W) 24 saat sürer
+    - Model bu non-lineer ilişkileri gradient boosting ile yakalar
+
+5.2 Hanehalkı Kümeleme Modeli (HouseholdClusterer)
+-----------------------------------------------------
+  Algoritma: K-Means Clustering (k=5)
+  Amaç: Benzer profildeki haneleri gruplamak
+
+  Clustering Feature'ları (tüketim kasıtlı olarak HARİÇ tutulur):
+    - city_encoded         → şehir (LabelEncoder ile sayısallaştırılmış)
+    - occupants_count      → hane halkı sayısı
+    - total_area_sqm       → toplam alan (m²)
+    - n_devices            → cihaz sayısı
+    - avg_device_age       → ortalama cihaz yaşı
+
+  Pipeline:
+    LabelEncoder (şehir) → StandardScaler → KMeans (5 küme, 10 init)
+
+  Neden Tüketim Dahil Edilmez?
+    Amaç: "Benzer evlerden ne kadar tüketiyorsun?" sorusuna cevap vermek.
+    Eğer tüketim de clustering'e dahil olursa, zaten benzer tüketenleri
+    gruplar — bu karşılaştırmayı anlamsız kılar. Önce profil benzerleri
+    bulunur, sonra tüketim o grup içinde karşılaştırılır.
+
+  Karşılaştırma Süreci:
+    1. Kullanıcının ev profili modele verilir → küme ID'si döner
+    2. Aynı kümedeki tüm haneler Supabase'den çekilir
+    3. Kullanıcının aylık kWh'ı küme içinde sıralanır → yüzdelik dilim
+    4. Sonuç: "Benzer 12 hane içinde %78'inden daha az enerji kullanıyorsun"
+
+5.3 Sentetik Veri Üretimi (data/synthetic.py + data/device_profiles.py)
+--------------------------------------------------------------------------
+  Gerçek eğitim verisi olmadığı için, Türk hanelerine özgü parametrelerle
+  sentetik veri üretilir:
+
+  Device Profiles — her cihaz türü için gerçekçi aralıklar:
+    - nominal_watts_range:  Buzdolabı 80-250W, Klima 800-3500W
+    - standby_watts_range:  TV 1-10W, Bilgisayar 2-15W
+    - daily_hours_range:    Buzdolabı 24s, TV 2-10s
+    - duty_cycle:           Buzdolabı %35, Çamaşır %70, TV %100
+    - efficiency_classes:   Cihaza özgü olası sınıflar
+
+  Efficiency Class Map:
+    A+++ → 0.92, A++ → 0.85, A+ → 0.78, A → 0.70
+    B → 0.55, C → 0.40, D → 0.30, E → 0.22, F → 0.15, G → 0.08
+
+  Household Dataset: 500 sentetik hane (8 şehir, 1-6 kişi, 40-200 m²)
+
+5.4 Tarife Hesaplama Sistemi (tariff_service.py + supabase_client.py)
+-----------------------------------------------------------------------
+  Türk konut elektrik tarifesi (kademeli):
+    - Alt kademe: 0-240 kWh → 1.50 ₺/kWh (vergiler dahil %20)
+    - Üst kademe: 241+ kWh → 2.30 ₺/kWh (vergiler dahil %20)
+
+  TariffCalculator:
+    - Kademeli maliyet hesabı (kademe sınırlarını otomatik yönetir)
+    - Kademe bazlı breakdown (hangi kademede ne kadar ödendi)
+    - Supabase'den güncel tarife çekme + 5dk cache + fallback defaults
+
+
+6. API ENDPOİNTLERİ
+================================================================================
+
+ML Backend (FastAPI — https://kwhane.onrender.com):
+
+  POST /calculate
+    Girdi:  DeviceInput (id, type, nominal_power_watts, daily_usage_hours,
+            standby_power_watts, efficiency_class, year_of_purchase)
+    Çıktı: CalculateResponse (theoretical_kwh, real_kwh, standby_kwh,
+            total_monthly_cost, efficiency_score, tariff_breakdown,
+            confidence_label, top_factors, model_version)
+    Açıklama: Bir cihazın gerçek enerji tüketimini ML ile tahmin eder.
+
+  POST /compare
+    Girdi:  DeviceInput
+    Çıktı: CompareResponse (cluster_id, cluster_size, user_monthly_kwh,
+            cluster_avg, percentile, comparison_label)
+    Açıklama: Cihaz bazlı peer comparison — benzer hanelerdeki aynı
+              cihaz türüyle karşılaştırma.
+
+  POST /savings
+    Girdi:  DeviceInput
+    Çıktı: SavingsResponse (recommendations[], total_potential_savings)
+    Açıklama: Cihaz için tasarruf önerileri üretir:
+      - upgrade: daha verimli modele geçiş
+      - usage_optimization: kullanım süresi azaltma
+      - standby_reduction: bekleme gücünü kesme
+
+  POST /chat
+    Girdi:  ChatRequest (message, devices[], history[], recommendations[],
+            total_monthly_kwh, bill_count, actual_monthly_kwh, ...)
+    Çıktı: ChatResponse (reply: string)
+    Açıklama: LLM tabanlı Türkçe enerji danışmanı.
+              Kullanıcının tüm ev bağlamı (cihazlar, tüketimler, faturalar,
+              tasarruf önerileri) sistem prompt'una enjekte edilir.
+              Groq API üzerinden Llama 3.3 70B Versatile modeli kullanılır.
+
+  POST /home-builder
+    Girdi:  HomeBuilderRequest (message, history[], currentHome)
+    Çıktı: HomeBuilderResponse (reply, plan{rooms[], devices[]})
+    Açıklama: Doğal dilde ev tarifi → yapılandırılmış JSON plan.
+              "3+1 dairem var, mutfakta buzdolabı ve bulaşık makinesi var"
+              → odalar ve cihazlar otomatik oluşturulur.
+
+  POST /bills/diagnose
+    Girdi:  BillDiagnoseRequest (actual_kwh, actual_cost_tl, devices[],
+            predicted_tariff_tl_per_kwh)
+    Çıktı: BillDiagnoseResponse (device_attributions[], residual_kwh,
+            anomalies[], summary_tr)
+    Açıklama: Fatura analizi — gerçek fatura ile tahminler karşılaştırılır,
+              cihaz bazlı maliyet dağılımı çıkarılır, anomaliler tespit edilir.
+
+  POST /calibration
+    Girdi:  CalibrationRequest (actual_kwh, devices[], bill_count)
+    Çıktı: CalibrationResponse (suggestions[])
+    Açıklama: Çoklu fatura verileriyle model kalibrasyonu.
+              Tahmini tüketim ile gerçek fatura arasındaki farkı kapatmak
+              için hangi cihazların daily_usage_hours değerinin
+              düzeltilmesi gerektiğini önerir.
+
+  POST /compare/home
+    Girdi:  HomeCompareRequest (city, occupants_count, total_area_sqm,
+            n_devices, monthly_kwh, source)
+    Çıktı: HomeCompareResponse (cluster_id, cluster_size, percentile,
+            comparison_label, peer_group_summary)
+    Açıklama: Ev düzeyinde peer comparison. K-Means ile benzer profildeki
+              haneler bulunur, kullanıcının yüzdelik dilimi hesaplanır.
+              source='bill' ise gerçek fatura verisi kullanılır.
+
+  GET /health
+    Çıktı: {status, models_loaded, energy_model_loaded, cluster_model_loaded,
+            energy_model_version, model_dir}
+
+
+7. VERİTABANI ŞEMASI (Supabase PostgreSQL)
+================================================================================
+
+  Tablolar:
+    users           → Supabase Auth (otomatik)
+    homes           → id, user_id, city, occupants_count, total_area_sqm
+    rooms           → id, home_id, name, room_type
+    devices         → id, room_id, name, type, nominal_power_watts,
+                      daily_usage_hours, standby_power_watts,
+                      efficiency_class, year_of_purchase
+    bills           → id, user_id, period_start, period_end,
+                      actual_kwh, actual_cost_tl
+    device_comparisons → device_id, cluster_id, percentile, comparison_label
+    recommendations → id, user_id, device_id, slug, category, title,
+                      description, current_monthly_cost, projected_monthly_cost,
+                      potential_savings_amount, status
+    goals           → id, user_id, target, current, deadline
+    goal_logs       → id, goal_id, value, timestamp
+    device_catalog  → id, type, brand, model, nominal_power_watts,
+                      efficiency_class, price
+    electricity_tariffs → name, limit_min_kwh, limit_max_kwh,
+                          unit_price_raw, tax_rate
+
+  Row Level Security (RLS):
+    Her tablo user_id bazlı RLS policy ile korunur.
+    Kullanıcılar yalnızca kendi verilerini okuyabilir ve yazabilir.
+
+
+8. LLM ENTEGRASYONU — AI ENERJİ DANIŞMANI
+================================================================================
+
+  Provider: Groq API (ücretsiz, OpenAI-compatible)
+  Model:    Llama 3.3 70B Versatile
+  SDK:      openai Python paketi (base_url değiştirilerek Groq'a yönlendirilir)
+
+  Çalışma prensibi:
+    1. Frontend, kullanıcının tüm ev bağlamını toplar:
+       - Cihaz listesi (isim, tür, güç, kullanım, verimlilik, tahmin)
+       - Toplam aylık kWh ve ₺
+       - Fatura verileri (varsa)
+       - Tasarruf önerileri
+       - Fatura analiz özeti
+    2. Bu bağlam bir ChatRequest olarak backend'e POST edilir
+    3. Backend, dinamik bir system prompt oluşturur:
+       - "Sen KWhane AI'sın — Türk haneleri için enerji tasarrufu uzmanısın"
+       - Kullanıcının tüm ev verisi enjekte edilir
+       - Yanıt kuralları: sadece verilere dayan, ₺ ve kWh kullan, 3-5 cümle
+    4. Son 6 mesaj conversation history olarak gönderilir
+    5. LLM, bağlama dayalı Türkçe yanıt üretir
+
+  Ev Kurulum Sihirbazı (Home Builder):
+    - Ayrı bir system prompt ile çalışır
+    - Kullanıcı "3+1 dairem var" der
+    - LLM yapılandırılmış JSON döndürür:
+      {rooms: [{name, roomType, width, depth}], devices: [{roomName, type, ...}]}
+    - Backend normalize eder (geçersiz tipler düzeltilir, boyutlar sınırlanır)
+    - Frontend otomatik olarak 3D odaları ve cihazları oluşturur
+
+  Fallback (lokal geliştirme):
+    - Aynı config ile Ollama kullanılabilir (localhost:11434)
+    - LLM_BASE_URL ve LLM_MODEL env variable'ları ile geçiş yapılır
+
+
+9. FATURA ANALİZ VE KALİBRASYON SİSTEMİ
+================================================================================
+
+  Phase A — Fatura Girişi:
+    - Kullanıcı gerçek elektrik faturalarını girer (kWh + ₺ + dönem)
+    - Ortalama aylık tüketim ve birim fiyat hesaplanır
+
+  Phase B — Fatura Diagnostik:
+    - Gerçek fatura ile cihaz bazlı tahminler karşılaştırılır
+    - Her cihazın toplam faturadaki payı hesaplanır
+    - Açıklanamayan residual (fark) raporlanır
+    - Anomaliler tespit edilir (ör: "buzdolabı beklentinin 2 katı tüketiyor")
+
+  Phase C — Kalibrasyon:
+    - Çoklu fatura ortalaması ile tahminler arasındaki fark analiz edilir
+    - Her cihaz için daily_usage_hours düzeltme önerisi üretilir
+    - Öneriler güven skoruna göre sıralanır
+    - Kullanıcı onaylarsa cihaz ayarları güncellenir → model daha doğru hale gelir
+
+  Phase D — Peer Comparison:
+    - Fatura verisi varsa gerçek tüketim, yoksa tahmin kullanılır
+    - source='bill' etiketi ile UI'da "Faturanıza göre" pill gösterilir
+    - Karşılaştırma, fatura gerçekliğine dayandığında daha anlamlı olur
+
+
+10. TEMA VE DİL SİSTEMİ
+================================================================================
+
+  ThemeProvider: Dark/Light tema geçişi
+    - CSS custom properties ile uygulama geneli tema değişkenleri
+    - 3D sahnede gece/gündüz senkronizasyonu (Stars vs Sky)
+    - localStorage ile kalıcılık
+
+  LanguageProvider: Türkçe/İngilizce çoklu dil desteği
+    - t() fonksiyonu ile çeviri
+    - Tüm UI metinleri dil dosyalarından okunur
+
+  Sesli Giriş: useSpeechToText hook'u
+    - Web Speech API ile mikrofon desteği
+    - AI Asistan'a sesli soru sorma
+
+
+11. GÜVENLİK
+================================================================================
+
+  Authentication:
+    - Supabase Auth (JWT tabanlı)
+    - Email/password + sosyal giriş seçenekleri
+    - Token localStorage'da saklanır
+    - 401 yanıtlarında otomatik logout + redirect
+
+  Row Level Security:
+    - Tüm Supabase tabloları RLS ile korunur
+    - Kullanıcılar yalnızca kendi ev/oda/cihaz/fatura verilerine erişebilir
+
+  CORS:
+    - ML Backend: allow_origins=["*"] (tüm originler — geliştirme kolaylığı)
+    - Production'da belirli domainlerle sınırlanabilir
+
+  Environment Variables:
+    - API anahtarları .env dosyasında saklanır
+    - Frontend build-time inject (VITE_ prefix'i)
+    - Backend runtime inject (Render environment variables)
+
+
+12. DEPLOYMENT MİMARİSİ
+================================================================================
+
+  ┌──────────────────────────────────────────────────────┐
+  │                    GitHub Repository                  │
+  │                 (monorepo: frontend/ + ML-python/)   │
+  └──────────┬─────────────────────────────┬─────────────┘
+             |                             |
+      ┌──────v──────┐              ┌───────v───────┐
+      │   Netlify    │              │  Render.com   │
+      │  (Frontend)  │              │ (ML Backend)  │
+      │              │              │               │
+      │ Build:       │              │ Build:        │
+      │  npm run     │              │  pip install  │
+      │  build       │              │  -r req.txt   │
+      │              │              │               │
+      │ Runtime:     │              │ Runtime:      │
+      │  Static      │              │  uvicorn      │
+      │  files +     │              │  main:app     │
+      │  Nginx CDN   │              │  --port $PORT │
+      │              │              │               │
+      │ URL:         │              │ URL:          │
+      │ kwhane.com   │              │ kwhane.       │
+      │ (GoDaddy     │◄────API────►│ onrender.com  │
+      │  DNS)        │   calls     │               │
+      └──────────────┘              └───────┬───────┘
+                                            |
+                                    ┌───────v───────┐
+                                    │   Groq API    │
+                                    │ Llama 3.3 70B │
+                                    │  (ücretsiz)   │
+                                    └───────────────┘
+
+  CI/CD:
+    - Her git push otomatik deploy tetikler (hem Netlify hem Render)
+    - Netlify: npm run build → dist/ → CDN
+    - Render: pip install → uvicorn başlat
+
+
+13. PROJE DOSYA YAPISI
+================================================================================
+
+  KWhane/
+  ├── frontend/                          # React SPA
+  │   ├── src/
+  │   │   ├── components/
+  │   │   │   ├── Dashboard/             # Ana dashboard bileşenleri
+  │   │   │   │   ├── Layout/            # DashboardLayout, ProfileModal, Settings
+  │   │   │   │   ├── Bills/             # Fatura yönetimi bileşenleri
+  │   │   │   │   ├── Goals/             # Hedef takip bileşenleri
+  │   │   │   │   ├── Home/              # Ana sayfa bileşenleri
+  │   │   │   │   ├── AiAssistant.jsx    # LLM sohbet paneli
+  │   │   │   │   ├── HomeRanking.jsx    # Peer comparison
+  │   │   │   │   ├── SuggestionCards.jsx # Tasarruf önerileri
+  │   │   │   │   ├── HomeBuilderWizard  # AI ev kurulum sihirbazı
+  │   │   │   │   └── ...
+  │   │   │   ├── Simulation3D/          # 3D Motor
+  │   │   │   │   ├── SceneContainer.jsx # Ana sahne wrapper
+  │   │   │   │   ├── RoomBuilder.jsx    # Oda render + etkileşim
+  │   │   │   │   ├── ProceduralDevices  # 10 cihaz 3D modeli
+  │   │   │   │   ├── DraggableObject    # Sürükle-bırak sistemi
+  │   │   │   │   ├── ElectricWiring     # Kablo tesisat sistemi
+  │   │   │   │   ├── ElectricHub        # Sigorta kutusu
+  │   │   │   │   ├── EnergyBadge        # Enerji overlay'ları
+  │   │   │   │   ├── GhostDevice        # Hologram öneriler
+  │   │   │   │   ├── RoomFurnishings    # Dekoratif mobilyalar
+  │   │   │   │   ├── CameraControls     # Orbit kamera
+  │   │   │   │   ├── Lights             # Sahne aydınlatması
+  │   │   │   │   └── GardenProps        # Bahçe dekorasyonu
+  │   │   │   └── ui/                    # Genel UI bileşenleri
+  │   │   ├── services/                  # API wrapper modülleri
+  │   │   ├── store/                     # Zustand state store
+  │   │   ├── contexts/                  # React context'ler (Auth, Theme, Lang)
+  │   │   ├── hooks/                     # Custom hook'lar
+  │   │   ├── utils/                     # Yardımcı fonksiyonlar
+  │   │   └── pages/                     # Sayfa bileşenleri
+  │   ├── netlify.toml                   # Netlify build config
+  │   ├── Dockerfile                     # Docker image (opsiyonel)
+  │   └── package.json
+  │
+  ├── ML-python/                         # Python ML Backend
+  │   ├── main.py                        # FastAPI entry point
+  │   ├── config.py                      # Pydantic Settings
+  │   ├── ml/
+  │   │   ├── energy_model.py            # GradientBoostingRegressor
+  │   │   ├── clustering_model.py        # K-Means HouseholdClusterer
+  │   │   ├── savings_scorer.py          # Tasarruf puanlayıcı
+  │   │   └── train.py                   # Model eğitim script'i
+  │   ├── services/
+  │   │   ├── calculate_service.py       # /calculate iş mantığı
+  │   │   ├── compare_service.py         # /compare iş mantığı
+  │   │   ├── savings_service.py         # /savings iş mantığı
+  │   │   ├── chat_service.py            # /chat LLM entegrasyonu
+  │   │   ├── home_builder_service.py    # /home-builder LLM entegrasyonu
+  │   │   ├── bill_diagnostics.py        # Fatura analiz motoru
+  │   │   ├── calibration_service.py     # Model kalibrasyon motoru
+  │   │   ├── home_compare_service.py    # Ev düzeyi karşılaştırma
+  │   │   ├── energy_calculations.py     # Enerji hesaplama yardımcıları
+  │   │   ├── tariff_service.py          # Kademe hesaplayıcı
+  │   │   ├── supabase_client.py         # Supabase bağlantı + cache
+  │   │   └── ollama_client.py           # LLM client (Groq/Ollama)
+  │   ├── data/
+  │   │   ├── device_profiles.py         # Cihaz referans verileri
+  │   │   └── synthetic.py               # Sentetik veri üretici
+  │   ├── models/
+  │   │   └── schemas.py                 # Pydantic request/response modelleri
+  │   ├── trained_models/                # Persist edilen ML modelleri
+  │   │   ├── energy_regressor.joblib
+  │   │   ├── household_profile_kmeans.joblib
+  │   │   └── ...
+  │   ├── requirements.txt
+  │   ├── Dockerfile
+  │   └── .env.example
+  │
+  └── docker-compose.yml                 # Lokal geliştirme ortamı
+
+
+================================================================================
+                            BELGE SONU
+================================================================================

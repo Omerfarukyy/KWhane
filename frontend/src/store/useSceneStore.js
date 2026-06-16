@@ -473,16 +473,8 @@ const useSceneStore = create((set, get) => ({
             set({ homeId });
 
             if (dbRooms.length === 0) {
-                // First login — create the default Koridor room
-                const koridor = {
-                    id:       uuidv4(),
-                    name:     'Koridor',
-                    roomType: 'Genel',
-                    position: [0, 0, 0],
-                    size:     { width: 6, depth: 5, height: 3 },
-                };
-                await houseService.insertRoom(homeId, koridor);
-                set({ rooms: [koridor], objects: [], ghostObjects: [], energyData: {}, deviceSpecs: {} });
+                // First login — leave scene empty so the setup wizard appears
+                set({ rooms: [], objects: [], ghostObjects: [], energyData: {}, deviceSpecs: {} });
             } else {
                 const rooms      = dbRooms.map(dbRoomToZustand);
                 const roomLookup = new Map(rooms.map((r) => [r.id, r]));

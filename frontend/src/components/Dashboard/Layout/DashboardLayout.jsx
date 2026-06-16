@@ -121,6 +121,13 @@ const DashboardLayout = () => {
         if (!user) resetStore();
     }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Auto-open the setup wizard when user has no rooms (first visit)
+    useEffect(() => {
+        if (!isLoadingFromDB && rooms.length === 0 && user?.id) {
+            setIsBuilderOpen(true);
+        }
+    }, [isLoadingFromDB, rooms.length, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Open room modal when a wall-add button sets pendingRoomAttach
     useEffect(() => {
         if (pendingRoomAttach) setIsRoomModalOpen(true);
