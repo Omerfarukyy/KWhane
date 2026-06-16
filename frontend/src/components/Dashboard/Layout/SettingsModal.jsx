@@ -8,14 +8,15 @@ import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeProvider';
 import useSceneStore from '../../../store/useSceneStore';
+import { useLanguage } from '../../../contexts/LanguageProvider';
 
 // ─── Sidebar items config ─────────────────────────────────────────────────────
 const SECTIONS = [
-    { id: 'home',         icon: <Home size={16} />,       label: 'Ev Profili' },
-    { id: 'tariff',       icon: <Zap size={16} />,        label: 'Tarife Bilgisi' },
-    { id: 'notifications',icon: <Bell size={16} />,       label: 'Bildirimler' },
-    { id: 'appearance',   icon: <Palette size={16} />,    label: 'Görünüm' },
-    { id: 'account',      icon: <User size={16} />,       label: 'Hesap' },
+    { id: 'home',         icon: <Home size={16} />,       labelKey: 'homeProfile' },
+    { id: 'tariff',       icon: <Zap size={16} />,        labelKey: 'tariffInfo' },
+    { id: 'notifications',icon: <Bell size={16} />,       labelKey: 'notifications' },
+    { id: 'appearance',   icon: <Palette size={16} />,    labelKey: 'appearance' },
+    { id: 'account',      icon: <User size={16} />,       labelKey: 'account' },
 ];
 
 // ─── Generic helpers ──────────────────────────────────────────────────────────
@@ -39,6 +40,7 @@ const Label = ({ children }) => (
 
 // ─── Section: Ev Profili ─────────────────────────────────────────────────────
 const HomeProfileSection = ({ homeId }) => {
+    const { t } = useLanguage();
     const [profile, setProfile] = useState({ city: '', occupants_count: '', total_area_sqm: '' });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -49,7 +51,7 @@ const HomeProfileSection = ({ homeId }) => {
         if (!homeId) return;
         supabase.from('homes').select('city, occupants_count, total_area_sqm').eq('id', homeId).single()
             .then(({ data, error: e }) => {
-                if (e) { setError('Profil yüklenemedi.'); return; }
+                if (e) { setError(t('profileLoadError')); return; }
                 setProfile({
                     city: data?.city ?? '',
                     occupants_count: data?.occupants_count ?? '',
@@ -68,7 +70,7 @@ const HomeProfileSection = ({ homeId }) => {
             total_area_sqm: parseFloat(profile.total_area_sqm) || null,
         }).eq('id', homeId);
         setSaving(false);
-        if (e) { setError('Kaydedilemedi: ' + e.message); return; }
+        if (e) { setError(t('saveFailed') + ': ' + e.message); return; }
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
     };
@@ -77,9 +79,9 @@ const HomeProfileSection = ({ homeId }) => {
 
     return (
         <div className="flex flex-col gap-5">
-            <SectionHeader title="Ev Profili" desc="Evinizin temel bilgilerini düzenleyin." />
+            <SectionHeader title={t('homeProfile')} desc={t('homeProfileDesc')} />
             {error && <ErrorBanner msg={error} />}
-            <Field label="Şehir">
+            <Field label={t('city')}>
                 <input style={inputCls} value={profile.city}
                     onChange={e => setProfile(p => ({ ...p, city: e.target.value }))}
                     placeholder="İstanbul"
@@ -87,7 +89,7 @@ const HomeProfileSection = ({ homeId }) => {
                     onBlur={e => e.target.style.borderColor = 'var(--color-border)'}
                 />
             </Field>
-            <Field label="Sakin Sayısı">
+            <Field label={t('occupants')}>
                 <input style={inputCls} type="number" min="1" max="20"
                     value={profile.occupants_count}
                     onChange={e => setProfile(p => ({ ...p, occupants_count: e.target.value }))}
@@ -96,7 +98,7 @@ const HomeProfileSection = ({ homeId }) => {
                     onBlur={e => e.target.style.borderColor = 'var(--color-border)'}
                 />
             </Field>
-            <Field label="Metrekare (m²)">
+            <Field label={t('squareMeters')}>
                 <input style={inputCls} type="number" min="10"
                     value={profile.total_area_sqm}
                     onChange={e => setProfile(p => ({ ...p, total_area_sqm: e.target.value }))}
@@ -112,6 +114,7 @@ const HomeProfileSection = ({ homeId }) => {
 
 // ─── Section: Tarife Bilgisi ─────────────────────────────────────────────────
 const TariffSection = () => {
+    const { t } = useLanguage();
     const [tariffs, setTariffs] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -125,33 +128,33 @@ const TariffSection = () => {
 
     return (
         <div className="flex flex-col gap-5">
-            <SectionHeader title="Tarife Bilgisi" desc="Güncel elektrik tarife kademelerini görüntüleyin." />
+            <SectionHeader title={t('tariffInfo')} desc={t('tariffInfoDesc')} />
             {tariffs.length === 0 ? (
                 <p style={{ color: 'var(--color-muted)', fontSize: '0.875rem' }}>
-                    Tarife verisi bulunamadı. Supabase'de <code>electricity_tariffs</code> tablosunu doldurun.
+                    {t('fillTariffTable')}
                 </p>
             ) : (
                 <div className="flex flex-col gap-2">
-                    {tariffs.map((t, i) => (
+                    {tariffs.map((tf, i) => (
                         <div key={i} className="flex items-center justify-between p-3 rounded-xl"
                             style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
                             <div>
                                 <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                                    {t.name || `Kademe ${i + 1}`}
+                                    {tf.name || `${t('tier')} ${i + 1}`}
                                 </span>
-                                {t.min_kwh != null && (
+                                {tf.min_kwh != null && (
                                     <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                                        {t.min_kwh} – {t.max_kwh ?? '∞'} kWh/ay
+                                        {tf.min_kwh} – {tf.max_kwh ?? '∞'} kWh/ay
                                     </p>
                                 )}
                             </div>
                             <div className="text-right">
                                 <span className="text-sm font-bold" style={{ color: '#3b82f6' }}>
-                                    ₺{Number(t.price_per_kwh ?? t.unit_price ?? 0).toFixed(4)}/kWh
+                                    ₺{Number(tf.price_per_kwh ?? tf.unit_price ?? 0).toFixed(4)}/kWh
                                 </span>
-                                {t.tax_rate != null && (
+                                {tf.tax_rate != null && (
                                     <p className="text-xs mt-0.5" style={{ color: 'var(--color-subtle)' }}>
-                                        KDV %{(t.tax_rate * 100).toFixed(0)}
+                                        {t('vatRate')} %{(tf.tax_rate * 100).toFixed(0)}
                                     </p>
                                 )}
                             </div>
@@ -168,6 +171,7 @@ const NOTIF_KEY = 'kwhane-notifications';
 const defaultNotifs = { emailDigest: true, savingsAlerts: true, deviceRec: false };
 
 const NotificationsSection = () => {
+    const { t } = useLanguage();
     const [notifs, setNotifs] = useState(() => {
         try { return { ...defaultNotifs, ...JSON.parse(localStorage.getItem(NOTIF_KEY) || '{}') }; }
         catch { return defaultNotifs; }
@@ -184,12 +188,12 @@ const NotificationsSection = () => {
 
     return (
         <div className="flex flex-col gap-5">
-            <SectionHeader title="Bildirimler" desc="Hangi bildirimleri almak istediğinizi seçin." />
-            <ToggleRow label="Haftalık e-posta özeti" desc="Her Pazartesi tüketim özetinizi alın."
+            <SectionHeader title={t('notifications')} desc={t('notificationsDesc')} />
+            <ToggleRow label={t('weeklyEmailDigest')} desc={t('weeklyEmailDesc')}
                 value={notifs.emailDigest} onChange={() => toggle('emailDigest')} />
-            <ToggleRow label="Tasarruf uyarıları" desc="Anomali veya yüksek tüketim bildirimleri."
+            <ToggleRow label={t('savingsAlerts')} desc={t('savingsAlertsDesc')}
                 value={notifs.savingsAlerts} onChange={() => toggle('savingsAlerts')} />
-            <ToggleRow label="Cihaz önerileri" desc="Yapay zeka destekli ürün tavsiyeleri."
+            <ToggleRow label={t('deviceRecommendations')} desc={t('deviceRecommendationsDesc')}
                 value={notifs.deviceRec} onChange={() => toggle('deviceRec')} />
             <SaveBtn saving={false} saved={saved} onClick={save} />
         </div>
@@ -198,6 +202,7 @@ const NotificationsSection = () => {
 
 // ─── Section: Görünüm ─────────────────────────────────────────────────────────
 const AppearanceSection = () => {
+    const { t } = useLanguage();
     const { theme, toggleTheme } = useTheme();
     const [quality, setQuality] = useState(() => localStorage.getItem('kwhane-quality') || 'medium');
     const [saved, setSaved] = useState(false);
@@ -210,18 +215,18 @@ const AppearanceSection = () => {
 
     return (
         <div className="flex flex-col gap-5">
-            <SectionHeader title="Görünüm" desc="Tema ve simülasyon kalite ayarları." />
+            <SectionHeader title={t('appearance')} desc={t('appearanceDesc')} />
 
-            <Field label="Tema">
+            <Field label={t('theme')}>
                 <div className="flex gap-3">
                     <ThemeBtn active={theme === 'dark'} onClick={() => theme !== 'dark' && toggleTheme()}
-                        icon={<Moon size={16} />} label="Koyu" />
+                        icon={<Moon size={16} />} label={t('dark')} />
                     <ThemeBtn active={theme === 'light'} onClick={() => theme !== 'light' && toggleTheme()}
-                        icon={<Sun size={16} />} label="Açık" />
+                        icon={<Sun size={16} />} label={t('light')} />
                 </div>
             </Field>
 
-            <Field label="3D Simülasyon Kalitesi">
+            <Field label={t('simulationQuality')}>
                 <div className="flex gap-2">
                     {['low', 'medium', 'high'].map(q => (
                         <button key={q}
@@ -233,7 +238,7 @@ const AppearanceSection = () => {
                                 color: quality === q ? '#3b82f6' : 'var(--color-muted)',
                                 cursor: 'pointer',
                             }}>
-                            {q === 'low' ? 'Düşük' : q === 'medium' ? 'Orta' : 'Yüksek'}
+                            {t(q)}
                         </button>
                     ))}
                 </div>
@@ -259,6 +264,7 @@ const ThemeBtn = ({ active, onClick, icon, label }) => (
 
 // ─── Section: Hesap ───────────────────────────────────────────────────────────
 const AccountSection = ({ onClose }) => {
+    const { t } = useLanguage();
     const { user } = useAuth();
     const homeId = useSceneStore(s => s.homeId);
     const resetStore = useSceneStore(s => s.resetStore);
@@ -270,12 +276,11 @@ const AccountSection = ({ onClose }) => {
         if (!homeId) return;
         setResetting(true);
         try {
-            // Delete all rooms (cascade deletes devices)
             await supabase.from('rooms').delete().eq('home_id', homeId);
             resetStore();
             onClose();
         } catch (e) {
-            setError('Sıfırlama başarısız: ' + e.message);
+            setError(t('resetFailed') + ': ' + e.message);
         } finally {
             setResetting(false);
         }
@@ -283,10 +288,10 @@ const AccountSection = ({ onClose }) => {
 
     return (
         <div className="flex flex-col gap-5">
-            <SectionHeader title="Hesap" desc="Hesap bilgileri ve tehlikeli eylemler." />
+            <SectionHeader title={t('account')} desc={t('accountDesc')} />
 
             <div className="p-4 rounded-xl" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                <Label>E-posta</Label>
+                <Label>{t('emailLabel')}</Label>
                 <p className="text-sm mt-1" style={{ color: 'var(--color-text)' }}>{user?.email ?? '—'}</p>
             </div>
 
@@ -295,16 +300,16 @@ const AccountSection = ({ onClose }) => {
             <div className="p-4 rounded-xl" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
                 <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle size={16} style={{ color: '#ef4444' }} />
-                    <span className="text-sm font-bold" style={{ color: '#ef4444' }}>Tehlikeli Alan</span>
+                    <span className="text-sm font-bold" style={{ color: '#ef4444' }}>{t('dangerZone')}</span>
                 </div>
                 <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
-                    Tüm oda ve cihaz verileriniz silinir. Bu işlem geri alınamaz.
+                    {t('dangerZoneDesc')}
                 </p>
                 {!confirm ? (
                     <button onClick={() => setConfirm(true)}
                         className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
                         style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}>
-                        <Trash2 size={14} /> Tüm ev verisini sıfırla
+                        <Trash2 size={14} /> {t('resetHomeData')}
                     </button>
                 ) : (
                     <div className="flex gap-2">
@@ -312,12 +317,12 @@ const AccountSection = ({ onClose }) => {
                             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
                             style={{ background: '#ef4444', color: 'white', cursor: resetting ? 'not-allowed' : 'pointer', opacity: resetting ? 0.7 : 1 }}>
                             {resetting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                            Evet, sil
+                            {t('yesDelete')}
                         </button>
                         <button onClick={() => setConfirm(false)}
                             className="px-4 py-2 rounded-xl text-sm font-bold"
                             style={{ background: 'var(--color-surface-2)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', cursor: 'pointer' }}>
-                            İptal
+                            {t('cancel')}
                         </button>
                     </div>
                 )}
@@ -357,21 +362,24 @@ const ToggleRow = ({ label, desc, value, onChange }) => (
     </div>
 );
 
-const SaveBtn = ({ saving, saved, onClick }) => (
-    <button onClick={onClick} disabled={saving}
-        className="self-end flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-        style={{
-            background: saved ? '#22c55e' : '#3b82f6',
-            boxShadow: '0 0 16px rgba(59,130,246,0.2)',
-            cursor: saving ? 'not-allowed' : 'pointer',
-            opacity: saving ? 0.7 : 1,
-        }}
-        onMouseEnter={e => { if (!saving && !saved) e.currentTarget.style.background = '#2563eb'; }}
-        onMouseLeave={e => { if (!saving) e.currentTarget.style.background = saved ? '#22c55e' : '#3b82f6'; }}>
-        {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
-        {saving ? 'Kaydediliyor...' : saved ? 'Kaydedildi!' : 'Kaydet'}
-    </button>
-);
+const SaveBtn = ({ saving, saved, onClick }) => {
+    const { t } = useLanguage();
+    return (
+        <button onClick={onClick} disabled={saving}
+            className="self-end flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+            style={{
+                background: saved ? '#22c55e' : '#3b82f6',
+                boxShadow: '0 0 16px rgba(59,130,246,0.2)',
+                cursor: saving ? 'not-allowed' : 'pointer',
+                opacity: saving ? 0.7 : 1,
+            }}
+            onMouseEnter={e => { if (!saving && !saved) e.currentTarget.style.background = '#2563eb'; }}
+            onMouseLeave={e => { if (!saving) e.currentTarget.style.background = saved ? '#22c55e' : '#3b82f6'; }}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
+            {saving ? t('savingText') : saved ? t('savedText') : t('save')}
+        </button>
+    );
+};
 
 const Spinner = () => (
     <div className="flex items-center justify-center py-12" style={{ color: 'var(--color-subtle)' }}>
@@ -405,6 +413,7 @@ const SidebarItem = ({ icon, label, active, onClick }) => (
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 const SettingsModal = ({ isOpen, onClose }) => {
+    const { t } = useLanguage();
     const [activeSection, setActiveSection] = useState('home');
     const homeId = useSceneStore(s => s.homeId);
 
@@ -441,7 +450,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
                             <div className="p-2 rounded-lg" style={{ background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}>
                                 <Settings size={18} />
                             </div>
-                            <h2 className="text-base font-bold" style={{ color: 'var(--color-text)' }}>Ayarlar</h2>
+                            <h2 className="text-base font-bold" style={{ color: 'var(--color-text)' }}>{t('settings')}</h2>
                         </div>
                         <button onClick={onClose} className="md:hidden p-2 rounded-xl transition-all"
                             style={{ color: 'var(--color-subtle)', background: 'var(--color-surface)', border: '1px solid var(--color-border)', cursor: 'pointer' }}>
@@ -451,7 +460,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
 
                     <div className="flex-1 p-3 flex flex-col gap-1">
                         {SECTIONS.map(s => (
-                            <SidebarItem key={s.id} icon={s.icon} label={s.label}
+                            <SidebarItem key={s.id} icon={s.icon} label={t(s.labelKey)}
                                 active={activeSection === s.id}
                                 onClick={() => setActiveSection(s.id)} />
                         ))}

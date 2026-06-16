@@ -4,19 +4,20 @@ import { AnimatePresence, motion } from 'framer-motion';
 import useSceneStore from '../../store/useSceneStore';
 import { runFullAnalysis } from '../../services/mlService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageProvider';
 
-// ─── Device labels & icons ───────────────────────────────────────────────────
-const DEVICE_META = {
-    fridge:          { label: 'Buzdolabi',       icon: '\u{1F9CA}' },
-    tv:              { label: 'Televizyon',       icon: '\u{1F4FA}' },
-    ac:              { label: 'Klima',            icon: '\u{2744}\u{FE0F}' },
-    washing_machine: { label: 'Camasir Mak.',     icon: '\u{1F455}' },
-    dishwasher:      { label: 'Bulasik Mak.',     icon: '\u{1F37D}\u{FE0F}' },
-    oven:            { label: 'Firin',            icon: '\u{1F525}' },
-    computer:        { label: 'Bilgisayar',       icon: '\u{1F4BB}' },
-    lighting:        { label: 'Aydinlatma',       icon: '\u{1F4A1}' },
-    water_heater:    { label: 'Su Isitici',       icon: '\u{1F6BF}' },
-    dryer:           { label: 'Kurutma Mak.',     icon: '\u{1F300}' },
+// ─── Device icons (labels moved inside component for i18n) ──────────────────
+const DEVICE_ICONS = {
+    fridge:          '\u{1F9CA}',
+    tv:              '\u{1F4FA}',
+    ac:              '\u{2744}\u{FE0F}',
+    washing_machine: '\u{1F455}',
+    dishwasher:      '\u{1F37D}\u{FE0F}',
+    oven:            '\u{1F525}',
+    computer:        '\u{1F4BB}',
+    lighting:        '\u{1F4A1}',
+    water_heater:    '\u{1F6BF}',
+    dryer:           '\u{1F300}',
 };
 
 // ─── Room type → default devices mapping (mirrors useSceneStore ROOM_PRESETS) ─
@@ -58,9 +59,9 @@ const DEFAULT_SPECS = {
 // ─── Home presets ────────────────────────────────────────────────────────────
 const HOME_PRESETS = {
     small: {
-        label: 'Kucuk Ev',
+        labelKey: 'preset.small',
+        descKey: 'preset.smallDesc',
         subtitle: '2+1',
-        description: 'Tek kisilik veya cift yasama uygun, kompakt bir ev.',
         icon: '\u{1F3E0}',
         rooms: [
             { name: 'Oturma Odasi', roomType: 'Oturma Odasi', width: 5, depth: 4, height: 3 },
@@ -70,9 +71,9 @@ const HOME_PRESETS = {
         ],
     },
     medium: {
-        label: 'Orta Ev',
+        labelKey: 'preset.medium',
+        descKey: 'preset.mediumDesc',
         subtitle: '3+1',
-        description: 'Aileler icin ideal, genis yasam alani.',
         icon: '\u{1F3E1}',
         rooms: [
             { name: 'Oturma Odasi',   roomType: 'Oturma Odasi', width: 6, depth: 5, height: 3 },
@@ -84,9 +85,9 @@ const HOME_PRESETS = {
         ],
     },
     large: {
-        label: 'Buyuk Ev',
+        labelKey: 'preset.large',
+        descKey: 'preset.largeDesc',
         subtitle: '4+1',
-        description: 'Genis aile veya ev ofisi icin, tum olanaklar.',
         icon: '\u{1F3F0}',
         rooms: [
             { name: 'Oturma Odasi',   roomType: 'Oturma Odasi',  width: 7, depth: 6, height: 3 },
@@ -117,6 +118,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
     const [nextRoomId, setNextRoomId] = useState(2);
 
     const { user } = useAuth();
+    const { t } = useLanguage();
     const addRoom       = useSceneStore((s) => s.addRoom);
     const addDevice     = useSceneStore((s) => s.addDevice);
     const setEnergyData = useSceneStore((s) => s.setEnergyData);
@@ -276,8 +278,8 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                     className="flex flex-col items-center gap-4"
                 >
                     <div className="w-12 h-12 rounded-full border-2 border-emerald-500/30 border-t-emerald-500 animate-spin" />
-                    <p className="text-white font-semibold text-lg">Eviniz kuruluyor...</p>
-                    <p className="text-white/50 text-sm">Odalar ve cihazlar ekleniyor</p>
+                    <p className="text-white font-semibold text-lg">{t('settingUpHome')}</p>
+                    <p className="text-white/50 text-sm">{t('addingRoomsDevices')}</p>
                 </motion.div>
             </div>
         );
@@ -314,12 +316,12 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                         </div>
                         <div>
                             <h2 className="font-bold text-white text-base">
-                                {step === STEP_CUSTOM ? 'Ozel Ev Tasarla' : 'Evinizi Kurun'}
+                                {step === STEP_CUSTOM ? t('customDesign') : t('setupHome')}
                             </h2>
                             <p className="text-xs mt-0.5" style={{ color: '#555' }}>
                                 {step === STEP_CUSTOM
-                                    ? 'Odalari ve cihazlari kendiniz belirleyin'
-                                    : 'Hazir sablonlardan secin veya kendiniz tasarlayin'}
+                                    ? t('designRooms')
+                                    : t('selectOrCustom')}
                             </p>
                         </div>
                     </div>
@@ -332,7 +334,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                 onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = '#444'; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.color = '#888'; e.currentTarget.style.borderColor = '#2a2a2a'; }}
                             >
-                                Geri
+                                {t('back')}
                             </button>
                         )}
                         <button onClick={onClose}
@@ -389,19 +391,19 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                 )}
 
                                                 <div className="text-3xl mb-3">{preset.icon}</div>
-                                                <h3 className="text-white font-bold text-base mb-0.5">{preset.label}</h3>
+                                                <h3 className="text-white font-bold text-base mb-0.5">{t(preset.labelKey)}</h3>
                                                 <span className="text-xs font-medium px-2 py-0.5 rounded-md inline-block mb-3"
                                                     style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>
                                                     {preset.subtitle}
                                                 </span>
                                                 <p className="text-xs leading-relaxed mb-4" style={{ color: '#777' }}>
-                                                    {preset.description}
+                                                    {t(preset.descKey)}
                                                 </p>
 
                                                 {/* Room list */}
                                                 <div className="mb-3">
                                                     <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#555' }}>
-                                                        Odalar ({preset.rooms.length})
+                                                        {t('rooms')} ({preset.rooms.length})
                                                     </p>
                                                     <div className="flex flex-wrap gap-1.5">
                                                         {preset.rooms.map((r, i) => (
@@ -416,17 +418,16 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                 {/* Device list */}
                                                 <div>
                                                     <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#555' }}>
-                                                        Cihazlar ({roomDevices.length})
+                                                        {t('devices')} ({roomDevices.length})
                                                     </p>
                                                     <div className="flex flex-wrap gap-1.5">
                                                         {uniqueDevices.map((d) => {
                                                             const count = roomDevices.filter((x) => x === d).length;
-                                                            const meta = DEVICE_META[d];
                                                             return (
                                                                 <span key={d} className="text-[11px] px-2 py-1 rounded-md flex items-center gap-1"
                                                                     style={{ background: '#1e1e1e', color: '#aaa' }}>
-                                                                    <span>{meta?.icon}</span>
-                                                                    <span>{meta?.label}{count > 1 ? ` x${count}` : ''}</span>
+                                                                    <span>{DEVICE_ICONS[d]}</span>
+                                                                    <span>{t(`device.${d}`)}{count > 1 ? ` x${count}` : ''}</span>
                                                                 </span>
                                                             );
                                                         })}
@@ -458,7 +459,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                 onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(5,150,105,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }}
                                             >
                                                 <Sparkles size={16} />
-                                                {HOME_PRESETS[selectedPreset].label} Kur
+                                                {t(HOME_PRESETS[selectedPreset].labelKey)} — {t('buildHome')}
                                                 <ChevronRight size={16} />
                                             </button>
                                         </motion.div>
@@ -468,7 +469,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                 {/* Divider */}
                                 <div className="flex items-center gap-4 mb-6">
                                     <div className="flex-1 h-px" style={{ background: '#1e1e1e' }} />
-                                    <span className="text-xs font-medium" style={{ color: '#555' }}>veya</span>
+                                    <span className="text-xs font-medium" style={{ color: '#555' }}>{t('or')}</span>
                                     <div className="flex-1 h-px" style={{ background: '#1e1e1e' }} />
                                 </div>
 
@@ -488,9 +489,9 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                             <Pencil size={20} style={{ color: '#818cf8' }} />
                                         </div>
                                         <div className="flex-1">
-                                            <h3 className="text-white font-bold text-sm mb-1">Ozel Tasarim</h3>
+                                            <h3 className="text-white font-bold text-sm mb-1">{t('customDesign')}</h3>
                                             <p className="text-xs" style={{ color: '#777' }}>
-                                                Oda ekleyin, isimlendirin, cihazlari secin - tamamen size ozel bir ev olusturun.
+                                                {t('customDesignDesc')}
                                             </p>
                                         </div>
                                         <ChevronRight size={20} style={{ color: '#555' }} />
@@ -519,7 +520,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                     {/* Room name */}
                                                     <div>
                                                         <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: '#555' }}>
-                                                            Oda Adi
+                                                            {t('roomName')}
                                                         </label>
                                                         <input
                                                             type="text"
@@ -538,7 +539,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                     {/* Room type */}
                                                     <div>
                                                         <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: '#555' }}>
-                                                            Oda Tipi
+                                                            {t('roomType')}
                                                         </label>
                                                         <select
                                                             value={room.roomType}
@@ -573,9 +574,9 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                             {/* Room dimensions */}
                                             <div className="grid grid-cols-3 gap-3 mb-3">
                                                 {[
-                                                    { key: 'width', label: 'Genislik (m)' },
-                                                    { key: 'depth', label: 'Derinlik (m)' },
-                                                    { key: 'height', label: 'Yukseklik (m)' },
+                                                    { key: 'width', label: `${t('width')} (m)` },
+                                                    { key: 'depth', label: `${t('depth')} (m)` },
+                                                    { key: 'height', label: `${t('height')} (m)` },
                                                 ].map(({ key, label }) => (
                                                     <div key={key}>
                                                         <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: '#555' }}>
@@ -607,11 +608,10 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                             {/* Device toggles */}
                                             <div>
                                                 <label className="text-[10px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#555' }}>
-                                                    Cihazlar
+                                                    {t('devices')}
                                                 </label>
                                                 <div className="flex flex-wrap gap-2">
                                                     {ALL_DEVICE_TYPES.map((type) => {
-                                                        const meta = DEVICE_META[type];
                                                         const active = room.devices.includes(type);
                                                         return (
                                                             <button
@@ -625,8 +625,8 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                                     cursor: 'pointer',
                                                                 }}
                                                             >
-                                                                <span>{meta?.icon}</span>
-                                                                <span>{meta?.label}</span>
+                                                                <span>{DEVICE_ICONS[type]}</span>
+                                                                <span>{t(`device.${type}`)}</span>
                                                             </button>
                                                         );
                                                     })}
@@ -650,7 +650,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#888'; }}
                                 >
                                     <Plus size={16} />
-                                    Oda Ekle
+                                    {t('addRoom')}
                                 </button>
 
                                 {/* Apply custom button */}
@@ -671,7 +671,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                         }}
                                     >
                                         <Sparkles size={16} />
-                                        Evi Kur ({customRooms.length} oda)
+                                        {t('buildHome')} ({customRooms.length} {t('rooms').toLowerCase()})
                                         <ChevronRight size={16} />
                                     </button>
                                 </div>

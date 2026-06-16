@@ -119,7 +119,7 @@ const DashboardLayout = () => {
                     }
                 });
             })
-            .catch(() => toast.error('Veriler yüklenemedi. Lütfen sayfayı yenileyin.'));
+            .catch(() => toast.error(t('dataLoadError')));
     }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
@@ -271,20 +271,20 @@ const DashboardLayout = () => {
         setPendingRoomAttach(null);
     }, [addRoom, setPendingRoomAttach]);
 
-    const displayName  = user?.fullName || user?.email?.split('@')[0] || 'Kullanıcı';
+    const displayName  = user?.fullName || user?.email?.split('@')[0] || t('defaultUser');
 
     // ── Cihaz tüketim sıralaması (bar chart için) ─────────────────────────
     const DEVICE_LABELS = {
-        fridge:          'Buzdolabı',
-        tv:              'Televizyon',
-        ac:              'Klima',
-        washing_machine: 'Çamaşır Mak.',
-        dishwasher:      'Bulaşık Mak.',
-        oven:            'Fırın',
-        computer:        'Bilgisayar',
-        lighting:        'Aydınlatma',
-        water_heater:    'Su Isıtıcı',
-        dryer:           'Kurutma Mak.',
+        fridge:          t('device.fridge'),
+        tv:              t('device.tv'),
+        ac:              t('device.ac'),
+        washing_machine: t('device.washing_machine'),
+        dishwasher:      t('device.dishwasher'),
+        oven:            t('device.oven'),
+        computer:        t('device.computer'),
+        lighting:        t('device.lighting'),
+        water_heater:    t('device.water_heater'),
+        dryer:           t('device.dryer'),
     };
     const devicesByKwh = useMemo(() => {
         return [...objects]
@@ -301,7 +301,7 @@ const DashboardLayout = () => {
 
     // ── Trend: tahmin vs fatura ortalaması (veya Türkiye ort. 280 kWh) ───
     const trendRef  = billsAvgKwh && billsAvgKwh > 0 ? billsAvgKwh : 280;
-    const trendLabel = billsAvgKwh && billsAvgKwh > 0 ? 'Fatura ort.' : 'Türkiye ort.';
+    const trendLabel = billsAvgKwh && billsAvgKwh > 0 ? t('billAvg') : t('turkeyAvg');
 
     // Gauge offset — clamp totalKwh to 0-600 for visual
     const gaugeKwh    = homeTotals.kwh;
@@ -495,7 +495,7 @@ const DashboardLayout = () => {
                         <button
                             onClick={() => setIsPanelCollapsed(v => !v)}
                             className="absolute -left-3.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full flex items-center justify-center transition-all"
-                            title={isPanelCollapsed ? 'Paneli aç' : 'Paneli küçült'}
+                            title={isPanelCollapsed ? t('expandPanel') : t('collapsePanel')}
                             style={{
                                 background: 'var(--color-surface)',
                                 border: '1px solid var(--color-border)',
@@ -529,15 +529,15 @@ const DashboardLayout = () => {
                         {isPanelCollapsed && (
                             <div className="flex flex-col items-center justify-center gap-3 h-full py-6">
                                 {[
-                                    { id: 'ozet',     label: 'Ö' },
-                                    { id: 'oneriler', label: 'İ' },
-                                    { id: 'siralama', label: 'S' },
-                                    { id: 'faturalar', label: 'F' },
+                                    { id: 'ozet',     label: t('tabOverviewShort') },
+                                    { id: 'oneriler', label: t('tabSuggestionsShort') },
+                                    { id: 'siralama', label: t('tabRankingShort') },
+                                    { id: 'faturalar', label: t('tabBillsShort') },
                                 ].map(tab => (
                                     <button
                                         key={tab.id}
                                         onClick={() => { setHomeTab(tab.id); setIsPanelCollapsed(false); }}
-                                        title={tab.id === 'ozet' ? 'Özet' : tab.id === 'oneriler' ? 'Öneriler' : tab.id === 'siralama' ? 'Sıralama' : 'Faturalar'}
+                                        title={tab.id === 'ozet' ? t('tabOverview') : tab.id === 'oneriler' ? t('tabSuggestions') : tab.id === 'siralama' ? t('tabRanking') : t('tabBills')}
                                         className="w-8 h-8 rounded-xl text-[11px] font-black transition-all"
                                         style={{
                                             background: homeTab === tab.id ? 'rgba(59,130,246,0.2)' : 'transparent',
@@ -560,7 +560,7 @@ const DashboardLayout = () => {
                                     <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--color-subtle)' }}>{t('deviceDetail')}</span>
                                     <button onClick={closePinnedPanel}
                                         className="p-1 rounded-md transition-colors"
-                                        title="Kapat"
+                                        title={t('close')}
                                         style={{ color: 'var(--color-subtle)', background: 'transparent', cursor: 'pointer' }}
                                         onMouseEnter={e => e.currentTarget.style.color = 'var(--color-text)'}
                                         onMouseLeave={e => e.currentTarget.style.color = 'var(--color-subtle)'}>
@@ -592,7 +592,7 @@ const DashboardLayout = () => {
                                             style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
                                             onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
                                             onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}>
-                                            <Trash2 size={12} /> Odayı Sil
+                                            <Trash2 size={12} /> {t('deleteRoom')}
                                         </button>
                                     </div>
                                 )}
@@ -601,10 +601,10 @@ const DashboardLayout = () => {
                                 <div className="flex-shrink-0 flex rounded-xl overflow-hidden"
                                     style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', padding: 3, gap: 2 }}>
                                     {[
-                                        { id: 'ozet',     label: 'Özet' },
-                                        { id: 'oneriler', label: 'Öneriler' },
-                                        { id: 'siralama', label: 'Sıralama' },
-                                        { id: 'faturalar', label: 'Faturalar' },
+                                        { id: 'ozet',     label: t('tabOverview') },
+                                        { id: 'oneriler', label: t('tabSuggestions') },
+                                        { id: 'siralama', label: t('tabRanking') },
+                                        { id: 'faturalar', label: t('tabBills') },
                                     ].map(tab => (
                                         <button key={tab.id} onClick={() => setHomeTab(tab.id)}
                                             className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
@@ -705,7 +705,7 @@ const DashboardLayout = () => {
                                                         }}
                                                     >
                                                         <span>{isBelow ? '▼' : '▲'}</span>
-                                                        <span>{trendLabel}'ndan {Math.abs(delta).toFixed(0)}% {isBelow ? 'az' : 'fazla'}</span>
+                                                        <span>{t('trendCompare').replace('{label}', trendLabel).replace('{pct}', Math.abs(delta).toFixed(0)).replace('{dir}', t(isBelow ? 'less' : 'more'))}</span>
                                                     </motion.div>
                                                 );
                                             })()}
@@ -719,7 +719,7 @@ const DashboardLayout = () => {
                                             <div>
                                                 <p className="text-[10px] font-bold uppercase tracking-widest mb-3"
                                                     style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
-                                                    Cihaz Tüketimi
+                                                    {t('deviceConsumption')}
                                                 </p>
                                                 <div className="flex flex-col gap-2.5">
                                                     {devicesByKwh.map((obj, i) => {
@@ -779,16 +779,16 @@ const DashboardLayout = () => {
                                                     <div className="flex-1">
                                                         <h4 className="text-[10px] font-bold uppercase tracking-widest mb-1.5"
                                                             style={{ color: '#10b981' }}>
-                                                            Evimi Anlat
+                                                            {t('describeHome')}
                                                         </h4>
                                                         <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                                                            Evinizi tarif edin — AI otomatik olarak oda ve cihazlarınızı eklesin.
+                                                            {t('describeHomeDesc')}
                                                         </p>
                                                     </div>
                                                 </div>
                                                 <div className="mt-3 flex items-center justify-end text-xs font-semibold gap-1"
                                                     style={{ color: '#10b981' }}>
-                                                    Başla <ChevronRight size={13} />
+                                                    {t('start')} <ChevronRight size={13} />
                                                 </div>
                                             </motion.div>
                                         )}
@@ -909,7 +909,7 @@ const DashboardLayout = () => {
                         <div style={{ height: 1, background: 'var(--color-border)' }} />
                         <ProfileMenuItem
                             icon={<LogOut size={14} />}
-                            label="Çıkış Yap"
+                            label={t('logout')}
                             onClick={() => { setIsProfileMenuOpen(false); signOut(); }}
                             danger
                         />
@@ -1094,7 +1094,7 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                         </span>
                         {spec?.efficiency_class && (
                             <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>
-                                Verimlilik: <strong style={{ color: 'var(--color-muted)' }}>{spec.efficiency_class}</strong>
+                                {t('efficiency')}: <strong style={{ color: 'var(--color-muted)' }}>{spec.efficiency_class}</strong>
                             </span>
                         )}
                     </div>
@@ -1102,7 +1102,7 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                 {/* Delete button */}
                 <button onClick={onDelete}
                     className="flex-shrink-0 p-2 rounded-lg transition-all"
-                    title="Cihazı Sil (Del)"
+                    title={t('deleteDevice')}
                     style={{ color: 'var(--color-subtle)', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer' }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#f87171'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-subtle)'; e.currentTarget.style.borderColor = 'var(--color-border)'; }}>
@@ -1115,7 +1115,7 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                 <div className="rounded-xl p-3 flex flex-col gap-2"
                     style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
                     <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
-                        {isCycles ? 'Haftalık Kullanım (Sefer)' : 'Günlük Kullanım (Saat)'}
+                        {isCycles ? t('weeklyUsageCycles') : t('dailyUsageHours')}
                     </span>
                     <div className="flex items-center gap-2">
                         <input
@@ -1149,11 +1149,11 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                                 cursor: hasChanged && !isSaving && !isLocked ? 'pointer' : 'not-allowed',
                             }}
                         >
-                            {isSaving ? '…' : 'Kaydet'}
+                            {isSaving ? '…' : t('save')}
                         </button>
                     </div>
                     {isLocked && (
-                        <p className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>Buzdolabı 24 saat çalışır.</p>
+                        <p className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>{t('fridgeAlwaysOn')}</p>
                     )}
                 </div>
             )}
@@ -1161,12 +1161,12 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
             {isLoading && (
                 <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-subtle)' }}>
                     <div className="w-4 h-4 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin flex-shrink-0" />
-                    ML hesaplanıyor…
+                    {t('calculatingML')}
                 </div>
             )}
 
             {isError && (
-                <p className="text-xs" style={{ color: '#f87171', opacity: 0.7 }}>ML backend bağlanamadı. Gerçek veri yok.</p>
+                <p className="text-xs" style={{ color: '#f87171', opacity: 0.7 }}>{t('mlBackendError')}</p>
             )}
 
             {!isLoading && !isError && (
@@ -1204,8 +1204,8 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                     {/* Theoretical vs real */}
                     {theoretical > 0 && (
                         <div className="text-xs flex justify-between" style={{ color: 'var(--color-subtle)' }}>
-                            <span>Teorik: {theoretical.toFixed(1)} kWh</span>
-                            <span>Gerçek: <span style={{ color: accentColor }}>{kwh.toFixed(1)} kWh</span></span>
+                            <span>{t('theoretical')}: {theoretical.toFixed(1)} kWh</span>
+                            <span>{t('actual')}: <span style={{ color: accentColor }}>{kwh.toFixed(1)} kWh</span></span>
                         </div>
                     )}
 

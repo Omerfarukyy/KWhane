@@ -23,22 +23,12 @@ import { Target, Loader2, Pencil, X, CheckCircle2, AlertTriangle, AlertCircle, I
 import toast from 'react-hot-toast';
 import { getActiveGoal, upsertGoal, deleteGoal, getDefaultGoalPeriod, monthStart, monthEnd } from '../../../services/goalsService';
 import { getBillSummary } from '../../../services/billsService';
+import { useLanguage } from '../../../contexts/LanguageProvider';
 
 // Threshold matching Phase A.5 diagnostics: a |sim - bill| residual above this
 // surfaces a calibration warning so the user knows the goal-tracking signal
 // they're watching might not match real life.
 const CALIBRATION_WARN_PCT = 15;
-
-const formatPeriod = (startIso, endIso) => {
-    const fmt = (iso) => new Date(iso).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
-    return `${fmt(startIso)} – ${fmt(endIso)}`;
-};
-
-const STATUS_STYLES = {
-    on_track: { color: '#22c55e', bg: 'rgba(34,197,94,0.06)',  border: 'rgba(34,197,94,0.22)', icon: CheckCircle2, label: 'Hedef yolunda' },
-    tight:    { color: '#f59e0b', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.22)', icon: AlertCircle,  label: 'Sınırda' },
-    over:     { color: '#ef4444', bg: 'rgba(239,68,68,0.06)',  border: 'rgba(239,68,68,0.22)', icon: AlertTriangle, label: 'Hedef aşılıyor' },
-};
 
 function classifyStatus(projectedKwh, targetKwh) {
     if (!targetKwh) return 'on_track';
@@ -61,6 +51,20 @@ const StreakCard = ({ userId, predictedKwh }) => {
     // recent bill so the goal lines up with the actual billing cycle.
     // Falls back to the current calendar month when no bill exists.
     const [defaultPeriod, setDefaultPeriod] = useState(null);
+
+    const { t, lang } = useLanguage();
+
+    const formatPeriod = (startIso, endIso) => {
+        const locale = lang === 'tr' ? 'tr-TR' : 'en-US';
+        const fmt = (iso) => new Date(iso).toLocaleDateString(locale, { day: '2-digit', month: 'short' });
+        return `${fmt(startIso)} – ${fmt(endIso)}`;
+    };
+
+    const STATUS_STYLES = {
+        on_track: { color: '#22c55e', bg: 'rgba(34,197,94,0.06)',  border: 'rgba(34,197,94,0.22)', icon: CheckCircle2, label: t('onTrack') },
+        tight:    { color: '#f59e0b', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.22)', icon: AlertCircle,  label: t('tight') },
+        over:     { color: '#ef4444', bg: 'rgba(239,68,68,0.06)',  border: 'rgba(239,68,68,0.22)', icon: AlertTriangle, label: t('over') },
+    };
 
     // Load goal + bill summary + default period in parallel.
     useEffect(() => {
@@ -131,7 +135,7 @@ const StreakCard = ({ userId, predictedKwh }) => {
             <div className="rounded-2xl p-3 flex items-center gap-2"
                 style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
                 <Loader2 size={14} className="animate-spin" style={{ color: 'var(--color-subtle)' }} />
-                <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>Hedef yükleniyor…</span>
+                <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>{t('loadingGoal')}</span>
             </div>
         );
     }
@@ -139,7 +143,7 @@ const StreakCard = ({ userId, predictedKwh }) => {
     const handleSave = async () => {
         const target = parseFloat(draft);
         if (!Number.isFinite(target) || target <= 0) {
-            toast.error('Geçerli bir hedef girin (kWh).');
+            toast.error(t('invalidGoal'));
             return;
         }
         setSaving(true);
@@ -152,24 +156,24 @@ const StreakCard = ({ userId, predictedKwh }) => {
         const result = await upsertGoal({ userId, targetKwh: target, ...periodOverride });
         setSaving(false);
         if (result.error) {
-            toast.error('Hedef kaydedilemedi.');
+            toast.error(t('goalSaveError'));
             return;
         }
         setGoal(result.data);
         setEditing(false);
         setDraft('');
-        toast.success('Aylık hedef kaydedildi.');
+        toast.success(t('goalSaved'));
     };
 
     const handleClear = async () => {
         if (!goal) return;
         const result = await deleteGoal(goal.id);
         if (result.error) {
-            toast.error('Hedef silinemedi.');
+            toast.error(t('goalDeleteError'));
             return;
         }
         setGoal(null);
-        toast.success('Hedef kaldırıldı.');
+        toast.success(t('goalDeleted'));
     };
 
     // ── No goal — show CTA ──────────────────────────────────────────────
@@ -180,14 +184,14 @@ const StreakCard = ({ userId, predictedKwh }) => {
                 <div className="flex items-center gap-2 mb-2">
                     <Target size={14} style={{ color: '#c084fc' }} />
                     <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#c084fc' }}>
-                        Aylık Hedef
+                        {t('monthlyGoal')}
                     </p>
                 </div>
 
                 {!editing ? (
                     <>
                         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                            Bu ay için bir tüketim hedefi belirleyin — sayılar ilerledikçe sizi haberdar edelim.
+                            {t('setGoalDesc')}
                         </p>
                         <button
                             onClick={() => {
@@ -201,26 +205,26 @@ const StreakCard = ({ userId, predictedKwh }) => {
                                 cursor:     'pointer',
                             }}
                         >
-                            Hedef Belirle
+                            {t('setGoal')}
                         </button>
                     </>
                 ) : (
                     <div className="flex flex-col gap-2 mt-1">
                         {projection.kwh && (
                             <p className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>
-                                {projection.source === 'bill' ? 'Faturanıza' : 'Simülasyona'} göre tipik tüketim:{' '}
+                                {projection.source === 'bill' ? t('basedOnBillGoal') : t('basedOnSimGoal')} {t('typicalConsumption')}{' '}
                                 <strong style={{ color: 'var(--color-muted)' }}>{Math.round(projection.kwh)} kWh/ay</strong>
                             </p>
                         )}
                         {defaultPeriod && (
                             <p className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>
-                                Hedef dönemi:{' '}
+                                {t('goalPeriod')}:{' '}
                                 <strong style={{ color: 'var(--color-muted)' }}>
                                     {formatPeriod(defaultPeriod.periodStart, defaultPeriod.periodEnd)}
                                 </strong>
                                 {' '}
                                 <span style={{ color: 'var(--color-subtle)' }}>
-                                    ({defaultPeriod.source === 'bill' ? 'son faturanızdan' : 'takvim ayı'})
+                                    ({defaultPeriod.source === 'bill' ? t('fromLastBill') : t('calendarMonth')})
                                 </span>
                             </p>
                         )}
@@ -248,7 +252,7 @@ const StreakCard = ({ userId, predictedKwh }) => {
                                 className="px-3 py-2 rounded-lg text-xs font-semibold transition disabled:opacity-50"
                                 style={{ background: '#a855f7', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer' }}
                             >
-                                {saving ? '…' : 'Kaydet'}
+                                {saving ? '…' : t('save')}
                             </button>
                             <button
                                 onClick={() => { setEditing(false); setDraft(''); }}
@@ -280,13 +284,13 @@ const StreakCard = ({ userId, predictedKwh }) => {
                 <div className="flex items-center gap-2 min-w-0">
                     <Target size={14} style={{ color: styleSet.color }} />
                     <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: styleSet.color }}>
-                        Aylık Hedef
+                        {t('monthlyGoal')}
                     </p>
                 </div>
                 <div className="flex items-center gap-1">
                     <button onClick={() => { setDraft(goal.target_kwh.toString()); setEditing(true); }}
                         className="p-1 rounded-md transition"
-                        title="Hedefi düzenle"
+                        title={t('editGoal')}
                         style={{ color: 'var(--color-subtle)', cursor: 'pointer' }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
                         onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-subtle)')}>
@@ -294,7 +298,7 @@ const StreakCard = ({ userId, predictedKwh }) => {
                     </button>
                     <button onClick={handleClear}
                         className="p-1 rounded-md transition"
-                        title="Hedefi kaldır"
+                        title={t('removeGoal')}
                         style={{ color: 'var(--color-subtle)', cursor: 'pointer' }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')}
                         onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-subtle)')}>
@@ -309,7 +313,7 @@ const StreakCard = ({ userId, predictedKwh }) => {
                     <span className="text-2xl font-black" style={{ color: 'var(--color-text)' }}>
                         {Math.round(goal.target_kwh)}
                     </span>
-                    <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>kWh hedef</span>
+                    <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>{t('kwhGoal')}</span>
                 </div>
                 <span className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: styleSet.color }}>
                     <StatusIcon size={11} />
@@ -339,7 +343,7 @@ const StreakCard = ({ userId, predictedKwh }) => {
                     <button onClick={handleSave} disabled={saving}
                         className="px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50"
                         style={{ background: styleSet.color, color: '#fff', cursor: saving ? 'not-allowed' : 'pointer' }}>
-                        {saving ? '…' : 'Kaydet'}
+                        {saving ? '…' : t('save')}
                     </button>
                     <button onClick={() => { setEditing(false); setDraft(''); }}
                         className="px-2 py-1.5 rounded-lg text-xs transition"
@@ -353,9 +357,9 @@ const StreakCard = ({ userId, predictedKwh }) => {
             <div>
                 <div className="flex justify-between text-[10px] mb-1" style={{ color: 'var(--color-subtle)' }}>
                     <span>
-                        {formatPeriod(goal.period_start, goal.period_end)} · {period.elapsedDays}/{period.totalDays} gün
+                        {formatPeriod(goal.period_start, goal.period_end)} · {period.elapsedDays}/{period.totalDays} {t('days')}
                     </span>
-                    <span>%{Math.round(period.elapsedPct)} yoldasınız</span>
+                    <span>%{Math.round(period.elapsedPct)} {t('completed')}</span>
                 </div>
                 <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border-2)' }}>
                     <div className="h-full rounded-full transition-all duration-700"
@@ -370,10 +374,10 @@ const StreakCard = ({ userId, predictedKwh }) => {
                     <div className="flex items-baseline justify-between">
                         <div className="flex items-baseline gap-1.5">
                             <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
-                                Tahmini ay sonu
+                                {t('projectedMonthEnd')}
                             </span>
                             <span className="text-[9px]" style={{ color: 'var(--color-subtle)' }}>
-                                ({projection.source === 'bill' ? 'fatura' : 'simülasyon'})
+                                ({projection.source === 'bill' ? t('bill') : t('simulation')})
                             </span>
                         </div>
                         <span className="text-sm font-bold" style={{ color: styleSet.color }}>
@@ -386,7 +390,7 @@ const StreakCard = ({ userId, predictedKwh }) => {
                 </div>
             ) : (
                 <p className="text-[11px] italic" style={{ color: 'var(--color-subtle)' }}>
-                    Cihaz veya fatura ekleyince ay sonu tahmini görünecek.
+                    {t('noProjectionYet')}
                 </p>
             )}
 
@@ -399,11 +403,12 @@ const StreakCard = ({ userId, predictedKwh }) => {
                     }}>
                     <Info size={12} style={{ color: '#f59e0b', marginTop: 2, flexShrink: 0 }} />
                     <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                        Simülasyonunuz ({Math.round(calibrationGap.simulationKwh)} kWh)
-                        son faturanızdan ({Math.round(calibrationGap.billKwh)} kWh)
-                        {' '}<strong>%{Math.abs(calibrationGap.deltaPct).toFixed(0)} {calibrationGap.deltaPct > 0 ? 'yüksek' : 'düşük'}</strong>.
-                        İlerleme simülasyona göre hesaplanıyor — gerçek tüketimle uyum için
-                        {' '}<span style={{ color: '#f59e0b', fontWeight: 600 }}>Faturalar</span> sekmesinden kalibrasyon önerilerini uygulayın.
+                        {t('calibrationGapPrefix')
+                            .replace('{sim}', Math.round(calibrationGap.simulationKwh))
+                            .replace('{bill}', Math.round(calibrationGap.billKwh))}
+                        {' '}<strong>%{Math.abs(calibrationGap.deltaPct).toFixed(0)} {calibrationGap.deltaPct > 0 ? t('higher') : t('lower')}</strong>.
+                        {' '}{t('calibrationWarning')}
+                        {' '}<span style={{ color: '#f59e0b', fontWeight: 600 }}>{t('calibrationAction')}</span>
                     </p>
                 </div>
             )}

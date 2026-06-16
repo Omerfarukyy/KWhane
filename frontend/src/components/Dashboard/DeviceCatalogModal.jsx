@@ -26,20 +26,6 @@ const DEVICE_PROFILES = {
 };
 
 
-const DEVICE_CATEGORIES = [
-    { type: 'fridge',          label: 'Buzdolabı',         icon: '🧊' },
-    { type: 'tv',              label: 'Televizyon',         icon: '📺' },
-    { type: 'ac',              label: 'Klima',              icon: '❄️' },
-    { type: 'washing_machine', label: 'Çamaşır Mak.',       icon: '👕' },
-    { type: 'dishwasher',      label: 'Bulaşık Mak.',       icon: '🍽️' },
-    { type: 'oven',            label: 'Fırın',              icon: '🔥' },
-    { type: 'computer',        label: 'Bilgisayar',         icon: '💻' },
-    { type: 'lighting',        label: 'Aydınlatma',         icon: '💡' },
-    { type: 'water_heater',    label: 'Su Isıtıcı',         icon: '🚿' },
-    { type: 'dryer',           label: 'Kurutma Mak.',       icon: '🌀' },
-    { type: 'electric_hub',    label: 'Sigorta Kutusu',     icon: '⚡' },
-];
-
 const EFFICIENCY_COLORS = {
     'A+++': '#22d3ee',
     'A++':  '#34d399',
@@ -62,6 +48,21 @@ const EFFICIENCY_COLORS = {
  */
 const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = null, initialQuery = '', disabledTypes = [] }) => {
     const { t } = useLanguage();
+
+    const DEVICE_CATEGORIES = [
+        { type: 'fridge',          label: t('device.fridge'),          icon: '🧊' },
+        { type: 'tv',              label: t('device.tv'),              icon: '📺' },
+        { type: 'ac',              label: t('device.ac'),              icon: '❄️' },
+        { type: 'washing_machine', label: t('device.washing_machine'), icon: '👕' },
+        { type: 'dishwasher',      label: t('device.dishwasher'),      icon: '🍽️' },
+        { type: 'oven',            label: t('device.oven'),            icon: '🔥' },
+        { type: 'computer',        label: t('device.computer'),        icon: '💻' },
+        { type: 'lighting',        label: t('device.lighting'),        icon: '💡' },
+        { type: 'water_heater',    label: t('device.water_heater'),    icon: '🚿' },
+        { type: 'dryer',           label: t('device.dryer'),           icon: '🌀' },
+        { type: 'electric_hub',    label: t('device.electric_hub'),    icon: '⚡' },
+    ];
+
     const [selectedType, setSelectedType] = useState(initialType || 'fridge');
     const [search, setSearch]             = useState(initialQuery || '');
     const [cards, setCards]               = useState([]);
@@ -251,7 +252,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                     style={{ borderRight: '1px solid var(--color-border)' }}>
                     <div className="px-4 py-2 mb-1">
                         <span className="text-xs uppercase tracking-widest font-semibold"
-                            style={{ color: 'var(--color-subtle)' }}>Kategori</span>
+                            style={{ color: 'var(--color-subtle)' }}>{t('category')}</span>
                     </div>
                     {DEVICE_CATEGORIES.map((cat) => {
                         const isDisabled = disabledTypes.includes(cat.type);
@@ -288,7 +289,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                             >
                                 <span className="text-base">{cat.icon}</span>
                                 <span>{cat.label}</span>
-                                {isDisabled && <span className="ml-auto text-[10px]" style={{ color: 'var(--color-subtle)' }}>Eklendi</span>}
+                                {isDisabled && <span className="ml-auto text-[10px]" style={{ color: 'var(--color-subtle)' }}>{t('alreadyAdded')}</span>}
                             </button>
                         );
                     })}
@@ -300,10 +301,10 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                     <div className="flex items-center justify-between px-5 py-4"
                         style={{ borderBottom: '1px solid var(--color-border)' }}>
                         <div>
-                            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Cihaz Seç</h2>
+                            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{t('selectDevice')}</h2>
                             <p className="text-xs" style={{ color: 'var(--color-subtle)' }}>
                                 {DEVICE_CATEGORIES.find((c) => c.type === selectedType)?.label} —&nbsp;
-                                {filtered.length} sonuç
+                                {filtered.length} {t('result')}
                             </p>
                         </div>
                         <button
@@ -321,7 +322,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                     <div className="px-5 pt-3 pb-2">
                         <input
                             type="text"
-                            placeholder="Model ara…"
+                            placeholder={t('searchModel')}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none transition"
@@ -338,12 +339,12 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                         {loading ? (
                             <div className="flex items-center justify-center h-full text-sm"
                                 style={{ color: 'var(--color-subtle)' }}>
-                                Yükleniyor…
+                                {t('loading')}
                             </div>
                         ) : filtered.length === 0 ? (
                             <div className="flex items-center justify-center h-full text-sm"
                                 style={{ color: 'var(--color-subtle)' }}>
-                                Sonuç bulunamadı
+                                {t('noResults')}
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 gap-3 pt-1">
@@ -383,7 +384,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                             <div className="mt-2 text-xs flex gap-3"
                                                 style={{ color: 'var(--color-subtle)' }}>
                                                 <span>{card.nominal_power_watts}W</span>
-                                                <span>{card.daily_usage_hours}h/gün</span>
+                                                <span>{card.daily_usage_hours}{t('hPerDay')}</span>
                                                 {card.year_of_purchase && (
                                                     <span>{card.year_of_purchase}</span>
                                                 )}
@@ -412,11 +413,11 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                     {picked && usageModel && (
                         <div className="px-5 pb-3 pt-2" style={{ background: 'var(--color-surface-2)' }}>
                             <p className="text-xs font-medium uppercase tracking-wider mb-2"
-                                style={{ color: 'var(--color-subtle)' }}>Kullanım Ayarı</p>
+                                style={{ color: 'var(--color-subtle)' }}>{t('usageSetting')}</p>
                             {usageModel.unit === 'cycles' ? (
                                 <div className="flex items-center gap-4">
                                     <div className="flex items-center gap-2">
-                                        <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Haftalık kullanım (kez)</label>
+                                        <label className="text-xs" style={{ color: 'var(--color-muted)' }}>{t('weeklyUsageCycles')}</label>
                                         <input
                                             type="number"
                                             min={1}
@@ -433,7 +434,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                         />
                                     </div>
                                     <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>
-                                        ≈ {(((parseFloat(usageValue) || usageModel.default_cycles) * usageModel.cycle_hours) / 7).toFixed(2)} saat/gün (enerji hesabı için)
+                                        ≈ {(((parseFloat(usageValue) || usageModel.default_cycles) * usageModel.cycle_hours) / 7).toFixed(2)} {t('hPerDay')} ({t('energyCalcNote')})
                                     </span>
                                 </div>
                             ) : usageModel.locked ? (
@@ -449,12 +450,12 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                             color: 'var(--color-subtle)',
                                         }}
                                     />
-                                    <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>saat/gün — Buzdolabı her zaman açıktır</span>
+                                    <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>{t('hPerDay')} — {t('fridgeAlwaysOn')}</span>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-3">
                                     <div className="flex items-center gap-2">
-                                        <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Günlük kullanım (saat)</label>
+                                        <label className="text-xs" style={{ color: 'var(--color-muted)' }}>{t('dailyUsageHours')}</label>
                                         <input
                                             type="number"
                                             min={0}
@@ -471,7 +472,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                         />
                                     </div>
                                     <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>
-                                        {(((parseFloat(usageValue) || usageModel.default_hours) * 30)).toFixed(0)} saat/ay
+                                        {(((parseFloat(usageValue) || usageModel.default_hours) * 30)).toFixed(0)} {t('hPerMonth')}
                                     </span>
                                 </div>
                             )}
@@ -492,14 +493,14 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                 onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'var(--color-surface-2)'; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; e.currentTarget.style.background = 'transparent'; }}
                             >
-                                İptal
+                                {t('cancel')}
                             </button>
                             <button
                                 onClick={handleAdd}
                                 disabled={!picked}
                                 className="px-5 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white shadow transition disabled:opacity-40 disabled:cursor-not-allowed"
                             >
-                                Ekle
+                                {t('add')}
                             </button>
                         </div>
                     </div>

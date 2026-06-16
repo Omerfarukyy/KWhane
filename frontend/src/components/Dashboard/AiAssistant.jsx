@@ -25,7 +25,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
     const { t } = useLanguage();
 
     const [messages, setMessages] = useState([
-        { role: 'assistant', content: 'Eviniz analiz ediliyor…' }
+        { role: 'assistant', content: t('analyzingHome') }
     ]);
     const [inputText, setInputText]               = useState('');
     const [isLoading, setIsLoading]               = useState(false);
@@ -63,7 +63,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                 const spec   = deviceSpecs[obj.id]  || {};
                 const energy = energyData[obj.id]   || {};
                 return {
-                    name:                 spec.name              || obj.type || 'Cihaz',
+                    name:                 spec.name              || obj.type || t('device'),
                     type:                 spec.deviceType        || obj.type || 'unknown',
                     efficiency_class:     spec.efficiencyClass   || 'A',
                     nominal_power_watts:  spec.nominalPowerWatts || spec.power || 0,
@@ -107,14 +107,20 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
             // Build welcome message — prefer real bill numbers when available
             let welcome;
             if (bills.billCount > 0) {
-                welcome = `Son ${bills.billCount} faturanıza göre ortalama ₺${Math.round(bills.avgMonthlyCost)}/ay (${bills.avgMonthlyKwh.toFixed(0)} kWh) ödüyorsunuz. Nereyi konuşalım?`;
+                welcome = t('aiWelcomeBills')
+                    .replace('{n}', bills.billCount)
+                    .replace('{cost}', Math.round(bills.avgMonthlyCost))
+                    .replace('{kwh}', bills.avgMonthlyKwh.toFixed(0));
             } else if (devices.length === 0) {
-                welcome = 'Henüz cihaz eklenmemiş. Sol panelden bir cihaz ekledikten sonra enerji analizinizi yapabilirim.';
+                welcome = t('aiWelcomeNoDevices');
             } else {
                 const hasCosts = totCost > 0;
                 welcome = hasCosts
-                    ? `Evinizde ${devices.length} cihaz var, toplam ${totKwh.toFixed(1)} kWh/ay, ₺${Math.round(totCost)}/ay tahmini maliyet. Ne öğrenmek istersiniz?`
-                    : `Evinizde ${devices.length} cihaz eklenmiş. Enerji hesaplamaları tamamlandığında size daha detaylı bilgi verebilirim. Ne sormak istersiniz?`;
+                    ? t('aiWelcomeDevices')
+                        .replace('{n}', devices.length)
+                        .replace('{kwh}', totKwh.toFixed(1))
+                        .replace('{cost}', Math.round(totCost))
+                    : t('aiWelcomeDevicesNoCost').replace('{n}', devices.length);
             }
 
             setMessages([{ role: 'assistant', content: welcome }]);
@@ -125,7 +131,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
     useEffect(() => {
         if (!isOpen && !embedded) {
             setContextReady(false);
-            setMessages([{ role: 'assistant', content: 'Eviniz analiz ediliyor…' }]);
+            setMessages([{ role: 'assistant', content: t('analyzingHome') }]);
         }
     }, [isOpen, embedded]);
 
@@ -157,8 +163,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
             bill_diagnostic_summary:       readCachedDiagnosticSummary(user?.id),
         });
 
-        const replyContent = result?.reply
-            ?? 'AI servisine bağlanılamadı. Backend\'in çalıştığını ve OPENAI_API_KEY\'in ayarlandığını kontrol edin.';
+        const replyContent = result?.reply ?? t('aiConnectionError');
 
         setMessages((prev) => [...prev, { role: 'assistant', content: replyContent }]);
         setIsLoading(false);
@@ -181,7 +186,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
             <button
                 type="button"
                 onClick={onOpen}
-                aria-label="KWhane AI yardımcısını aç"
+                aria-label={t('openAiAssistant')}
                 className="fixed bottom-6 right-6 z-50 flex items-center justify-center rounded-full transition-transform hover:scale-105"
                 style={{
                     width:      56,
@@ -338,7 +343,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Bir şey sor… (Enter ile gönder)"
+                        placeholder={t('askSomething')}
                         disabled={isLoading}
                         className="flex-1 text-sm py-3 pl-4 pr-4 rounded-xl outline-none transition-colors"
                         style={{
@@ -355,7 +360,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                         <button
                             onClick={listening ? stopMic : startMic}
                             disabled={isLoading}
-                            title={listening ? 'Mikrofonu durdur' : 'Sesle yaz'}
+                            title={listening ? t('stopMic') : t('voiceInput')}
                             className="flex-shrink-0 p-2 rounded-xl transition-colors"
                             style={{
                                 color:      listening ? '#ffffff' : 'var(--color-text)',
@@ -390,7 +395,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                     </button>
                 </div>
                 <p className="text-[10px] text-center mt-2 italic" style={{ color: 'var(--color-subtle)' }}>
-                    Llama 3.2 (Ollama) ile desteklenmektedir
+                    {t('poweredBy')}
                 </p>
             </div>
         </div>

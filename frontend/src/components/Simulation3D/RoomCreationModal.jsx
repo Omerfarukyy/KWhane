@@ -1,21 +1,23 @@
 import React, { useState } from 'react';
-
-const ROOM_TYPES = [
-    { value: 'Mutfak',        label: '🍳 Mutfak',           hint: 'Buzdolabı, fırın, bulaşık makinesi önerilir' },
-    { value: 'Oturma Odası',  label: '🛋️ Oturma Odası',    hint: 'TV, klima önerilir' },
-    { value: 'Yatak Odası',   label: '🛏️ Yatak Odası',     hint: 'Klima, bilgisayar önerilir' },
-    { value: 'Banyo',         label: '🚿 Banyo',             hint: 'Su ısıtıcı önerilir' },
-    { value: 'Çamaşır Odası', label: '👕 Çamaşır Odası',   hint: 'Çamaşır & kurutma makinesi önerilir' },
-    { value: 'Ofis',          label: '💼 Ofis',              hint: 'Bilgisayar, aydınlatma önerilir' },
-    { value: 'Genel',         label: '🏠 Genel',             hint: 'Özel öneri yok' },
-];
+import { useLanguage } from '../../contexts/LanguageProvider';
 
 const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
+    const { t } = useLanguage();
     const [name, setName]         = useState('');
     const [roomType, setRoomType] = useState('Genel');
     const [width, setWidth]       = useState(6);
     const [depth, setDepth]       = useState(5);
     const [height, setHeight]     = useState(3);
+
+    const ROOM_TYPES = [
+        { value: 'Mutfak',        label: `🍳 ${t('room.kitchen')}`,  hint: t('roomHint.kitchen') },
+        { value: 'Oturma Odası',  label: `🛋️ ${t('room.living')}`,  hint: t('roomHint.living') },
+        { value: 'Yatak Odası',   label: `🛏️ ${t('room.bedroom')}`, hint: t('roomHint.bedroom') },
+        { value: 'Banyo',         label: `🚿 ${t('room.bathroom')}`, hint: t('roomHint.bathroom') },
+        { value: 'Çamaşır Odası', label: `👕 ${t('room.laundry')}`,  hint: t('roomHint.laundry') },
+        { value: 'Ofis',          label: `💼 ${t('room.office')}`,   hint: t('roomHint.office') },
+        { value: 'Genel',         label: `🏠 ${t('room.general')}`,  hint: t('roomHint.general') },
+    ];
 
     if (!isOpen) return null;
 
@@ -37,7 +39,7 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
         onClose();
     };
 
-    const selectedType = ROOM_TYPES.find((t) => t.value === roomType);
+    const selectedType = ROOM_TYPES.find((rt) => rt.value === roomType);
 
     const inputStyle = {
         background: 'var(--color-surface-2)',
@@ -57,7 +59,7 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
                 {/* Header */}
                 <div className="flex items-center justify-between mb-5">
                     <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-                        Yeni Oda Oluştur
+                        {t('createNewRoom')}
                     </h2>
                     <button
                         onClick={onClose}
@@ -75,7 +77,7 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
                     <div>
                         <label className="block text-xs font-medium mb-1 uppercase tracking-wider"
                             style={{ color: 'var(--color-subtle)' }}>
-                            Oda Adı
+                            {t('roomName')}
                         </label>
                         <input
                             type="text"
@@ -83,7 +85,7 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
                             onChange={(e) => setName(e.target.value)}
                             className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none transition"
                             style={{ ...inputStyle, outlineColor: '#3b82f6' }}
-                            placeholder={roomType || 'Örn: Ana Yatak Odası'}
+                            placeholder={roomType || t('exampleRoomName')}
                             onFocus={e => e.currentTarget.style.borderColor = '#3b82f6'}
                             onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
                         />
@@ -93,16 +95,16 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
                     <div>
                         <label className="block text-xs font-medium mb-1 uppercase tracking-wider"
                             style={{ color: 'var(--color-subtle)' }}>
-                            Oda Tipi
+                            {t('roomType')}
                         </label>
                         <div className="grid grid-cols-2 gap-2">
-                            {ROOM_TYPES.map((t) => {
-                                const isActive = roomType === t.value;
+                            {ROOM_TYPES.map((rt) => {
+                                const isActive = roomType === rt.value;
                                 return (
                                     <button
-                                        key={t.value}
+                                        key={rt.value}
                                         type="button"
-                                        onClick={() => setRoomType(t.value)}
+                                        onClick={() => setRoomType(rt.value)}
                                         className="text-left px-3 py-2 rounded-lg text-sm transition"
                                         style={{
                                             background: isActive ? 'rgba(59,130,246,0.1)' : 'var(--color-surface-2)',
@@ -113,7 +115,7 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
                                         onMouseEnter={e => { if (!isActive) e.currentTarget.style.border = '1px solid var(--color-border-2)'; }}
                                         onMouseLeave={e => { if (!isActive) e.currentTarget.style.border = '1px solid var(--color-border)'; }}
                                     >
-                                        {t.label}
+                                        {rt.label}
                                     </button>
                                 );
                             })}
@@ -130,16 +132,16 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
                     <div>
                         <label className="block text-xs font-medium mb-2 uppercase tracking-wider"
                             style={{ color: 'var(--color-subtle)' }}>
-                            Boyutlar
+                            {t('dimensions')}
                         </label>
                         <p className="text-xs mb-2" style={{ color: 'var(--color-subtle)' }}>
-                            Örn: 4m × 5m oda → 4 genişlik, 5 uzunluk
+                            {t('dimensionsExample')}
                         </p>
                         <div className="grid grid-cols-3 gap-3">
                             {[
-                                { label: 'Genişlik',  key: 'width',  value: width,  setter: setWidth,  min: 2, max: 20 },
-                                { label: 'Uzunluk',   key: 'depth',  value: depth,  setter: setDepth,  min: 2, max: 20 },
-                                { label: 'Yükseklik', key: 'height', value: height, setter: setHeight, min: 2, max: 5  },
+                                { label: t('width'),  key: 'width',  value: width,  setter: setWidth,  min: 2, max: 20 },
+                                { label: t('depth'),  key: 'depth',  value: depth,  setter: setDepth,  min: 2, max: 20 },
+                                { label: t('height'), key: 'height', value: height, setter: setHeight, min: 2, max: 5  },
                             ].map(({ label, key, value, setter, min, max }) => (
                                 <div key={key}>
                                     <span className="block text-xs mb-1" style={{ color: 'var(--color-subtle)' }}>
@@ -187,13 +189,13 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
                             onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.background = 'var(--color-surface-2)'; }}
                             onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-muted)'; e.currentTarget.style.background = 'transparent'; }}
                         >
-                            İptal
+                            {t('cancel')}
                         </button>
                         <button
                             type="submit"
                             className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow transition"
                         >
-                            Oluştur
+                            {t('create')}
                         </button>
                     </div>
                 </form>

@@ -5,22 +5,11 @@ import { efficiencyColor } from '../../utils/efficiencyColor';
 import { USAGE_MODEL } from '../../utils/usageModels';
 import { runFullAnalysis } from '../../services/mlService';
 import { useAuth } from '../../contexts/AuthContext';
-
-const DEVICE_LABELS = {
-    fridge: 'Buzdolabı',
-    tv: 'Televizyon',
-    ac: 'Klima',
-    washing_machine: 'Çamaşır Mak.',
-    dishwasher: 'Bulaşık Mak.',
-    oven: 'Fırın',
-    computer: 'Bilgisayar',
-    lighting: 'Aydınlatma',
-    water_heater: 'Su Isıtıcı',
-    dryer: 'Kurutma Mak.',
-};
+import { useLanguage } from '../../contexts/LanguageProvider';
 
 const DeviceInfoPopup = ({ object, energyData }) => {
     const { user } = useAuth();
+    const { t } = useLanguage();
     const pinnedDeviceId = useSceneStore((s) => s.pinnedDeviceId);
     const setPinnedDeviceId = useSceneStore((s) => s.setPinnedDeviceId);
     const setSelectedId = useSceneStore((s) => s.setSelectedId);
@@ -111,17 +100,17 @@ const DeviceInfoPopup = ({ object, energyData }) => {
                 <div style={styles.header}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={styles.deviceName}>
-                            {spec?.name || DEVICE_LABELS[object.type] || object.type}
+                            {spec?.name || t(`device.${object.type}`) || object.type}
                         </div>
                         <div style={styles.typeBadge}>{object.type}</div>
                     </div>
                     <div style={{ display: 'flex', gap: 4 }}>
-                        <button style={styles.deleteBtn} onClick={handleDelete} title="Sil">
+                        <button style={styles.deleteBtn} onClick={handleDelete} title={t('delete')}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                                 <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
                             </svg>
                         </button>
-                        <button style={styles.closeBtn} onClick={handleClose} title="Kapat">
+                        <button style={styles.closeBtn} onClick={handleClose} title={t('close')}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                                 <line x1="18" y1="6" x2="6" y2="18" />
                                 <line x1="6" y1="6" x2="18" y2="18" />
@@ -134,13 +123,13 @@ const DeviceInfoPopup = ({ object, energyData }) => {
                 {isLoading && (
                     <div style={styles.loadingRow}>
                         <div style={styles.spinner} />
-                        <span style={{ color: '#94a3b8', fontSize: 10 }}>Hesaplanıyor…</span>
+                        <span style={{ color: '#94a3b8', fontSize: 10 }}>{t('calculating')}</span>
                     </div>
                 )}
 
                 {isError && (
                     <div style={{ color: '#f87171', fontSize: 10, textAlign: 'center', padding: '4px 0' }}>
-                        ML bağlanamadı
+                        {t('mlConnectionFailed')}
                     </div>
                 )}
 
@@ -156,7 +145,7 @@ const DeviceInfoPopup = ({ object, energyData }) => {
                                 <span style={styles.statValue}>{Math.round(cost)}</span>
                             </div>
                             <div style={styles.statBox}>
-                                <span style={styles.statLabel}>Verim</span>
+                                <span style={styles.statLabel}>{t('efficiencyShort')}</span>
                                 <span style={{ ...styles.statValue, color: accentColor, fontSize: 12 }}>{score}</span>
                             </div>
                         </div>
@@ -172,7 +161,7 @@ const DeviceInfoPopup = ({ object, energyData }) => {
                 {usageModel && (
                     <div style={styles.usageRow}>
                         <span style={styles.usageLabel}>
-                            {isCycles ? 'Haftalık' : 'Günlük'}
+                            {isCycles ? t('weekly') : t('daily')}
                         </span>
                         <input
                             type="number"
@@ -193,7 +182,7 @@ const DeviceInfoPopup = ({ object, energyData }) => {
                             }}
                         />
                         <span style={{ color: '#64748b', fontSize: 9, flexShrink: 0 }}>
-                            {isCycles ? 'sefer' : 'saat'}
+                            {isCycles ? t('times') : t('hours')}
                         </span>
                         {hasChanged && !isLocked && (
                             <button

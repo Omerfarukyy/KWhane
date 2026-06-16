@@ -4,14 +4,7 @@ import { listBills, deleteBill, getBillSummary } from '../../../services/billsSe
 import BillEntryModal from './BillEntryModal';
 import CalibrationCard from './CalibrationCard';
 import useSceneStore from '../../../store/useSceneStore';
-
-const formatPeriod = (start, end) => {
-    const fmt = (iso) => {
-        const d = new Date(iso);
-        return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
-    };
-    return `${fmt(start)} – ${fmt(end)}`;
-};
+import { useLanguage } from '../../../contexts/LanguageProvider';
 
 const BillsTab = ({ userId }) => {
     const [bills,    setBills]    = useState([]);
@@ -20,6 +13,16 @@ const BillsTab = ({ userId }) => {
     const [modalOpen, setModalOpen] = useState(false);
 
     const setHomeBillValidated = useSceneStore((s) => s.setHomeBillValidated);
+    const { t, lang } = useLanguage();
+
+    const formatPeriod = (start, end) => {
+        const locale = lang === 'tr' ? 'tr-TR' : 'en-US';
+        const fmt = (iso) => {
+            const d = new Date(iso);
+            return d.toLocaleDateString(locale, { day: '2-digit', month: 'short' });
+        };
+        return `${fmt(start)} – ${fmt(end)}`;
+    };
 
     const refresh = useCallback(async () => {
         if (!userId) return;
@@ -55,7 +58,7 @@ const BillsTab = ({ userId }) => {
             <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold uppercase tracking-widest"
                     style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
-                    Faturalar
+                    {t('billsTitle')}
                 </p>
                 <button
                     onClick={() => setModalOpen(true)}
@@ -69,7 +72,7 @@ const BillsTab = ({ userId }) => {
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59,130,246,0.2)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(59,130,246,0.12)')}
                 >
-                    <Plus size={12} /> Ekle
+                    <Plus size={12} /> {t('add')}
                 </button>
             </div>
 
@@ -83,19 +86,19 @@ const BillsTab = ({ userId }) => {
                 <div className="p-4 rounded-2xl"
                     style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}>
                     <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--color-subtle)' }}>
-                        Son {summary.billCount} faturanın ortalaması
+                        {t('billsAvgLabel').replace('{n}', summary.billCount)}
                     </p>
                     <div className="flex items-baseline gap-3">
                         <span className="text-3xl font-black" style={{ color: '#3b82f6' }}>
                             ₺{Math.round(summary.avgMonthlyCost)}
                         </span>
                         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                            {summary.avgMonthlyKwh.toFixed(0)} kWh/ay
+                            {summary.avgMonthlyKwh.toFixed(0)} {t('kwhPerMonth')}
                         </span>
                     </div>
                     {summary.effectiveTariffTlPerKwh !== null && (
                         <p className="text-[11px] mt-2" style={{ color: 'var(--color-subtle)' }}>
-                            Ortalama birim: ₺{summary.effectiveTariffTlPerKwh.toFixed(2)}/kWh
+                            {t('averageRate')}: ₺{summary.effectiveTariffTlPerKwh.toFixed(2)}/kWh
                         </p>
                     )}
                 </div>
@@ -111,9 +114,9 @@ const BillsTab = ({ userId }) => {
                     style={{ color: 'var(--color-subtle)' }}>
                     <Receipt size={28} />
                     <p className="text-xs text-center">
-                        Henüz fatura eklenmemiş.<br />
+                        {t('noBillsYet')}<br />
                         <span style={{ color: 'var(--color-muted)' }}>
-                            Tahmini değerler yerine gerçek fatura verilerinizi kullanmak için fatura ekleyin.
+                            {t('noBillsDesc')}
                         </span>
                     </p>
                 </div>
@@ -140,7 +143,7 @@ const BillsTab = ({ userId }) => {
                             </div>
                             <button
                                 onClick={() => handleDelete(b.id)}
-                                title="Faturayı sil"
+                                title={t('deleteBill')}
                                 className="flex-shrink-0 p-1.5 rounded-lg transition"
                                 style={{
                                     color: 'var(--color-subtle)',

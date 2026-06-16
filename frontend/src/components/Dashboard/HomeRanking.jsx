@@ -20,35 +20,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Users, BarChart3, Zap } from 'lucide-react';
 import { fetchHomeComparison, getHomeMeta } from '../../services/peerComparisonService';
 import { getBillSummary } from '../../services/billsService';
-
-const LABEL_COPY = {
-    below_average: { color: '#22c55e', text: 'Ortalamanın altında' },
-    average:       { color: '#3b82f6', text: 'Ortalamada' },
-    above_average: { color: '#f87171', text: 'Ortalamanın üstünde' },
-};
-
-const SOURCE_COPY = {
-    bill: {
-        tag:             'Faturanıza göre',
-        color:           '#22c55e',
-        // Pill (next to section title)
-        bg:              'rgba(34,197,94,0.12)',
-        border:          'rgba(34,197,94,0.3)',
-        // Headline box tint — same hue as the pill so the whole tab reads green
-        headlineBg:      'rgba(34,197,94,0.06)',
-        headlineBorder:  'rgba(34,197,94,0.2)',
-        headlineNumber:  '#22c55e',
-    },
-    predicted: {
-        tag:             'Tahmine göre',
-        color:           '#60a5fa',
-        bg:              'rgba(59,130,246,0.12)',
-        border:          'rgba(59,130,246,0.3)',
-        headlineBg:      'rgba(59,130,246,0.06)',
-        headlineBorder:  'rgba(59,130,246,0.2)',
-        headlineNumber:  '#3b82f6',
-    },
-};
+import { useLanguage } from '../../contexts/LanguageProvider';
 
 const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
     const [data, setData]               = useState(null);
@@ -56,6 +28,26 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
     const [error, setError]             = useState(false);
     const [billsActualKwh, setBillsActualKwh] = useState(null);
     const [billsLoaded, setBillsLoaded] = useState(false);
+    const { t } = useLanguage();
+
+    const LABEL_COPY = {
+        below_average: { color: '#22c55e', text: t('belowAverage') },
+        average:       { color: '#3b82f6', text: t('atAverage') },
+        above_average: { color: '#f87171', text: t('aboveAverage') },
+    };
+
+    const SOURCE_COPY = {
+        bill: {
+            tag: t('basedOnBill'), color: '#22c55e',
+            bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.3)',
+            headlineBg: 'rgba(34,197,94,0.06)', headlineBorder: 'rgba(34,197,94,0.2)', headlineNumber: '#22c55e',
+        },
+        predicted: {
+            tag: t('basedOnPrediction'), color: '#60a5fa',
+            bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.3)',
+            headlineBg: 'rgba(59,130,246,0.06)', headlineBorder: 'rgba(59,130,246,0.2)', headlineNumber: '#3b82f6',
+        },
+    };
 
     // Pull bill summary once so we know whether to prefer real vs predicted.
     useEffect(() => {
@@ -122,7 +114,7 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
         <div className="flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-widest"
                 style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
-                Hanehalkı Sıralaması
+                {t('householdRanking')}
             </p>
         </div>
     );
@@ -146,9 +138,9 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
                     style={{ color: 'var(--color-subtle)' }}>
                     <Zap size={28} />
                     <p className="text-xs text-center">
-                        Henüz karşılaştırma verisi yok.<br />
+                        {t('noComparisonData')}<br />
                         <span style={{ color: 'var(--color-muted)' }}>
-                            Bir cihaz ekleyin veya bir fatura kaydedin.
+                            {t('noComparisonDesc')}
                         </span>
                     </p>
                 </div>
@@ -174,7 +166,7 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
                 <div className="flex flex-col items-center justify-center py-8 gap-2 text-center"
                     style={{ color: 'var(--color-subtle)' }}>
                     <BarChart3 size={24} />
-                    <p className="text-xs">Sıralama hesaplanamadı.<br />ML servisinin çalıştığından emin olun.</p>
+                    <p className="text-xs">{t('rankingFailed')}<br />{t('rankingFailedDesc')}</p>
                 </div>
             </div>
         );
@@ -203,7 +195,7 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
             <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold uppercase tracking-widest"
                     style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
-                    Hanehalkı Sıralaması
+                    {t('householdRanking')}
                 </p>
                 <span
                     className="text-[10px] font-semibold px-2 py-0.5 rounded-md whitespace-nowrap"
@@ -221,21 +213,21 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
             <div className="p-4 rounded-2xl text-center"
                 style={{ background: sourceInfo.headlineBg, border: `1px solid ${sourceInfo.headlineBorder}` }}>
                 <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-                    Eviniz benzer {data.cluster_size} hane içinde
+                    {t('homeInCluster').replace('{n}', data.cluster_size)}
                 </p>
                 <p className="text-5xl font-black" style={{ color: sourceInfo.headlineNumber }}>
                     %{betterThanPct}
                 </p>
                 <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
-                    'inden daha az enerji kullanıyor
+                    {t('usesLessEnergy')}
                 </p>
             </div>
 
             {/* Distribution bar — user vs cluster average */}
             <div>
                 <div className="flex justify-between text-[10px] mb-1" style={{ color: 'var(--color-subtle)' }}>
-                    <span>Az tüketim</span>
-                    <span>Çok tüketim</span>
+                    <span>{t('lowConsumption')}</span>
+                    <span>{t('highConsumption')}</span>
                 </div>
 
                 {/* "Sen" marker ABOVE the bar so it never overlaps "Ortalama" */}
@@ -243,7 +235,7 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
                     <div className="absolute -translate-x-1/2 flex flex-col items-center leading-none"
                         style={{ left: `${userOnBar}%` }}>
                         <span className="text-[10px] font-bold whitespace-nowrap"
-                            style={{ color: labelInfo.color }}>Ben</span>
+                            style={{ color: labelInfo.color }}>{t('me')}</span>
                         <span style={{ color: labelInfo.color, fontSize: 8, lineHeight: 1 }}>▼</span>
                     </div>
                 </div>
@@ -254,7 +246,7 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
                     />
                     <div className="absolute top-0 bottom-0 w-px"
                         style={{ left: `${avgOnBar}%`, background: 'rgba(255,255,255,0.6)' }}
-                        title="Küme ortalaması"
+                        title={t('average')}
                     />
                 </div>
 
@@ -262,7 +254,7 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
                 <div className="relative mt-1 h-3">
                     <div className="absolute -translate-x-1/2 text-[9px] uppercase tracking-wider whitespace-nowrap"
                         style={{ left: `${avgOnBar}%`, color: 'var(--color-subtle)' }}>
-                        Ortalama
+                        {t('average')}
                     </div>
                 </div>
             </div>
@@ -271,27 +263,27 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
             <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-xl p-3 flex flex-col"
                     style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>Sen</span>
+                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>{t('you')}</span>
                     <span className="text-lg font-black mt-0.5" style={{ color: 'var(--color-text)' }}>
                         {Math.round(data.user_monthly_kwh)}
                     </span>
-                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>kWh/ay</span>
+                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>{t('kwhPerMonth')}</span>
                 </div>
                 <div className="rounded-xl p-3 flex flex-col"
                     style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>Ortalama</span>
+                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>{t('average')}</span>
                     <span className="text-lg font-black mt-0.5" style={{ color: 'var(--color-text)' }}>
                         {Math.round(avg)}
                     </span>
-                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>kWh/ay</span>
+                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>{t('kwhPerMonth')}</span>
                 </div>
                 <div className="rounded-xl p-3 flex flex-col"
                     style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>Fark</span>
+                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>{t('difference')}</span>
                     <span className="text-lg font-black mt-0.5" style={{ color: labelInfo.color }}>
                         {deltaVsAvg >= 0 ? '+' : ''}{Math.round(deltaVsAvg)}
                     </span>
-                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>kWh/ay</span>
+                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>{t('kwhPerMonth')}</span>
                 </div>
             </div>
 
@@ -300,7 +292,9 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
                 style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
                 <Users size={12} style={{ color: labelInfo.color }} />
                 <span style={{ color: 'var(--color-muted)' }}>
-                    Eviniz <strong style={{ color: labelInfo.color }}>{labelInfo.text.toLowerCase()}</strong> tüketiyor.
+                    {t('homeConsumptionLabel').split('{label}')[0]}
+                    <strong style={{ color: labelInfo.color }}>{labelInfo.text.toLowerCase()}</strong>
+                    {t('homeConsumptionLabel').split('{label}')[1]}
                 </span>
             </div>
         </div>
