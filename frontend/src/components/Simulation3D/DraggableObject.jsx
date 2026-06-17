@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import toast from 'react-hot-toast';
@@ -83,16 +83,15 @@ const DraggableObject = ({
     const [isDragging, setIsDragging] = useState(false);
     const [isColliding, setIsColliding] = useState(false);
 
-    // Zustand State
-    const selectedId       = useSceneStore((state) => state.selectedId);
+    // Zustand State — derived selector so this component only re-renders
+    // when its OWN selection state changes, not when any other device is selected.
+    const isSelected       = useSceneStore(useCallback((s) => s.selectedId === objectId, [objectId]));
     const setSelectedId    = useSceneStore((state) => state.setSelectedId);
     const setPinnedDeviceId = useSceneStore((state) => state.setPinnedDeviceId);
     const updateObjectPosition = useSceneStore((state) => state.updateObjectPosition);
     const updateObjectRoom     = useSceneStore((state) => state.updateObjectRoom);
     const setIsDraggingStore = useSceneStore((state) => state.setIsDragging);
     const isCreationMode = useSceneStore((state) => state.isCreationMode);
-
-    const isSelected = selectedId === objectId;
 
     const { camera, gl, raycaster, controls } = useThree();
 

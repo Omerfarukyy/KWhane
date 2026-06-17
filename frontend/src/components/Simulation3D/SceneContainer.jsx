@@ -1,9 +1,11 @@
-import { Suspense, useMemo, useEffect } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Suspense, useMemo, useEffect, useState, useCallback, useRef } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { Grid, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
+import { Home, Loader2 } from 'lucide-react';
 import Lights, { SUN_POSITION } from './Lights';
 import { useTheme } from '../../contexts/ThemeProvider';
+import { useLanguage } from '../../contexts/LanguageProvider';
 import RoomBuilder from './RoomBuilder';
 import CameraControls from './CameraControls';
 import KeyboardCameraControls from './KeyboardCameraControls';
@@ -20,7 +22,7 @@ import useSceneStore from '../../store/useSceneStore';
 import './SceneContainer.css';
 
 // ─── Adjacency detection ─────────────────────────────────────────────────────
-const DOOR_THRESHOLD = 0.35; // rooms within this world-unit distance share a wall
+const DOOR_THRESHOLD = 0.35;
 
 function computeAdjacencies(rooms) {
     const adj = new Map(rooms.map((r) => [r.id, { right: null, left: null, front: null, back: null }]));
@@ -62,50 +64,136 @@ function computeAdjacencies(rooms) {
     return adj;
 }
 
+// ─── GPU warmup: render N frames to compile shaders, then signal ready ───────
+function SceneWarmup({ onReady }) {
+    const count = useRef(0);
+    const done = useRef(false);
+    const { invalidate } = useThree();
+
+    useFrame(() => {
+        if (done.current) return;
+        count.current += 1;
+        invalidate();
+        if (count.current >= 45) {
+            done.current = true;
+            onReady();
+        }
+    });
+
+    return null;
+}
+
+// ─── Adaptive animation loop for demand mode ────────────────────────────────
+// Active interaction → 60 fps, idle > 3 s → 24 fps (saves GPU while
+// keeping LED animations visually smooth).
+function SceneAnimationLoop() {
+    const { invalidate } = useThree();
+    const isDragging = useSceneStore((s) => s.isDragging);
+    const lastActive = useRef(performance.now());
+
+    useEffect(() => {
+        if (isDragging) lastActive.current = performance.now();
+    }, [isDragging]);
+
+    useEffect(() => {
+        let rafId;
+        let prev = 0;
+
+        const tick = (now) => {
+            rafId = requestAnimationFrame(tick);
+            const idle = now - lastActive.current > 3000;
+            const interval = idle ? 41 : 16; // ~24 fps vs ~60 fps
+            if (now - prev >= interval) {
+                invalidate();
+                prev = now;
+            }
+        };
+        rafId = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(rafId);
+    }, [invalidate]);
+
+    // Keep lastActive fresh on pointer / scroll events inside the canvas
+    useFrame(({ gl }) => {
+        const dom = gl.domElement;
+        if (!dom._kwhaneListeners) {
+            const bump = () => { lastActive.current = performance.now(); };
+            dom.addEventListener('pointerdown', bump, { passive: true });
+            dom.addEventListener('wheel', bump, { passive: true });
+            dom._kwhaneListeners = bump;
+        }
+    });
+
+    return null;
+}
+
+// ─── Loading overlay ─────────────────────────────────────────────────────────
+const SceneLoadingOverlay = ({ text }) => (
+    <div className="scene-loading-overlay">
+        <div className="scene-loading-content">
+            <div className="scene-loading-icon-wrap">
+                <Home size={36} strokeWidth={1.5} />
+            </div>
+            <p className="scene-loading-text">{text}</p>
+            <div className="scene-loading-bar">
+                <div className="scene-loading-bar-fill" />
+            </div>
+        </div>
+    </div>
+);
+
 /**
- * SceneContainer.jsx — İzole 3D Sahne Bileşeni
- *
- * Props:
- *   onGhostClick(ghost)    — called when user clicks a ghost device suggestion
- *   onGhostDismiss(id)     — called when user dismisses a ghost via ×
- *   children               — optional extra Three.js elements
+ * SceneContainer.jsx — 3D scene wrapper with loading screen & demand-mode rendering.
  */
 const SceneContainer = ({ children, onGhostClick, onGhostDismiss }) => {
+    const { t } = useLanguage();
     const cameraDistance = 15;
+    const [sceneReady, setSceneReady] = useState(false);
+    const handleReady = useCallback(() => setSceneReady(true), []);
 
     return (
         <div className="scene-container relative">
-            <Suspense
-                fallback={<div className="scene-container__loader">Sahne yükleniyor…</div>}
+            {/* Loading overlay — fades out after GPU warmup */}
+            <div className={`scene-loading-overlay ${sceneReady ? 'scene-loading-overlay--hidden' : ''}`}>
+                <div className="scene-loading-content">
+                    <div className="scene-loading-icon-wrap">
+                        <Home size={36} strokeWidth={1.5} />
+                    </div>
+                    <p className="scene-loading-text">{t('preparingHome')}</p>
+                    <div className="scene-loading-bar">
+                        <div className="scene-loading-bar-fill" />
+                    </div>
+                </div>
+            </div>
+
+            <Canvas
+                shadows="soft"
+                frameloop="demand"
+                gl={{
+                    toneMapping: THREE.NoToneMapping,
+                    outputColorSpace: THREE.SRGBColorSpace,
+                }}
+                camera={{
+                    position: [cameraDistance, cameraDistance * 0.8, cameraDistance],
+                    fov: 50,
+                    near: 0.1,
+                    far: 1000,
+                }}
             >
-                <Canvas
-                    shadows="soft"
-                    frameloop="always"
-                    gl={{
-                        toneMapping: THREE.NoToneMapping,
-                        outputColorSpace: THREE.SRGBColorSpace,
-                    }}
-                    camera={{
-                        position: [cameraDistance, cameraDistance * 0.8, cameraDistance],
-                        fov: 50,
-                        near: 0.1,
-                        far: 1000,
-                    }}
+                <SceneWarmup onReady={handleReady} />
+                <SceneAnimationLoop />
+                <SceneContent
+                    onGhostClick={onGhostClick}
+                    onGhostDismiss={onGhostDismiss}
                 >
-                    <SceneContent
-                        onGhostClick={onGhostClick}
-                        onGhostDismiss={onGhostDismiss}
-                    >
-                        {children}
-                    </SceneContent>
-                </Canvas>
-            </Suspense>
+                    {children}
+                </SceneContent>
+            </Canvas>
         </div>
     );
 };
 
 /**
- * SceneContent — Canvas içindeki dinamik sahne içeriği
+ * SceneContent — dynamic scene hierarchy inside the Canvas.
  */
 const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
     const collision = useCollision();
@@ -121,7 +209,6 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
 
     const adjacencies = useMemo(() => computeAdjacencies(rooms), [rooms]);
 
-    // Per-room heat levels (0=cool, 1=hot) derived from energyData
     const roomHeatLevels = useMemo(() => {
         const roomKwh = {};
         rooms.forEach(r => { roomKwh[r.id] = 0; });
@@ -134,7 +221,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
         const values = Object.values(roomKwh);
         const maxKwh = Math.max(...values);
         const minKwh = Math.min(...values);
-        if (maxKwh < 1) return {}; // no meaningful data yet
+        if (maxKwh < 1) return {};
         const range = maxKwh - minKwh;
         const levels = {};
         Object.entries(roomKwh).forEach(([id, kwh]) => {
@@ -152,19 +239,15 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
 
     return (
         <group onPointerMissed={handlePointerMissed}>
-            {/* ─── Kamera Kontrolleri ──────────────────── */}
             <CameraControls maxDistance={60} minDistance={2} />
             <KeyboardCameraControls />
 
-            {/* ─── Aydınlatma ─────────────────────────── */}
             <Lights />
 
-            {/* ─── Gökyüzü (theme-synced: gündüz/gece) ─── */}
             <SceneBackground isDark={isDark} />
             {isDark ? (
                 <>
                     <Stars radius={100} depth={50} count={4000} factor={4} saturation={0} fade speed={0.5} />
-                    {/* Moon disk near directional-light position */}
                     <mesh position={SUN_POSITION}>
                         <sphereGeometry args={[2.4, 24, 24]} />
                         <meshBasicMaterial color="#e8edff" />
@@ -180,25 +263,18 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                         mieCoefficient={0.005}
                         mieDirectionalG={0.8}
                     />
-                    {/* Decorative static cloud puffs — simple white spheres far above */}
                     <DecorativeClouds />
                 </>
             )}
 
-            {/* ─── Bahçe Zemini (geniş çim alan) ──────── */}
-            <mesh
-                rotation={[-Math.PI / 2, 0, 0]}
-                position={[0, -0.005, 0]}
-                receiveShadow
-            >
+            {/* Ground plane */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.005, 0]} receiveShadow>
                 <planeGeometry args={[200, 200]} />
                 <meshStandardMaterial color={isDark ? '#2a3a26' : '#5d8a4e'} roughness={0.95} metalness={0} />
             </mesh>
 
-            {/* ─── Bahçe Prop'ları (ağaçlar + çalılar) ── */}
             <GardenProps />
 
-            {/* ─── Zemin Izgarası ─────────────────────── */}
             <Grid
                 args={[100, 100]}
                 cellSize={0.5}
@@ -214,11 +290,9 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 position={[0, -0.001, 0]}
             />
 
-            {/* ─── Elektrik Tesisatı ───────────────────── */}
             <ElectricHub />
             <ElectricWiring />
 
-            {/* ─── Dinamik Odalar ──────────────────────── */}
             {rooms.map((r) => (
                 <RoomBuilder
                     key={r.id}
@@ -234,8 +308,6 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 />
             ))}
 
-
-            {/* ─── Ghost (Hologram) Cihazlar ───────────── */}
             {filteredGhosts.map((ghost) => (
                 <GhostDevice
                     key={ghost.id}
@@ -245,10 +317,8 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 />
             ))}
 
-            {/* ─── Yerleştirilmiş Cihazlar ─────────────── */}
             {objects.map((obj) => {
                 const room = rooms.find((r) => r.id === obj.roomId);
-
                 return (
                     <DraggableObject
                         key={obj.id}
@@ -262,7 +332,6 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                         room={room}
                         floorY={obj.position[1]}
                     >
-                        {/* Procedural device mesh for all known types */}
                         {obj.type !== 'box' ? (
                             <ProceduralDevices type={obj.type} size={obj.size} />
                         ) : (
@@ -275,17 +344,15 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 );
             })}
 
-            {/* ─── Enerji Rozeti Overlayları ───────────── */}
             {objects.filter(obj => obj.type !== 'electric_hub').map((obj) => (
                 <EnergyBadge
                     key={`badge-${obj.id}`}
+                    objectId={obj.id}
                     object={obj}
-                    energyData={energyData[obj.id]}
                     heightOffset={0.3}
                 />
             ))}
 
-            {/* ─── Cihaz Bilgi Popup (tıklanınca) ─────── */}
             {objects.filter(obj => obj.type !== 'electric_hub').map((obj) => (
                 <DeviceInfoPopup
                     key={`popup-${obj.id}`}
@@ -294,44 +361,44 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 />
             ))}
 
-            {/* Dışarıdan eklenen ek 3D bileşenler */}
             {children}
         </group>
     );
 };
 
 // ─── SceneBackground ────────────────────────────────────────────────────────
-// Imperative scene.background swap so the night color cleans up properly when
-// the user switches back to light mode (avoids a stuck black or white flash).
 const NIGHT_BG = new THREE.Color('#070b18');
 function SceneBackground({ isDark }) {
     const { scene } = useThree();
     useEffect(() => {
         const prev = scene.background;
-        scene.background = isDark ? NIGHT_BG : null; // null lets <Sky> show through
+        scene.background = isDark ? NIGHT_BG : null;
         return () => { scene.background = prev; };
     }, [isDark, scene]);
     return null;
 }
 
-// ─── DecorativeClouds ───────────────────────────────────────────────────────
-// A handful of low-opacity white spheres scattered in the sky as stylized
-// clouds. Static, no animation, no volumetric maths — replaces drei's
-// <Cloud>/<Clouds> which was filling the canvas white in this scene.
+// ─── DecorativeClouds — shared geometry & material via useMemo ──────────────
+const CLOUD_PUFFS = [
+    { p: [-22, 18, -14], r: 2.6 }, { p: [-18, 18, -14], r: 2.0 }, { p: [-20, 19, -16], r: 1.8 },
+    { p: [16, 22, -20],  r: 2.4 }, { p: [19, 22, -18], r: 1.9 },
+    { p: [4,  24, 22],   r: 2.2 }, { p: [7,  24, 22],  r: 1.7 }, { p: [5, 25, 20], r: 1.5 },
+    { p: [-8, 20, 24],   r: 2.0 }, { p: [-5, 20, 24],  r: 1.6 },
+];
+const cloudMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false });
+
 function DecorativeClouds() {
-    const puffs = [
-        { p: [-22, 18, -14], r: 2.6 }, { p: [-18, 18, -14], r: 2.0 }, { p: [-20, 19, -16], r: 1.8 },
-        { p: [16, 22, -20],  r: 2.4 }, { p: [19, 22, -18], r: 1.9 },
-        { p: [4,  24, 22],   r: 2.2 }, { p: [7,  24, 22],  r: 1.7 }, { p: [5, 25, 20], r: 1.5 },
-        { p: [-8, 20, 24],   r: 2.0 }, { p: [-5, 20, 24],  r: 1.6 },
-    ];
+    const geometries = useMemo(
+        () => CLOUD_PUFFS.map((c) => new THREE.SphereGeometry(c.r, 12, 8)),
+        [],
+    );
+
+    useEffect(() => () => geometries.forEach((g) => g.dispose()), [geometries]);
+
     return (
         <group>
-            {puffs.map((c, i) => (
-                <mesh key={i} position={c.p}>
-                    <sphereGeometry args={[c.r, 16, 12]} />
-                    <meshBasicMaterial color="#ffffff" transparent opacity={0.85} depthWrite={false} />
-                </mesh>
+            {CLOUD_PUFFS.map((c, i) => (
+                <mesh key={i} position={c.p} geometry={geometries[i]} material={cloudMaterial} />
             ))}
         </group>
     );

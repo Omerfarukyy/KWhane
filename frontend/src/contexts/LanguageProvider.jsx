@@ -111,6 +111,7 @@ const translations = {
         height: "Yükseklik",
         addRoomFirst: "Lütfen önce bir oda ekleyin!",
         loadingHome: "Eviniz yükleniyor…",
+        preparingHome: "Eviniz hazırlanıyor…",
         exampleRoomName: "Örn: Ana Yatak Odası",
 
         // Room types
@@ -521,6 +522,7 @@ const translations = {
         height: "Height",
         addRoomFirst: "Please add a room first!",
         loadingHome: "Loading your home…",
+        preparingHome: "Preparing your home…",
         exampleRoomName: "E.g.: Master Bedroom",
 
         // Room types

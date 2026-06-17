@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import React from 'react';
 import { useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -129,7 +130,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
 
-    const selectedId        = useSceneStore((state) => state.selectedId);
+    const isSelected        = useSceneStore(useCallback((s) => s.selectedId === id, [id]));
     const setSelectedId     = useSceneStore((state) => state.setSelectedId);
     const setPinnedDeviceId = useSceneStore((state) => state.setPinnedDeviceId);
     const setIsDraggingStore = useSceneStore((state) => state.setIsDragging);
@@ -140,8 +141,6 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     const setPendingRoomAttach = useSceneStore((state) => state.setPendingRoomAttach);
     const resizeRoom = useSceneStore((state) => state.resizeRoom);
     const moveRoomGhosts = useSceneStore((state) => state.moveRoomGhosts);
-
-    const isSelected = selectedId === id;
     const wallMaterialProps = isSelected ? wallMatSelected : wallMatNormal;
     const dividerMaterialProps = isSelected ? dividerMatSelected : dividerMatNormal;
     const floorMaterialProps = isSelected ? floorMatSelected : floorMatNormal;

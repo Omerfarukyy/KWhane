@@ -1,21 +1,18 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Html } from '@react-three/drei';
 import useSceneStore from '../../store/useSceneStore';
 import { efficiencyColor } from '../../utils/efficiencyColor';
 
 /**
  * EnergyBadge — floating HTML overlay above a device mesh.
- * Shows real kWh/month and cost/month from the ML backend.
- *
- * Props:
- *   object      — scene object { id, position, size, type }
- *   energyData  — null (loading) | 'error' | CalculateResponse
- *   heightOffset — extra Y offset above the top of the mesh (default 0.3)
+ * Subscribes directly to its own energy data slice so that updates to
+ * OTHER devices' data don't trigger a re-render here.
  */
-const EnergyBadge = ({ object, energyData, heightOffset = 0.3 }) => {
+const EnergyBadge = ({ objectId, object, heightOffset = 0.3 }) => {
     const [x, y, z] = object.position;
     const topY = y + (object.size?.[1] || 1) / 2 + heightOffset;
     const validated = useSceneStore((s) => s.homeBillValidated);
+    const energyData = useSceneStore(useCallback((s) => s.energyData[objectId], [objectId]));
 
     return (
         <Html
@@ -30,7 +27,6 @@ const EnergyBadge = ({ object, energyData, heightOffset = 0.3 }) => {
 };
 
 const BadgeContent = ({ energyData, validated }) => {
-    // Loading state
     if (energyData === null || energyData === undefined) {
         return (
             <div style={styles.badge}>
@@ -39,11 +35,10 @@ const BadgeContent = ({ energyData, validated }) => {
         );
     }
 
-    // Error state
     if (energyData === 'error') {
         return (
             <div style={{ ...styles.badge, borderColor: 'rgba(239,68,68,0.4)' }}>
-                <span style={{ color: '#fca5a5', fontSize: 10 }}>ML bağlanamadı</span>
+                <span style={{ color: '#fca5a5', fontSize: 10 }}>ML error</span>
             </div>
         );
     }
@@ -75,7 +70,6 @@ const Spinner = () => (
             borderTopColor: '#60a5fa',
             animation: 'badge-spin 0.7s linear infinite',
         }} />
-        <span style={{ color: 'rgba(148,163,184,0.7)', fontSize: 10 }}>Hesaplanıyor…</span>
         <style>{`@keyframes badge-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
 );
