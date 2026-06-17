@@ -17,6 +17,7 @@ import { AlertTriangle, AlertCircle, Info, CheckCircle2, Loader2, X } from 'luci
 import { updateDeviceFields } from '../../../services/houseService';
 import useSceneStore from '../../../store/useSceneStore';
 import toast from 'react-hot-toast';
+import { useLanguage } from '../../../contexts/LanguageProvider';
 
 // 8 fixed colors cycled across attribution slices. The "Açıklanamayan" residual
 // always gets the same neutral grey so it's visually distinct.
@@ -29,15 +30,16 @@ const SEVERITY_STYLES = {
     low:    { icon: Info,          color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.25)' },
 };
 
-const ACTION_LABELS = {
-    add_device:      'Bu cihazı ekle',
-    adjust_hours:    'Saatleri güncelle',
-    update_year:     'Yılını düzelt',
-    verify_class:    'Sınıfı kontrol et',
-    override_tariff: 'Tarifeyi güncelle',
+const ACTION_LABEL_KEYS = {
+    add_device:      'addThisDevice',
+    adjust_hours:    'updateHours',
+    update_year:     'updateYear',
+    verify_class:    'verifyClass',
+    override_tariff: 'updateTariff',
 };
 
 const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
+    const { t } = useLanguage();
     const [appliedActions, setAppliedActions] = useState({});  // keyed by `${flag.type}-${flag.device_id}`
     const [busyKey, setBusyKey] = useState(null);
 
@@ -49,7 +51,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
         return (
             <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: '#94a3b8' }}>
                 <Loader2 size={28} className="animate-spin" />
-                <p className="text-sm">Faturanız analiz ediliyor…</p>
+                <p className="text-sm">{t('analyzingBill')}</p>
             </div>
         );
     }
@@ -59,14 +61,14 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-center" style={{ color: '#94a3b8' }}>
                 <AlertCircle size={28} style={{ color: '#f59e0b' }} />
                 <p className="text-sm">
-                    Fatura kaydedildi, ancak analiz şu an yapılamıyor.<br />
-                    <span className="text-xs text-white/40">ML servisinin çalıştığından emin olun.</span>
+                    {t('billSavedNoAnalysis')}<br />
+                    <span className="text-xs text-white/40">{t('ensureMlRunning')}</span>
                 </p>
                 <button
                     onClick={onClose}
                     className="mt-3 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-sm text-white transition"
                 >
-                    Kapat
+                    {t('close')}
                 </button>
             </div>
         );
@@ -89,7 +91,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                 const prev = deviceSpecs[action.device_id] || {};
                 setDeviceSpec(action.device_id, { ...prev, daily_usage_hours: action.suggested_hours });
                 setHomeBillValidated(true);
-                toast.success(`Kullanım saati ${action.suggested_hours} saat olarak güncellendi.`);
+                toast.success(t('hoursUpdatedTo').replace('{h}', action.suggested_hours));
                 setAppliedActions((s) => ({ ...s, [key]: true }));
                 onApplied?.();
             } else if (action.type === 'update_year' && action.device_id) {
@@ -98,23 +100,23 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                 const prev = deviceSpecs[action.device_id] || {};
                 setDeviceSpec(action.device_id, { ...prev, year_of_purchase: newYear });
                 setHomeBillValidated(true);
-                toast.success(`Cihaz yılı ${newYear} olarak güncellendi. Doğru yılı Cihazlar sekmesinden de düzenleyebilirsiniz.`);
+                toast.success(t('yearUpdatedTo').replace('{y}', newYear));
                 setAppliedActions((s) => ({ ...s, [key]: true }));
                 onApplied?.();
             } else if (action.type === 'add_device') {
-                toast('Cihaz katalogundan ekleyin: sol panel → Cihaz Ekle.', { icon: '➕' });
+                toast(t('addFromCatalog'), { icon: '➕' });
                 setAppliedActions((s) => ({ ...s, [key]: true }));
                 onClose?.();
             } else if (action.type === 'verify_class' && action.device_id) {
-                toast('Cihazlar sekmesinden verim sınıfını gözden geçirin.', { icon: '🔎' });
+                toast(t('verifyClassHint'), { icon: '🔎' });
                 setAppliedActions((s) => ({ ...s, [key]: true }));
             } else if (action.type === 'override_tariff') {
-                toast('Tarife geçersiz kılma yakında geliyor — şimdilik tahminler bilgilendirme amaçlı.', { icon: 'ℹ️' });
+                toast(t('tariffOverrideSoon'), { icon: 'ℹ️' });
                 setAppliedActions((s) => ({ ...s, [key]: true }));
             }
         } catch (err) {
             console.warn('[BillDiagnosticCard] action failed:', err.message);
-            toast.error('İşlem başarısız oldu.');
+            toast.error(t('actionFailed'));
         } finally {
             setBusyKey(null);
         }
@@ -122,12 +124,12 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
 
     const residualBadge = (() => {
         if (Math.abs(residual_pct) < 5) {
-            return { text: 'Tahminle uyumlu', color: '#22c55e', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.3)' };
+            return { text: t('matchesPrediction'), color: '#22c55e', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.3)' };
         }
         if (residual_pct > 0) {
-            return { text: `Tahminden %${residual_pct.toFixed(0)} yüksek`, color: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' };
+            return { text: t('higherThanPred').replace('{pct}', residual_pct.toFixed(0)), color: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' };
         }
-        return { text: `Tahminden %${Math.abs(residual_pct).toFixed(0)} düşük`, color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.3)' };
+        return { text: t('lowerThanPred').replace('{pct}', Math.abs(residual_pct).toFixed(0)), color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.3)' };
     })();
 
     return (
@@ -136,7 +138,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                     <CheckCircle2 size={18} style={{ color: '#22c55e' }} />
-                    <h2 className="text-base font-semibold text-white">Fatura Analizi</h2>
+                    <h2 className="text-base font-semibold text-white">{t('billAnalysis')}</h2>
                 </div>
                 <span
                     className="text-[11px] font-semibold px-2.5 py-1 rounded-md"
@@ -150,7 +152,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
             {attribution.length > 0 && totalKwh > 0 && (
                 <div>
                     <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>
-                        Tüketim Dağılımı
+                        {t('consumptionBreakdown')}
                     </p>
 
                     {/* Stacked bar */}
@@ -195,7 +197,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                     </ul>
 
                     <p className="text-[10px] mt-2 text-right" style={{ color: '#64748b' }}>
-                        Toplam ₺{totalCost.toFixed(0)} · {totalKwh.toFixed(0)} kWh
+                        {t('total')} ₺{totalCost.toFixed(0)} · {totalKwh.toFixed(0)} kWh
                     </p>
                 </div>
             )}
@@ -204,7 +206,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
             {diagnostics.length > 0 && (
                 <div>
                     <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>
-                        Tespit Ettiklerimiz
+                        {t('findings')}
                     </p>
                     <ul className="flex flex-col gap-2">
                         {diagnostics.map((flag, idx) => {
@@ -212,7 +214,8 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                             const Icon = sev.icon;
                             const key = `${flag.type}-${flag.device_id || 'global'}`;
                             const applied = appliedActions[key];
-                            const actionLabel = ACTION_LABELS[flag.suggested_action?.type];
+                            const actionLabelKey = ACTION_LABEL_KEYS[flag.suggested_action?.type];
+                            const actionLabel = actionLabelKey ? t(actionLabelKey) : null;
                             const isBusy = busyKey === key;
                             return (
                                 <li
@@ -238,7 +241,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                                                     border:     applied ? '1px solid rgba(34,197,94,0.3)' : 'none',
                                                 }}
                                             >
-                                                {applied ? '✓ Uygulandı' : isBusy ? 'Uygulanıyor…' : actionLabel}
+                                                {applied ? `✓ ${t('applied')}` : isBusy ? t('applying') : actionLabel}
                                             </button>
                                         </div>
                                     )}
@@ -251,9 +254,9 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
 
             {diagnostics.length === 0 && attribution.length === 0 && (
                 <div className="text-center py-6" style={{ color: '#94a3b8' }}>
-                    <p className="text-sm">Cihazlar henüz analiz edilmedi.</p>
+                    <p className="text-sm">{t('noDevicesAnalyzed')}</p>
                     <p className="text-xs mt-1" style={{ color: '#64748b' }}>
-                        Cihaz ekleyip enerji hesaplaması tamamlandığında, bu fatura için detaylı analiz oluşturabiliriz.
+                        {t('noDevicesAnalyzedDesc')}
                     </p>
                 </div>
             )}
@@ -264,7 +267,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                     onClick={onClose}
                     className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition"
                 >
-                    Tamam
+                    {t('ok')}
                 </button>
             </div>
         </div>

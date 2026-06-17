@@ -20,8 +20,10 @@ import { TrendingUp, TrendingDown, CheckCircle2, ArrowRight, Loader2, Scale } fr
 import toast from 'react-hot-toast';
 import useSceneStore from '../../../store/useSceneStore';
 import { fetchCalibration, applyCalibration } from '../../../services/calibrationService';
+import { useLanguage } from '../../../contexts/LanguageProvider';
 
 const CalibrationCard = ({ summary, onApplied }) => {
+    const { t } = useLanguage();
     const objects     = useSceneStore((s) => s.objects);
     const energyData  = useSceneStore((s) => s.energyData);
     const deviceSpecs = useSceneStore((s) => s.deviceSpecs);
@@ -44,7 +46,7 @@ const CalibrationCard = ({ summary, onApplied }) => {
                 if (predicted <= 0) return null;
                 return {
                     id:                    obj.id,
-                    name:                  spec.name || obj.type || 'Cihaz',
+                    name:                  spec.name || t(`device.${obj.type}`) || obj.type,
                     type:                  spec.type || obj.type || 'unknown',
                     predicted_monthly_kwh: predicted,
                     daily_usage_hours:     spec.daily_usage_hours ?? 0,
@@ -84,7 +86,7 @@ const CalibrationCard = ({ summary, onApplied }) => {
             <div className="rounded-2xl p-4 flex items-center gap-2"
                 style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)' }}>
                 <Loader2 size={14} className="animate-spin" style={{ color: '#a5b4fc' }} />
-                <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>Tahminler kalibre ediliyor…</span>
+                <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>{t('calibrating')}</span>
             </div>
         );
     }
@@ -100,10 +102,10 @@ const CalibrationCard = ({ summary, onApplied }) => {
                 <CheckCircle2 size={18} style={{ color: '#22c55e' }} />
                 <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold" style={{ color: '#86efac' }}>
-                        Tahminler faturanızla uyumlu
+                        {t('predictionsMatch')}
                     </p>
                     <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-subtle)' }}>
-                        Son {bill_count} faturanın ortalaması ({actual_kwh.toFixed(0)} kWh) ile tahminimiz ({predicted_kwh.toFixed(0)} kWh) %5 içinde.
+                        {t('predictionsWithin').replace('{n}', bill_count).replace('{actual}', actual_kwh.toFixed(0)).replace('{predicted}', predicted_kwh.toFixed(0))}
                     </p>
                 </div>
             </div>
@@ -118,17 +120,17 @@ const CalibrationCard = ({ summary, onApplied }) => {
                 <div className="flex items-center gap-2 mb-1">
                     <Scale size={14} style={{ color: '#a5b4fc' }} />
                     <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#a5b4fc' }}>
-                        Tahminler vs Fatura
+                        {t('predictionsVsBill')}
                     </p>
                 </div>
                 <p className="text-xs" style={{ color: 'var(--color-text)' }}>
-                    Son {bill_count} faturada gerçek tüketim {actual_kwh.toFixed(0)} kWh, tahminimiz {predicted_kwh.toFixed(0)} kWh
+                    {t('predVsBillStat').replace('{n}', bill_count).replace('{actual}', actual_kwh.toFixed(0)).replace('{predicted}', predicted_kwh.toFixed(0))}
                     (<strong style={{ color: residual_pct > 0 ? '#f87171' : '#60a5fa' }}>
                         {residual_pct > 0 ? '+' : ''}{residual_pct.toFixed(0)}%
                     </strong>).
                 </p>
                 <p className="text-[11px] mt-2" style={{ color: 'var(--color-subtle)' }}>
-                    Aydınlatma, klima gibi saat-tabanlı bir cihaz ekleyince burada öneriler gösterebiliriz.
+                    {t('addHourDeviceHint')}
                 </p>
             </div>
         );
@@ -144,7 +146,7 @@ const CalibrationCard = ({ summary, onApplied }) => {
                 toHours:   sugg.to_value,
             });
             if (result.error) {
-                toast.error('Kalibrasyon kaydedilemedi.');
+                toast.error(t('calibrationSaveFailed'));
                 return;
             }
             // Reflect new value in Zustand so DeviceDetailPanel and ML
@@ -153,7 +155,7 @@ const CalibrationCard = ({ summary, onApplied }) => {
             setDeviceSpec(sugg.device_id, { ...prev, daily_usage_hours: sugg.to_value });
 
             setAppliedIds((s) => ({ ...s, [sugg.device_id]: true }));
-            toast.success(`${sugg.device_name}: ${sugg.from_value}s → ${sugg.to_value}s olarak güncellendi.`);
+            toast.success(t('calibrationUpdated').replace('{name}', sugg.device_name).replace('{from}', sugg.from_value).replace('{to}', sugg.to_value));
             onApplied?.();
         } finally {
             setBusyDeviceId(null);
@@ -171,7 +173,7 @@ const CalibrationCard = ({ summary, onApplied }) => {
             <div className="flex items-center gap-2">
                 <Scale size={14} style={{ color: '#a5b4fc' }} />
                 <p className="text-[10px] font-bold uppercase tracking-widest flex-1" style={{ color: '#a5b4fc' }}>
-                    Tahmin Kalibrasyonu
+                    {t('predictionCalibration')}
                 </p>
                 <span className="flex items-center gap-1 text-xs font-semibold"
                     style={{ color: trendColor }}>
@@ -182,14 +184,12 @@ const CalibrationCard = ({ summary, onApplied }) => {
 
             {/* Headline */}
             <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
-                Son <strong>{bill_count}</strong> faturada tahminlerimiz ortalama
+                {t('calSentence1').replace('{n}', bill_count)}
                 {' '}<strong style={{ color: trendColor }}>
-                    %{Math.abs(residual_pct).toFixed(0)} {residual_pct > 0 ? 'düşük' : 'yüksek'}
+                    %{Math.abs(residual_pct).toFixed(0)} {residual_pct > 0 ? t('lower') : t('higher')}
                 </strong>{' '}
-                çıktı ({actual_kwh.toFixed(0)} kWh gerçek vs {predicted_kwh.toFixed(0)} kWh tahmini).
-                {' '}{residual_pct > 0
-                    ? 'Beyan ettiğiniz saatleri biraz artırarak tahminleri faturaya yaklaştırabiliriz.'
-                    : 'Beyan ettiğiniz saatleri biraz azaltarak tahminleri faturaya yaklaştırabiliriz.'}
+                {t('calSentence2').replace('{actual}', actual_kwh.toFixed(0)).replace('{predicted}', predicted_kwh.toFixed(0))}
+                {' '}{residual_pct > 0 ? t('calSuggestIncrease') : t('calSuggestDecrease')}
             </p>
 
             {/* Suggestions */}
@@ -198,6 +198,10 @@ const CalibrationCard = ({ summary, onApplied }) => {
                     const applied = appliedIds[sugg.device_id];
                     const busy    = busyDeviceId === sugg.device_id;
                     const impactLabel = sugg.impact_kwh_per_month >= 0 ? '+' : '';
+                    const obj = objects.find((o) => o.id === sugg.device_id);
+                    const deviceType = obj?.type || '';
+                    const translatedName = deviceType ? t(`device.${deviceType}`) : sugg.device_name;
+                    const translatedTypeLabel = deviceType ? t(`device.${deviceType}`) : sugg.device_type_label;
                     return (
                         <li key={sugg.device_id}
                             className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl"
@@ -205,18 +209,18 @@ const CalibrationCard = ({ summary, onApplied }) => {
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                                        {sugg.device_name}
+                                        {translatedName}
                                     </span>
                                     <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
-                                        {sugg.device_type_label}
+                                        {translatedTypeLabel}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-1.5 text-[11px] mt-0.5" style={{ color: 'var(--color-subtle)' }}>
-                                    <span>{sugg.from_value}s/gün</span>
+                                    <span>{sugg.from_value}{t('hDay')}</span>
                                     <ArrowRight size={10} />
-                                    <span style={{ color: '#a5b4fc' }}>{sugg.to_value}s/gün</span>
+                                    <span style={{ color: '#a5b4fc' }}>{sugg.to_value}{t('hDay')}</span>
                                     <span className="ml-2 text-[10px]" style={{ color: 'var(--color-subtle)' }}>
-                                        ({impactLabel}{sugg.impact_kwh_per_month.toFixed(0)} kWh/ay)
+                                        ({impactLabel}{sugg.impact_kwh_per_month.toFixed(0)} {t('kwhPerMonth')})
                                     </span>
                                 </div>
                             </div>
@@ -230,7 +234,7 @@ const CalibrationCard = ({ summary, onApplied }) => {
                                     border:     applied ? '1px solid rgba(34,197,94,0.3)' : 'none',
                                 }}
                             >
-                                {applied ? '✓ Uygulandı' : busy ? 'Uygulanıyor…' : 'Uygula'}
+                                {applied ? `✓ ${t('applied')}` : busy ? t('applying') : t('apply')}
                             </button>
                         </li>
                     );
@@ -238,7 +242,7 @@ const CalibrationCard = ({ summary, onApplied }) => {
             </ul>
 
             <p className="text-[10px] italic" style={{ color: 'var(--color-subtle)' }}>
-                Onayınız olmadan değişiklik yapılmaz. Orijinal değerleriniz kayıt altında tutulur.
+                {t('calDisclaimer')}
             </p>
         </div>
     );

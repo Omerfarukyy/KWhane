@@ -22,12 +22,48 @@ function categoryIcon(category) {
     return <Zap size={20} />;
 }
 
+// ─── Frontend fallback: translate known Turkish recommendation patterns ──────
+function translateRecTitle(rec) {
+    if (rec.title_en) return rec.title_en;
+    const title = rec.title || '';
+    if (rec.slug === 'reduce-standby-power')
+        return 'Reduce standby consumption with a smart plug';
+    const daily = title.match(/[Gg]unluk kullanimi ([\d.]+) saate dusur/);
+    if (daily) return `Reduce daily usage to ${daily[1]} hours`;
+    const weekly = title.match(/[Hh]aftalik kullanimi ([\d.]+) sefere dusur/);
+    if (weekly) return `Reduce weekly usage to ${weekly[1]} cycles`;
+    const upgrade = title.match(/(.+) modeline gecis/);
+    if (upgrade) return `Switch to ${upgrade[1]}`.trim();
+    return title;
+}
+
+function translateRecDesc(rec) {
+    if (rec.description_en) return rec.description_en;
+    const savings = Number(rec.potential_savings_amount ?? 0);
+    const cat = rec.category;
+    if (cat === 'standby_reduction')
+        return `Reduce standby energy waste using a smart plug. Save ${savings.toFixed(2)} TL per month.`;
+    if (cat === 'usage_optimization') {
+        const desc = rec.description || '';
+        const daily = desc.match(/([\d.]+) saatten ([\d.]+) saate/);
+        if (daily) return `By reducing daily usage from ${daily[1]} to ${daily[2]} hours, you can save ${savings.toFixed(2)} TL per month.`;
+        const weekly = desc.match(/([\d.]+) seferden ([\d.]+) sefere/);
+        if (weekly) return `By reducing weekly usage from ${weekly[1]} to ${weekly[2]} cycles, you can save ${savings.toFixed(2)} TL per month.`;
+    }
+    if (cat === 'device_upgrade')
+        return `By switching to a more efficient model, you can save ${savings.toFixed(2)} TL per month.`;
+    return rec.description || '';
+}
+
 // ─── Single flashcard ────────────────────────────────────────────────────────
-const Card = ({ rec, t }) => {
+const Card = ({ rec, t, lang }) => {
     const savings = Number(rec.potential_savings_amount ?? 0);
     const currentCost = Number(rec.current_monthly_cost ?? 0);
     const projectedCost = Math.max(0, currentCost - savings);
     const pct = currentCost > 0 ? Math.round((savings / currentCost) * 100) : 0;
+
+    const displayTitle = lang === 'en' ? translateRecTitle(rec) : (rec.title || rec.recommendation_text || t('energySavingSuggestion'));
+    const displayDesc = lang === 'en' ? translateRecDesc(rec) : (rec.description || rec.recommendation_text || '');
 
     return (
         <div className="flex flex-col gap-4 h-full">
@@ -40,11 +76,11 @@ const Card = ({ rec, t }) => {
                 <div className="flex-1 min-w-0">
                     <span className="text-[10px] font-bold uppercase tracking-wider"
                         style={{ color: '#3b82f6' }}>
-                        {rec.category || rec.recommendation_type || t('suggestion')}
+                        {t(`cat.${rec.category}`) !== `cat.${rec.category}` ? t(`cat.${rec.category}`) : (rec.category || rec.recommendation_type || t('suggestion'))}
                     </span>
                     <h4 className="text-sm font-bold leading-snug mt-0.5"
                         style={{ color: 'var(--color-text)' }}>
-                        {rec.title || rec.recommendation_text || t('energySavingSuggestion')}
+                        {displayTitle}
                     </h4>
                 </div>
             </div>
@@ -52,7 +88,7 @@ const Card = ({ rec, t }) => {
             {/* Body */}
             <p className="text-xs leading-relaxed flex-1"
                 style={{ color: 'var(--color-muted)' }}>
-                {rec.description || rec.recommendation_text || ''}
+                {displayDesc}
             </p>
 
             {/* Savings pill */}
@@ -61,7 +97,7 @@ const Card = ({ rec, t }) => {
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
                         style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
                         <span className="text-xs font-bold" style={{ color: '#4ade80' }}>
-                            ₺{savings.toFixed(0)}/ay {t('savingsPerMonth')}
+                            ₺{savings.toFixed(0)}/{t('kwhPerMonth').split('/')[1]} {t('savingsPerMonth')}
                         </span>
                         {pct > 0 && (
                             <span className="text-[10px]" style={{ color: '#22c55e' }}>(%{pct})</span>
@@ -104,7 +140,7 @@ const EmptyState = ({ t }) => (
 // ─── Main carousel ───────────────────────────────────────────────────────────
 const SuggestionCards = ({ compact = false }) => {
     const { user } = useAuth();
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
     const [cards, setCards] = useState([]);
     const [loading, setLoading] = useState(true);
     const [idx, setIdx] = useState(0);
@@ -170,7 +206,7 @@ const SuggestionCards = ({ compact = false }) => {
             <div className="rounded-2xl overflow-hidden"
                 style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', minHeight: compact ? 100 : 160 }}>
                 <div key={idx} className={`p-4 h-full suggestion-slide-${direction}`}>
-                    <Card rec={cards[idx]} t={t} />
+                    <Card rec={cards[idx]} t={t} lang={lang} />
                 </div>
             </div>
 

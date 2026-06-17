@@ -86,6 +86,7 @@ def score_recommendations(
                 "slug": slug,
                 "category": "device_upgrade",
                 "title": f"{brand} {model} modeline gecis ({eff})".strip(),
+                "title_en": f"Switch to {brand} {model} ({eff})".strip(),
                 "projected_monthly_cost": round(projected_cost, 2),
                 "potential_savings_amount": round(savings, 2),
                 "projected_monthly_kwh": round(projected_kwh, 2),
@@ -93,6 +94,10 @@ def score_recommendations(
                 "description": (
                     f"{brand} {model} ({eff}, {tier}) modeline gecis yaparak "
                     f"aylik {round(savings, 2)} TL tasarruf edebilirsiniz."
+                ),
+                "description_en": (
+                    f"By switching to {brand} {model} ({eff}, {tier}), "
+                    f"you can save {round(savings, 2)} TL per month."
                 ),
             })
 
@@ -116,6 +121,7 @@ def score_recommendations(
                     "slug": "reduce-standby-power",
                     "category": "standby_reduction",
                     "title": "Akilli priz ile bekleme tuketimini azalt",
+                    "title_en": "Reduce standby consumption with a smart plug",
                     "projected_monthly_cost": round(projected_cost, 2),
                     "potential_savings_amount": round(savings, 2),
                     "projected_monthly_kwh": round(projected_kwh, 2),
@@ -123,6 +129,10 @@ def score_recommendations(
                     "description": (
                         f"Akilli priz kullanarak bekleme modunda harcanan enerjiyi azaltin. "
                         f"Aylik {round(kwh_saved, 1)} kWh ve {round(savings, 2)} TL tasarruf."
+                    ),
+                    "description_en": (
+                        f"Reduce standby energy waste using a smart plug. "
+                        f"Save {round(kwh_saved, 1)} kWh and {round(savings, 2)} TL per month."
                     ),
                 })
 
@@ -143,9 +153,14 @@ def score_recommendations(
                 "cycle_hours": cycle_hours,
             }
             title = f"Haftalik kullanimi {round(target_usage_value, 1)} sefere dusur"
+            title_en = f"Reduce weekly usage to {round(target_usage_value, 1)} cycles"
             description_prefix = (
                 f"Haftalik kullanimi {round(current_usage_value, 1)} seferden "
                 f"{round(target_usage_value, 1)} sefere dusurerek "
+            )
+            description_prefix_en = (
+                f"By reducing weekly usage from {round(current_usage_value, 1)} to "
+                f"{round(target_usage_value, 1)} cycles, "
             )
             slug = "reduce-weekly-cycles"
         else:
@@ -155,9 +170,14 @@ def score_recommendations(
             trigger = current_usage_value > target_usage_value * 1.2
             overrides = {"daily_usage_hours": target_usage_value, "usage_basis": "hours"}
             title = f"Gunluk kullanimi {round(target_usage_value, 1)} saate dusur"
+            title_en = f"Reduce daily usage to {round(target_usage_value, 1)} hours"
             description_prefix = (
                 f"Gunluk kullanimi {round(current_usage_value, 1)} saatten "
                 f"{round(target_usage_value, 1)} saate dusurerek "
+            )
+            description_prefix_en = (
+                f"By reducing daily usage from {round(current_usage_value, 1)} to "
+                f"{round(target_usage_value, 1)} hours, "
             )
             slug = "reduce-daily-usage"
 
@@ -173,11 +193,13 @@ def score_recommendations(
                     "slug": slug,
                     "category": "usage_optimization",
                     "title": title,
+                    "title_en": title_en,
                     "projected_monthly_cost": round(projected_cost, 2),
                     "potential_savings_amount": round(savings, 2),
                     "projected_monthly_kwh": round(projected_kwh, 2),
                     "explanation_factors": _explain(energy_predictor, projected_estimate.features),
                     "description": description_prefix + f"aylik {round(savings, 2)} TL tasarruf edebilirsiniz.",
+                    "description_en": description_prefix_en + f"you can save {round(savings, 2)} TL per month.",
                 }
                 if is_cycle_mode:
                     item["from_cycles_per_week"] = round(current_usage_value, 2)

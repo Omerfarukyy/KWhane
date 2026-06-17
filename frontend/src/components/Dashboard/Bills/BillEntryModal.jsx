@@ -4,6 +4,7 @@ import { insertBill, diagnoseBill, cacheDiagnosticSummary } from '../../../servi
 import { useAuth } from '../../../contexts/AuthContext';
 import useSceneStore from '../../../store/useSceneStore';
 import BillDiagnosticCard from './BillDiagnosticCard';
+import { useLanguage } from '../../../contexts/LanguageProvider';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const monthAgoISO = () => {
@@ -20,6 +21,7 @@ const inputStyle = {
 
 const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
     const { user } = useAuth();
+    const { t } = useLanguage();
 
     const [periodStart, setPeriodStart] = useState(monthAgoISO());
     const [periodEnd,   setPeriodEnd]   = useState(todayISO());
@@ -83,9 +85,9 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
         if (result.error) {
             const msg = result.error.message || '';
             if (msg.toLowerCase().includes('duplicate') || msg.includes('bills_user_period_uniq')) {
-                setError('Bu döneme ait fatura zaten kayıtlı.');
+                setError(t('duplicateBill'));
             } else {
-                setError('Fatura kaydedilemedi. Lütfen tekrar deneyin.');
+                setError(t('billSaveFailed'));
             }
             return;
         }
@@ -103,7 +105,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
             const energy = energyData[obj.id] || {};
             return {
                 id:                    obj.id,
-                name:                  spec.name || obj.type || 'Cihaz',
+                name:                  spec.name || t(`device.${obj.type}`) || obj.type,
                 type:                  spec.type || obj.type || 'unknown',
                 predicted_monthly_kwh: energy.total_monthly_kwh ?? energy.monthly_kwh ?? 0,
                 efficiency_class:      spec.efficiency_class || 'A',
@@ -137,7 +139,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                             <Receipt size={16} style={{ color: '#60a5fa' }} />
                         </div>
                         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-                            {stage === 'diagnostic' ? 'Fatura Kaydedildi' : 'Fatura Ekle'}
+                            {stage === 'diagnostic' ? t('billSaved') : t('addBillTitle')}
                         </h2>
                     </div>
                     <button
@@ -159,7 +161,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                 ) : (
                 <>
                 <p className="text-xs mb-5" style={{ color: 'var(--color-subtle)' }}>
-                    Son elektrik faturanızı girin. Bu sayede tahminler yerine gerçek tüketiminize dayalı öneriler verebiliriz.
+                    {t('billEntryDesc')}
                 </p>
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -167,7 +169,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
-                                Dönem Başlangıcı
+                                {t('periodStart')}
                             </label>
                             <input
                                 type="date"
@@ -180,7 +182,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                         </div>
                         <div>
                             <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
-                                Dönem Bitişi
+                                {t('periodEnd')}
                             </label>
                             <input
                                 type="date"
@@ -197,7 +199,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
-                                Toplam Tüketim
+                                {t('totalConsumption')}
                             </label>
                             <div className="flex">
                                 <input
@@ -219,7 +221,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                         </div>
                         <div>
                             <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
-                                Toplam Tutar
+                                {t('totalAmount')}
                             </label>
                             <div className="flex">
                                 <span className="rounded-l-lg px-3 py-2 text-xs flex items-center"
@@ -244,7 +246,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                     {/* Provider (optional) */}
                     <div>
                         <label className="block text-xs font-medium mb-1 uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>
-                            Sağlayıcı <span className="normal-case font-normal" style={{ opacity: 0.6 }}>(opsiyonel)</span>
+                            {t('providerLabel')} <span className="normal-case font-normal" style={{ opacity: 0.6 }}>({t('optional')})</span>
                         </label>
                         <input
                             type="text"
@@ -260,7 +262,7 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                     {effectiveTariff !== null && (
                         <div className="px-3 py-2 rounded-lg text-xs"
                             style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', color: '#93c5fd' }}>
-                            Ortalama birim fiyat: <strong>₺{effectiveTariff.toFixed(2)}/kWh</strong>
+                            {t('avgUnitPrice')}: <strong>₺{effectiveTariff.toFixed(2)}/kWh</strong>
                         </div>
                     )}
 
@@ -280,14 +282,14 @@ const BillEntryModal = ({ isOpen, onClose, onSaved }) => {
                             className="px-4 py-2 rounded-lg text-sm transition"
                             style={{ color: 'var(--color-muted)' }}
                         >
-                            İptal
+                            {t('cancel')}
                         </button>
                         <button
                             type="submit"
                             disabled={!isValid || submitting}
                             className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow transition disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            {submitting ? 'Kaydediliyor…' : 'Kaydet'}
+                            {submitting ? t('savingText') : t('save')}
                         </button>
                     </div>
                 </form>

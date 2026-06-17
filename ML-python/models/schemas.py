@@ -101,11 +101,13 @@ class RecommendationItem(BaseModel):
     slug: str
     category: str
     title: str
+    title_en: str | None = None
     current_monthly_cost: float
     projected_monthly_cost: float
     potential_savings_amount: float
     status: str = "pending"
     description: str
+    description_en: str | None = None
     current_monthly_kwh: float | None = None
     projected_monthly_kwh: float | None = None
     explanation_factors: list[dict] = Field(default_factory=list)

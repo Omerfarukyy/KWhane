@@ -12,17 +12,17 @@ const PREVIEW_ROOM_ID   = '00000000-0000-0000-0000-00000000cafe';
 
 // ─── Fallback device profiles (used when Supabase returns 0 rows) ─────────────
 const DEVICE_PROFILES = {
-    fridge:          { name: 'Standart Buzdolabı',      nominal_power_watts: 150,  daily_usage_hours: 24,  standby_power_watts: 5,   efficiency_class: 'A'   },
-    tv:              { name: 'Standart TV',              nominal_power_watts: 100,  daily_usage_hours: 5,   standby_power_watts: 2,   efficiency_class: 'A+'  },
-    ac:              { name: 'Standart Klima',           nominal_power_watts: 2000, daily_usage_hours: 8,   standby_power_watts: 10,  efficiency_class: 'A'   },
-    washing_machine: { name: 'Standart Çamaşır Mak.',   nominal_power_watts: 1000, daily_usage_hours: 1,   standby_power_watts: 3,   efficiency_class: 'A'   },
-    dishwasher:      { name: 'Standart Bulaşık Mak.',   nominal_power_watts: 1800, daily_usage_hours: 1.5, standby_power_watts: 3,   efficiency_class: 'A'   },
-    oven:            { name: 'Standart Fırın',           nominal_power_watts: 2000, daily_usage_hours: 1,   standby_power_watts: 0,   efficiency_class: 'A+'  },
-    computer:        { name: 'Standart Bilgisayar',      nominal_power_watts: 200,  daily_usage_hours: 8,   standby_power_watts: 5,   efficiency_class: 'A'   },
-    lighting:        { name: 'Standart Aydınlatma',      nominal_power_watts: 20,   daily_usage_hours: 8,   standby_power_watts: 0,   efficiency_class: 'A++' },
-    water_heater:    { name: 'Standart Şofben',          nominal_power_watts: 2000, daily_usage_hours: 2,   standby_power_watts: 5,   efficiency_class: 'A'   },
-    dryer:           { name: 'Standart Kurutma Mak.',    nominal_power_watts: 2500, daily_usage_hours: 1,   standby_power_watts: 3,   efficiency_class: 'A'   },
-    electric_hub:    { name: 'Sigorta / Elektrik Paneli', nominal_power_watts: 0,  daily_usage_hours: 0,   standby_power_watts: 0,   efficiency_class: null  },
+    fridge:          { nameKey: 'fridge',          nominal_power_watts: 150,  daily_usage_hours: 24,  standby_power_watts: 5,   efficiency_class: 'A'   },
+    tv:              { nameKey: 'tv',              nominal_power_watts: 100,  daily_usage_hours: 5,   standby_power_watts: 2,   efficiency_class: 'A+'  },
+    ac:              { nameKey: 'ac',              nominal_power_watts: 2000, daily_usage_hours: 8,   standby_power_watts: 10,  efficiency_class: 'A'   },
+    washing_machine: { nameKey: 'washing_machine', nominal_power_watts: 1000, daily_usage_hours: 1,   standby_power_watts: 3,   efficiency_class: 'A'   },
+    dishwasher:      { nameKey: 'dishwasher',      nominal_power_watts: 1800, daily_usage_hours: 1.5, standby_power_watts: 3,   efficiency_class: 'A'   },
+    oven:            { nameKey: 'oven',            nominal_power_watts: 2000, daily_usage_hours: 1,   standby_power_watts: 0,   efficiency_class: 'A+'  },
+    computer:        { nameKey: 'computer',        nominal_power_watts: 200,  daily_usage_hours: 8,   standby_power_watts: 5,   efficiency_class: 'A'   },
+    lighting:        { nameKey: 'lighting',        nominal_power_watts: 20,   daily_usage_hours: 8,   standby_power_watts: 0,   efficiency_class: 'A++' },
+    water_heater:    { nameKey: 'water_heater',    nominal_power_watts: 2000, daily_usage_hours: 2,   standby_power_watts: 5,   efficiency_class: 'A'   },
+    dryer:           { nameKey: 'dryer',           nominal_power_watts: 2500, daily_usage_hours: 1,   standby_power_watts: 3,   efficiency_class: 'A'   },
+    electric_hub:    { nameKey: 'electric_hub',    nominal_power_watts: 0,    daily_usage_hours: 0,   standby_power_watts: 0,   efficiency_class: null  },
 };
 
 
@@ -124,12 +124,14 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                     setCards(data);
                 } else {
                     const profile = DEVICE_PROFILES[selectedType] || {};
-                    setCards([{ id: 'default', type: selectedType, ...profile, year_of_purchase: new Date().getFullYear() }]);
+                    const name = profile.nameKey ? `${t('standard')} ${t(`device.${profile.nameKey}`)}` : selectedType;
+                    setCards([{ id: 'default', type: selectedType, ...profile, name, year_of_purchase: new Date().getFullYear() }]);
                 }
             } catch {
                 if (!cancelled) {
                     const profile = DEVICE_PROFILES[selectedType] || {};
-                    setCards([{ id: 'default', type: selectedType, ...profile, year_of_purchase: new Date().getFullYear() }]);
+                    const name = profile.nameKey ? `${t('standard')} ${t(`device.${profile.nameKey}`)}` : selectedType;
+                    setCards([{ id: 'default', type: selectedType, ...profile, name, year_of_purchase: new Date().getFullYear() }]);
                 }
             } finally {
                 if (!cancelled) setLoading(false);
