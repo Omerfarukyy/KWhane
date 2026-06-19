@@ -301,4 +301,4 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
     );
 };
 
-export default HomeRanking;
+export default React.memo(HomeRanking);

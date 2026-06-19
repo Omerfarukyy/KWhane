@@ -123,13 +123,16 @@ export async function runFullAnalysis(deviceId, spec, userId) {
     }
 
     // Persist /savings.recommendations[] → recommendations table
-    if (userId && savRes?.recommendations?.length) {
+    if (userId && savRes) {
         try {
-            // Replace prior recs for this device to avoid stacking duplicates
-            // every time the device is re-analyzed (login restore, refresh).
-            await supabase.from('recommendations').delete().eq('device_id', deviceId);
+            // Always replace prior recs, including when the new result is empty.
+            const { error: deleteError } = await supabase
+                .from('recommendations')
+                .delete()
+                .eq('device_id', deviceId);
+            if (deleteError) throw new Error(deleteError.message);
 
-            const rows = savRes.recommendations.map((r) => ({
+            const rows = (savRes.recommendations || []).map((r) => ({
                 user_id:                  userId,
                 device_id:                deviceId,
                 slug:                     r.slug,
@@ -146,8 +149,11 @@ export async function runFullAnalysis(deviceId, spec, userId) {
                 device_type:              spec?.type ?? null,
             }));
 
-            const { error } = await supabase.from('recommendations').insert(rows);
-            if (error) console.warn('[mlService] persist recommendations:', error.message);
+            if (rows.length) {
+                const { error } = await supabase.from('recommendations').insert(rows);
+                if (error) console.warn('[mlService] persist recommendations:', error.message);
+            }
+            window.dispatchEvent(new Event('recommendations-changed'));
         } catch (err) {
             console.warn('[mlService] persist recommendations threw:', err.message);
         }

@@ -239,6 +239,11 @@ const translations = {
         kwhaneAi: "KWhane AI",
         aiOnline: "Yapay Zeka Çevrimiçi",
         aiRecommendationEx: "Buzdolabınız standartların <strong>%25</strong> üzerinde enerji harcıyor. A+++ model ile ayda 120₺ tasarruf edilebilir.",
+        aiAdvisor: "Enerji Danışmanı",
+        homeBuilderChat: "Ev Tasarımcısı",
+        switchToBuilder: "Ev tasarımı sohbetine geç",
+        switchToAdvisor: "Enerji danışmanına geç",
+        builderWelcome: "Evinizi tasarlamanıza yardımcı olabilirim. Kaç odanız var, hangi cihazları kullanıyorsunuz?",
 
         // ── Scene ──────────────────────────────────────────────
         loadingScene: "Sahne yükleniyor…",
@@ -648,6 +653,11 @@ const translations = {
         kwhaneAi: "KWhane AI",
         aiOnline: "AI Online",
         aiRecommendationEx: "Your fridge uses <strong>25%</strong> more energy than average. Switching to an A+++ model could save ₺120/month.",
+        aiAdvisor: "Energy Advisor",
+        homeBuilderChat: "Home Designer",
+        switchToBuilder: "Switch to home design chat",
+        switchToAdvisor: "Switch to energy advisor",
+        builderWelcome: "I can help you design your home. How many rooms do you have and which appliances do you use?",
 
         // ── Scene ──────────────────────────────────────────────
         loadingScene: "Loading scene…",

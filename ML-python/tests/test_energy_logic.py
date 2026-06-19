@@ -258,6 +258,36 @@ class EnergyLogicTests(unittest.TestCase):
         self.assertEqual(usage_rec["device_name"], "Bulasik")
         self.assertEqual(usage_rec["to_cycles_per_week"], 5.0)
 
+    def test_usage_recommendation_tracks_typical_target_without_silent_buffer(self):
+        tariff = TariffCalculator(TARIFFS)
+
+        def recommendations_for(hours):
+            device = DeviceInput(
+                id="d1",
+                room_id="r1",
+                name="Klima",
+                type="ac",
+                nominal_power_watts=2000,
+                daily_usage_hours=hours,
+                standby_power_watts=0,
+                efficiency_class="A",
+                year_of_purchase=2024,
+            )
+            return score_recommendations(
+                device=device,
+                current_monthly_kwh=hours * 10,
+                current_monthly_cost=hours * 10,
+                catalog_alternatives=[],
+                tariff_calculator=tariff,
+                energy_predictor=UsageLinearPredictor(),
+            )
+
+        above_target = recommendations_for(11)
+        at_target = recommendations_for(10)
+
+        self.assertTrue(any(r["category"] == "usage_optimization" for r in above_target))
+        self.assertFalse(any(r["category"] == "usage_optimization" for r in at_target))
+
     def test_chat_prompt_includes_device_and_recommendation_context(self):
         prompt = _build_system_prompt(ChatRequest(
             message="Ne onerirsin?",

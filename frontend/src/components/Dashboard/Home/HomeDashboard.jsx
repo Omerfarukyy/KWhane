@@ -16,7 +16,7 @@ const AiAssistant  = lazy(() => import('../AiAssistant'));
  * visible at a glance: bill entry, top expenses, recommendations, peer
  * ranking, item-catalog search, embedded AI chat.
  */
-const HomeDashboard = ({ onCatalogSearch }) => {
+const HomeDashboard = ({ onCatalogSearch, chatMode, onSetChatMode }) => {
     const { t }    = useLanguage();
     const { user } = useAuth();
 
@@ -98,11 +98,11 @@ const HomeDashboard = ({ onCatalogSearch }) => {
                         </div>
                     }
                 >
-                    <AiAssistant embedded isOpen onOpen={() => {}} onClose={() => {}} />
+                    <AiAssistant embedded isOpen onOpen={() => {}} onClose={() => {}} chatMode={chatMode} onSetChatMode={onSetChatMode} />
                 </Suspense>
             </div>
         </aside>
     );
 };
 
-export default HomeDashboard;
+export default React.memo(HomeDashboard);
