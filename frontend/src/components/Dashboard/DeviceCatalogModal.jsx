@@ -22,7 +22,6 @@ const DEVICE_PROFILES = {
     lighting:        { nameKey: 'lighting',        nominal_power_watts: 20,   daily_usage_hours: 8,   standby_power_watts: 0,   efficiency_class: 'A++' },
     water_heater:    { nameKey: 'water_heater',    nominal_power_watts: 2000, daily_usage_hours: 2,   standby_power_watts: 5,   efficiency_class: 'A'   },
     dryer:           { nameKey: 'dryer',           nominal_power_watts: 2500, daily_usage_hours: 1,   standby_power_watts: 3,   efficiency_class: 'A'   },
-    electric_hub:    { nameKey: 'electric_hub',    nominal_power_watts: 0,    daily_usage_hours: 0,   standby_power_watts: 0,   efficiency_class: null  },
 };
 
 
@@ -60,7 +59,6 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
         { type: 'lighting',        label: t('device.lighting'),        icon: '💡' },
         { type: 'water_heater',    label: t('device.water_heater'),    icon: '🚿' },
         { type: 'dryer',           label: t('device.dryer'),           icon: '🌀' },
-        { type: 'electric_hub',    label: t('device.electric_hub'),    icon: '⚡' },
     ];
 
     const [selectedType, setSelectedType] = useState(initialType || 'fridge');

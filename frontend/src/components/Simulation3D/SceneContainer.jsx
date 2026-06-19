@@ -344,7 +344,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 );
             })}
 
-            {objects.filter(obj => obj.type !== 'electric_hub').map((obj) => (
+            {objects.map((obj) => (
                 <EnergyBadge
                     key={`badge-${obj.id}`}
                     objectId={obj.id}
@@ -353,7 +353,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 />
             ))}
 
-            {objects.filter(obj => obj.type !== 'electric_hub').map((obj) => (
+            {objects.map((obj) => (
                 <DeviceInfoPopup
                     key={`popup-${obj.id}`}
                     object={obj}

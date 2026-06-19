@@ -228,12 +228,6 @@ const DashboardLayout = () => {
     const handleDeviceSelect = useCallback(async (spec) => {
         // Electric hub: persisted to Supabase like other devices (so position survives reload),
         // but skips ML analysis since it has no energy consumption.
-        if (spec.type === 'electric_hub') {
-            const hasHub = useSceneStore.getState().objects.some((o) => o.type === 'electric_hub');
-            if (!hasHub) addDevice(spec);
-            return;
-        }
-
         // Capture ghost position + roomId BEFORE removing it so we can spawn there
         const ghost = pendingGhostId
             ? useSceneStore.getState().ghostObjects.find((g) => g.id === pendingGhostId)
@@ -292,7 +286,6 @@ const DashboardLayout = () => {
     };
     const devicesByKwh = useMemo(() => {
         return [...objects]
-            .filter(o => o.type !== 'electric_hub')
             .map(o => {
                 const ed = energyData[o.id];
                 const kwh = (ed && ed !== 'error')
@@ -372,7 +365,7 @@ const DashboardLayout = () => {
                                 obj={pinnedObj}
                                 data={pinnedData}
                                 spec={deviceSpecs[pinnedObj.id]}
-                                onDelete={() => { closePinnedPanel(); removeSelected(); }}
+                                onDelete={() => { removeSelected(); setPinnedDeviceId(null); }}
                                 setEnergyData={setEnergyData}
                                 setDeviceSpec={setDeviceSpec}
                                 user={user}
@@ -575,7 +568,7 @@ const DashboardLayout = () => {
                                     obj={pinnedObj}
                                     data={pinnedData}
                                     spec={deviceSpecs[pinnedObj.id]}
-                                    onDelete={() => { closePinnedPanel(); removeSelected(); }}
+                                    onDelete={() => { removeSelected(); setPinnedDeviceId(null); }}
                                     setEnergyData={setEnergyData}
                                     setDeviceSpec={setDeviceSpec}
                                     user={user}
@@ -983,7 +976,7 @@ const DashboardLayout = () => {
                 onDeviceSelect={handleDeviceSelect}
                 initialType={catalogInitialType}
                 initialQuery={catalogInitialQuery}
-                disabledTypes={objects.some((o) => o.type === 'electric_hub') ? ['electric_hub'] : []}
+                disabledTypes={[]}
             />
         </div>
     );

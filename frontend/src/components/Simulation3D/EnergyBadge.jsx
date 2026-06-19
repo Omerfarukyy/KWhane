@@ -13,6 +13,10 @@ const EnergyBadge = ({ objectId, object, heightOffset = 0.3 }) => {
     const topY = y + (object.size?.[1] || 1) / 2 + heightOffset;
     const validated = useSceneStore((s) => s.homeBillValidated);
     const energyData = useSceneStore(useCallback((s) => s.energyData[objectId], [objectId]));
+    const pinnedDeviceId = useSceneStore((s) => s.pinnedDeviceId);
+
+    // Hide badge when device is pinned so the detail popup/panel is visible without overlap
+    if (pinnedDeviceId === objectId) return null;
 
     return (
         <Html

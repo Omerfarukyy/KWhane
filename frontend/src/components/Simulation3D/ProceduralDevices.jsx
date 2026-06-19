@@ -431,7 +431,6 @@ const ProceduralDevices = ({ type, size }) => {
         // Legacy aliases
         case 'television':      return <Television size={size} />;
         case 'air_conditioner': return <AirConditioner size={size} />;
-        case 'electric_hub':    return <ElectricHubVisual />;
         default:                return null;
     }
 };

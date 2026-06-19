@@ -88,26 +88,6 @@ const SceneControllerUI = () => {
                             </button>
                         </div>
 
-                        <div className="pt-2 mt-1 border-t border-gray-700/50">
-                            <button
-                                onClick={() => {
-                                    const hasHub = objects.some(o => o.type === 'electric_hub');
-                                    if (!hasHub) addDevice({
-                                        type: 'electric_hub',
-                                        name: 'Sigorta Kutusu',
-                                        nominal_power_watts: 0,
-                                        daily_usage_hours: 0,
-                                        standby_power_watts: 0,
-                                        efficiency_class: null,
-                                        year_of_purchase: new Date().getFullYear(),
-                                    });
-                                }}
-                                disabled={objects.some(o => o.type === 'electric_hub')}
-                                className="w-full bg-amber-700 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] py-1.5 px-2 rounded shadow transition-colors"
-                            >
-                                ⚡ Sigorta Kutusu Ekle
-                            </button>
-                        </div>
                     </div>
                 )}
 

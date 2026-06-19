@@ -81,7 +81,6 @@ const translations = {
         "device.lighting": "Aydınlatma",
         "device.water_heater": "Su Isıtıcı",
         "device.dryer": "Kurutma Mak.",
-        "device.electric_hub": "Sigorta Kutusu",
 
         // Device profile names (catalog)
         "profile.fridge": "Standart Buzdolabı",
@@ -94,7 +93,6 @@ const translations = {
         "profile.lighting": "Standart Aydınlatma",
         "profile.water_heater": "Standart Şofben",
         "profile.dryer": "Standart Kurutma Mak.",
-        "profile.electric_hub": "Sigorta / Elektrik Paneli",
 
         // ── Rooms ──────────────────────────────────────────────
         addRoom: "Oda Ekle",
@@ -492,7 +490,6 @@ const translations = {
         "device.lighting": "Lighting",
         "device.water_heater": "Water Heater",
         "device.dryer": "Dryer",
-        "device.electric_hub": "Circuit Breaker",
 
         // Device profile names (catalog)
         "profile.fridge": "Standard Fridge",
@@ -505,7 +502,6 @@ const translations = {
         "profile.lighting": "Standard Lighting",
         "profile.water_heater": "Standard Water Heater",
         "profile.dryer": "Standard Dryer",
-        "profile.electric_hub": "Circuit Breaker Panel",
 
         // ── Rooms ──────────────────────────────────────────────
         addRoom: "Add Room",
