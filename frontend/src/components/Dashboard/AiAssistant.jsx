@@ -1,17 +1,22 @@
 /**
- * AiAssistant.jsx — KWhane GPT-4o Energy Advisor chat panel.
+ * AiAssistant.jsx — Dual-mode AI chat panel.
  *
- * Controlled by DashboardLayout: receives isOpen + onClose props.
- * Does NOT manage its own toggle button — the "AI recommendation card"
- * in the right panel is the trigger (DashboardLayout handles that).
+ * Two isolated chat modes:
+ *   - 'advisor'  → Energy analysis (existing KWhane AI)
+ *   - 'builder'  → Home design helper
  *
- * On open: reads Zustand snapshot (objects + energyData + deviceSpecs),
- * queries Supabase recommendations, posts welcome message with real data.
- * On send: POSTs to FastAPI /chat with full home context + last 6 messages.
+ * Message histories are persisted in refs so switching modes
+ * never resets either conversation.
+ *
+ * Props:
+ *   isOpen, onOpen, onClose  — panel visibility (non-embedded)
+ *   embedded                 — inline mode for HomeDashboard
+ *   chatMode                 — 'advisor' | 'builder'
+ *   onSetChatMode            — (mode) => void
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, X, Send, Mic, MicOff } from 'lucide-react';
+import { Sparkles, X, Send, Mic, MicOff, Home, ArrowLeftRight } from 'lucide-react';
 import { sendMessage } from '../../services/chatService';
 import { getBillSummary, readCachedDiagnosticSummary } from '../../services/billsService';
 import { supabase } from '../../lib/supabase';
@@ -20,7 +25,14 @@ import useSceneStore from '../../store/useSceneStore';
 import { useSpeechToText } from '../../hooks/useSpeechToText';
 import { useLanguage } from '../../contexts/LanguageProvider';
 
-const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
+const AiAssistant = ({
+    isOpen,
+    onOpen,
+    onClose,
+    embedded = false,
+    chatMode = 'advisor',
+    onSetChatMode,
+}) => {
     const { user } = useAuth();
     const { t } = useLanguage();
 
@@ -40,8 +52,30 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
 
     const scrollRef = useRef(null);
 
+    // ── Dual-mode message persistence ──────────────────────────────────────
+    const advisorMsgsRef = useRef(null);
+    const builderMsgsRef = useRef(null);
+    const prevModeRef = useRef(chatMode);
+
+    useEffect(() => {
+        if (prevModeRef.current === chatMode) return;
+        // Save current messages to the outgoing mode's ref
+        if (prevModeRef.current === 'advisor') {
+            advisorMsgsRef.current = messages;
+        } else {
+            builderMsgsRef.current = messages;
+        }
+        // Restore incoming mode's messages (or init fresh)
+        if (chatMode === 'advisor') {
+            setMessages(advisorMsgsRef.current || [{ role: 'assistant', content: t('analyzingHome') }]);
+            if (!advisorMsgsRef.current) setContextReady(false);
+        } else {
+            setMessages(builderMsgsRef.current || [{ role: 'assistant', content: t('builderWelcome') }]);
+        }
+        prevModeRef.current = chatMode;
+    }, [chatMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const lastDeviceAddedAt = useSceneStore((s) => s.lastDeviceAddedAt);
-    // Refresh embedded context when a new device is added and fully analyzed
     useEffect(() => {
         if (embedded && contextReady && lastDeviceAddedAt) {
             setContextReady(false);
@@ -63,10 +97,8 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
         if ((!isOpen && !embedded) || contextReady) return;
 
         (async () => {
-            // One-time snapshot — avoids subscription re-renders
             const { objects, energyData, deviceSpecs } = useSceneStore.getState();
 
-            // Build deviceContext[] from Zustand state
             const devices = objects.map((obj) => {
                 const spec   = deviceSpecs[obj.id]  || {};
                 const energy = energyData[obj.id]   || {};
@@ -82,12 +114,9 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                 };
             });
 
-            // Compute totals
             const totKwh  = devices.reduce((s, d) => s + (d.monthly_kwh  || 0), 0);
             const totCost = devices.reduce((s, d) => s + (d.monthly_cost || 0), 0);
 
-            // Query Supabase recommendations + bill summary in parallel
-            // (both optional — chat still works if either fails)
             let recs = [];
             let bills = { billCount: 0, avgMonthlyKwh: null, avgMonthlyCost: null, effectiveTariffTlPerKwh: null };
             if (user?.id) {
@@ -112,26 +141,27 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
             setBillSummary(bills);
             setContextReady(true);
 
-            // Build welcome message — prefer real bill numbers when available
-            let welcome;
-            if (bills.billCount > 0) {
-                welcome = t('aiWelcomeBills')
-                    .replace('{n}', bills.billCount)
-                    .replace('{cost}', Math.round(bills.avgMonthlyCost))
-                    .replace('{kwh}', bills.avgMonthlyKwh.toFixed(0));
-            } else if (devices.length === 0) {
-                welcome = t('aiWelcomeNoDevices');
-            } else {
-                const hasCosts = totCost > 0;
-                welcome = hasCosts
-                    ? t('aiWelcomeDevices')
-                        .replace('{n}', devices.length)
-                        .replace('{kwh}', totKwh.toFixed(1))
-                        .replace('{cost}', Math.round(totCost))
-                    : t('aiWelcomeDevicesNoCost').replace('{n}', devices.length);
+            // Only set welcome if we're still in advisor mode and don't have persisted messages
+            if (chatMode === 'advisor' && !advisorMsgsRef.current) {
+                let welcome;
+                if (bills.billCount > 0) {
+                    welcome = t('aiWelcomeBills')
+                        .replace('{n}', bills.billCount)
+                        .replace('{cost}', Math.round(bills.avgMonthlyCost))
+                        .replace('{kwh}', bills.avgMonthlyKwh.toFixed(0));
+                } else if (devices.length === 0) {
+                    welcome = t('aiWelcomeNoDevices');
+                } else {
+                    const hasCosts = totCost > 0;
+                    welcome = hasCosts
+                        ? t('aiWelcomeDevices')
+                            .replace('{n}', devices.length)
+                            .replace('{kwh}', totKwh.toFixed(1))
+                            .replace('{cost}', Math.round(totCost))
+                        : t('aiWelcomeDevicesNoCost').replace('{n}', devices.length);
+                }
+                setMessages([{ role: 'assistant', content: welcome }]);
             }
-
-            setMessages([{ role: 'assistant', content: welcome }]);
         })();
     }, [isOpen, embedded, contextReady, user]);
 
@@ -139,7 +169,6 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
     useEffect(() => {
         if (!isOpen && !embedded) {
             setContextReady(false);
-            setMessages([{ role: 'assistant', content: t('analyzingHome') }]);
         }
     }, [isOpen, embedded]);
 
@@ -154,7 +183,6 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
         setInputText('');
         setIsLoading(true);
 
-        // Last 6 messages as history (3 turns)
         const history = nextMessages.slice(-6).map(({ role, content }) => ({ role, content }));
 
         const result = await sendMessage({
@@ -169,6 +197,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
             bill_count:                    billSummary.billCount,
             effective_tariff_tl_per_kwh:   billSummary.effectiveTariffTlPerKwh,
             bill_diagnostic_summary:       readCachedDiagnosticSummary(user?.id),
+            chat_mode:                     chatMode,
         });
 
         const replyContent = result?.reply ?? t('aiConnectionError');
@@ -177,7 +206,6 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
         setIsLoading(false);
     };
 
-    // Enter to send (Shift+Enter = newline passthrough)
     const handleKeyDown = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -185,49 +213,67 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
         }
     };
 
-    // Embedded mode: skip launcher; always render the panel inline.
-    if (embedded) {
-        // fallthrough — render the panel below with embedded styles.
-    } else if (!isOpen) {
-        // Floating circular launcher — always visible when the panel is closed.
+    const handleToggleMode = () => {
+        if (onSetChatMode) {
+            onSetChatMode(chatMode === 'advisor' ? 'builder' : 'advisor');
+        }
+    };
+
+    // ── Floating launchers (sim mode only, not embedded) ────────────────────
+    if (!embedded && !isOpen) {
         return (
-            <button
-                type="button"
-                onClick={onOpen}
-                aria-label={t('openAiAssistant')}
-                className="fixed bottom-6 right-6 z-50 flex items-center justify-center rounded-full transition-transform hover:scale-105"
-                style={{
-                    width:      56,
-                    height:     56,
-                    background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                    boxShadow:  '0 12px 32px rgba(59,130,246,0.45)',
-                    border:     '1px solid rgba(255,255,255,0.08)',
-                    color:      '#ffffff',
-                    cursor:     'pointer',
-                }}
-            >
-                <Sparkles size={22} />
-                <span
-                    className="absolute rounded-full"
+            <div className="fixed bottom-6 left-20 z-50 flex flex-col gap-3">
+                <button
+                    type="button"
+                    onClick={() => { if (onSetChatMode) onSetChatMode('builder'); onOpen(); }}
+                    aria-label={t('homeBuilderChat')}
+                    title={t('homeBuilderChat')}
+                    className="flex items-center justify-center rounded-full transition-transform hover:scale-105"
                     style={{
-                        right:      6,
-                        top:        6,
-                        width:      8,
-                        height:     8,
-                        background: '#22c55e',
-                        boxShadow:  '0 0 8px rgba(34,197,94,0.8)',
+                        width:      48,
+                        height:     48,
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        boxShadow:  '0 8px 24px rgba(16,185,129,0.4)',
+                        border:     '1px solid rgba(255,255,255,0.08)',
+                        color:      '#ffffff',
+                        cursor:     'pointer',
                     }}
-                />
-            </button>
+                >
+                    <Home size={20} />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => { if (onSetChatMode) onSetChatMode('advisor'); onOpen(); }}
+                    aria-label={t('aiAdvisor')}
+                    title={t('aiAdvisor')}
+                    className="flex items-center justify-center rounded-full transition-transform hover:scale-105"
+                    style={{
+                        width:      48,
+                        height:     48,
+                        background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                        boxShadow:  '0 8px 24px rgba(59,130,246,0.4)',
+                        border:     '1px solid rgba(255,255,255,0.08)',
+                        color:      '#ffffff',
+                        cursor:     'pointer',
+                    }}
+                >
+                    <Sparkles size={20} />
+                </button>
+            </div>
         );
     }
+
+    const isBuilder = chatMode === 'builder';
+    const accentColor = isBuilder ? '#10b981' : '#3b82f6';
+    const headerTitle = isBuilder ? t('homeBuilderChat') : 'KWhane AI';
+    const headerSub   = isBuilder ? t('homeBuilderChat') : t('aiOnline');
 
     return (
         <div
             className={
                 embedded
                     ? "flex flex-col rounded-3xl overflow-hidden w-full h-full"
-                    : "fixed bottom-6 right-6 z-50 flex flex-col rounded-3xl overflow-hidden"
+                    : "fixed bottom-6 left-20 z-50 flex flex-col rounded-3xl overflow-hidden"
             }
             style={
                 embedded
@@ -255,28 +301,46 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                 style={{ background: 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}
             >
                 <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl" style={{ background: 'rgba(59,130,246,0.1)' }}>
-                        <Sparkles className="w-4 h-4" style={{ color: '#3b82f6' }} />
+                    <div className="p-2 rounded-xl" style={{ background: `${accentColor}18` }}>
+                        {isBuilder
+                            ? <Home className="w-4 h-4" style={{ color: accentColor }} />
+                            : <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
+                        }
                     </div>
                     <div>
-                        <h3 className="font-bold text-sm leading-none" style={{ color: 'var(--color-text)' }}>KWhane AI</h3>
+                        <h3 className="font-bold text-sm leading-none" style={{ color: 'var(--color-text)' }}>
+                            {headerTitle}
+                        </h3>
                         <p className="text-[11px] mt-1 flex items-center gap-1.5" style={{ color: 'var(--color-subtle)' }}>
-                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
-                            {t('aiOnline')}
+                            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: accentColor }} />
+                            {headerSub}
                         </p>
                     </div>
                 </div>
-                {!embedded && (
+                <div className="flex items-center gap-1">
+                    {/* Mode toggle */}
                     <button
-                        onClick={onClose}
-                        className="p-1 transition-colors"
-                        style={{ color: 'var(--color-subtle)' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-subtle)')}
+                        onClick={handleToggleMode}
+                        title={isBuilder ? t('switchToAdvisor') : t('switchToBuilder')}
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: 'var(--color-subtle)', cursor: 'pointer', background: 'transparent' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = accentColor; e.currentTarget.style.background = `${accentColor}12`; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-subtle)'; e.currentTarget.style.background = 'transparent'; }}
                     >
-                        <X size={18} />
+                        {isBuilder ? <Sparkles size={16} /> : <Home size={16} />}
                     </button>
-                )}
+                    {!embedded && (
+                        <button
+                            onClick={onClose}
+                            className="p-1 transition-colors"
+                            style={{ color: 'var(--color-subtle)', cursor: 'pointer' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-subtle)')}
+                        >
+                            <X size={18} />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* ── Messages ───────────────────────────────────────────────────── */}
@@ -296,8 +360,8 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                             style={
                                 msg.role === 'user'
                                     ? {
-                                        background:   'rgba(59,130,246,0.15)',
-                                        border:       '1px solid rgba(59,130,246,0.3)',
+                                        background:   `${accentColor}26`,
+                                        border:       `1px solid ${accentColor}4D`,
                                         borderRadius: '16px 16px 4px 16px',
                                         color:        'var(--color-text)',
                                     }
@@ -314,7 +378,6 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                     </div>
                 ))}
 
-                {/* Loading indicator */}
                 {isLoading && (
                     <div className="flex" style={{ justifyContent: 'flex-start' }}>
                         <div
@@ -330,7 +393,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                                     key={i}
                                     className="inline-block w-2 h-2 rounded-full animate-bounce"
                                     style={{
-                                        background:      '#3b82f6',
+                                        background:      accentColor,
                                         animationDelay: `${i * 0.15}s`,
                                     }}
                                 />
@@ -361,7 +424,7 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                             color:       'var(--color-text)',
                             opacity:     isLoading ? 0.6 : 1,
                         }}
-                        onFocus={(e)  => (e.target.style.borderColor = '#3b82f6')}
+                        onFocus={(e)  => (e.target.style.borderColor = accentColor)}
                         onBlur={(e)   => (e.target.style.borderColor = 'var(--color-border)')}
                     />
                     {micSupported && (
@@ -387,16 +450,8 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                         className="flex-shrink-0 p-2 rounded-xl transition-colors"
                         style={{
                             color:      '#ffffff',
-                            background: isLoading || !inputText.trim() ? '#1e3a5f' : '#3b82f6',
+                            background: isLoading || !inputText.trim() ? '#1e3a5f' : accentColor,
                             cursor:     isLoading || !inputText.trim() ? 'not-allowed' : 'pointer',
-                        }}
-                        onMouseEnter={(e) => {
-                            if (!isLoading && inputText.trim())
-                                e.currentTarget.style.background = '#2563eb';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background =
-                                isLoading || !inputText.trim() ? '#1e3a5f' : '#3b82f6';
                         }}
                     >
                         <Send size={16} />

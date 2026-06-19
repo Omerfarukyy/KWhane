@@ -128,6 +128,9 @@ def _build_system_prompt(request: ChatRequest) -> str:
 Samimi, pratik ve ozlu yanitlar ver. Gereksiz teknik jargon kullanma.
 Her zaman Turkce yanit ver.
 
+Referans: Turkiye'de aktif bir hanenin aylik ortalama elektrik tuketimi 416 kWh'tir.
+Kullanicinin tuketimini bu degerle karsilastirarak yorum yap.
+
 === KULLANICININ EV DURUMU ===
 {consumption_block}
 Cihaz sayisi   : {device_count}
@@ -144,6 +147,7 @@ Yanit kurallari:
 - Rakamlari daima TL ve kWh birimleriyle ver.
 - Yanitlari 3-5 cumle ile sinirla; liste gerekiyorsa en fazla 4 madde.
 - Cihaz yoksa kullaniciyi simulasyona cihaz eklemeye yonlendir.
+- Turkiye ortalamasi (416 kWh/ay) ile karsilastirma yaparken somut rakamlar ver.
 {tariff_rule}"""
 
 

@@ -47,6 +47,7 @@ const DashboardLayout = () => {
     const [catalogInitialQuery, setCatalogInitialQuery] = useState('');
     const [pendingGhostId,      setPendingGhostId]      = useState(null);
     const [activeTab,           setActiveTab]           = useState('home');
+    const [chatMode,            setChatMode]            = useState('advisor');
     // Home panel sub-tabs
     const [homeTab,             setHomeTab]             = useState('ozet');
     const [isPanelCollapsed,    setIsPanelCollapsed]    = useState(false);
@@ -303,8 +304,8 @@ const DashboardLayout = () => {
             .sort((a, b) => b.kwh - a.kwh);
     }, [objects, energyData]);
 
-    // ── Trend: tahmin vs fatura ortalaması (veya Türkiye ort. 280 kWh) ───
-    const trendRef  = billsAvgKwh && billsAvgKwh > 0 ? billsAvgKwh : 280;
+    // ── Trend: tahmin vs fatura ortalaması (veya Türkiye ort. 416 kWh) ───
+    const trendRef  = billsAvgKwh && billsAvgKwh > 0 ? billsAvgKwh : 416;
     const trendLabel = billsAvgKwh && billsAvgKwh > 0 ? t('billAvg') : t('turkeyAvg');
 
     // Gauge offset — clamp totalKwh to 0-600 for visual
@@ -387,6 +388,8 @@ const DashboardLayout = () => {
                                     setPendingGhostId(null);
                                     setIsCatalogOpen(true);
                                 }}
+                                chatMode={chatMode}
+                                onSetChatMode={setChatMode}
                             />
                         </div>
                     )}
@@ -807,37 +810,6 @@ const DashboardLayout = () => {
                                             </motion.div>
                                         )}
 
-                                        {/* AI chatbot entry */}
-                                        <motion.div
-                                            onClick={openAiAssistant}
-                                            className="rounded-2xl p-4 relative overflow-hidden cursor-pointer"
-                                            style={{ background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.2)' }}
-                                            whileHover={{ scale: 1.025, y: -2, boxShadow: '0 8px 24px rgba(59,130,246,0.18)' }}
-                                            whileTap={{ scale: 0.98 }}
-                                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                                        >
-                                            <div className="absolute top-0 left-0 w-full h-0.5"
-                                                style={{ background: 'linear-gradient(to right, #3b82f6, #1d4ed8)' }} />
-                                            <div className="flex items-start gap-3">
-                                                <div className="p-2 rounded-xl mt-0.5"
-                                                    style={{ background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}>
-                                                    <Lightbulb size={18} className="animate-pulse" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <h4 className="text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-2"
-                                                        style={{ color: '#3b82f6' }}>
-                                                        {t('kwhaneAi')}
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
-                                                    </h4>
-                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}
-                                                        dangerouslySetInnerHTML={{ __html: t('aiRecommendationEx') }} />
-                                                </div>
-                                            </div>
-                                            <div className="mt-3 flex items-center justify-end text-xs font-semibold gap-1"
-                                                style={{ color: '#3b82f6' }}>
-                                                {t('seeDetails')} <ChevronRight size={13} />
-                                            </div>
-                                        </motion.div>
                                     </div>
                                 )}
 
@@ -936,7 +908,7 @@ const DashboardLayout = () => {
                 <ProfileModal  isOpen={isProfileModalOpen}  onClose={closeProfileModal} />
                 <SettingsModal isOpen={isSettingsModalOpen} onClose={closeSettingsModal} />
                 {!homeView && (
-                    <AiAssistant   isOpen={isAiAssistantOpen} onOpen={openAiAssistant} onClose={closeAiAssistant} />
+                    <AiAssistant   isOpen={isAiAssistantOpen} onOpen={openAiAssistant} onClose={closeAiAssistant} chatMode={chatMode} onSetChatMode={setChatMode} />
                 )}
                 <HomeBuilderWizard isOpen={isBuilderOpen}     onOpen={openBuilder}     onClose={closeBuilder}     hidden={isAiAssistantOpen} />
 
@@ -1028,7 +1000,7 @@ const NavButton = React.memo(({ icon, active, onClick, tooltip, danger = false }
 ));
 
 // ─── Profile Menu Item ───────────────────────────────────────────────────────
-const ProfileMenuItem = ({ icon, label, onClick, danger = false }) => (
+const ProfileMenuItem = React.memo(({ icon, label, onClick, danger = false }) => (
     <button
         onClick={onClick}
         className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors text-left"
@@ -1039,7 +1011,7 @@ const ProfileMenuItem = ({ icon, label, onClick, danger = false }) => (
         <span style={{ color: danger ? '#f87171' : 'var(--color-muted)' }}>{icon}</span>
         {label}
     </button>
-);
+));
 
 // ─── Device Detail Panel ──────────────────────────────────────────────────────
 

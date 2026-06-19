@@ -99,4 +99,4 @@ const TopExpenseBox = () => {
     );
 };
 
-export default TopExpenseBox;
+export default React.memo(TopExpenseBox);

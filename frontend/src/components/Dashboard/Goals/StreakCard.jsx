@@ -416,4 +416,4 @@ const StreakCard = ({ userId, predictedKwh }) => {
     );
 };
 
-export default StreakCard;
+export default React.memo(StreakCard);

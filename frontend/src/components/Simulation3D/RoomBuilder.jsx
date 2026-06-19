@@ -8,12 +8,29 @@ import RoomFurnishings from './RoomFurnishings';
 
 const WALL_THICKNESS = 0.1;
 const DIVIDER_THICKNESS = 0.04;
-const wallMatNormal = { color: '#8ecae6', transparent: true, opacity: 0.35, side: 2 };
-const wallMatSelected = { color: '#0ea5e9', transparent: true, opacity: 0.6, side: 2 };
-const dividerMatNormal = { color: '#a8d8ea', transparent: true, opacity: 0.18, side: 2 };
-const dividerMatSelected = { color: '#0ea5e9', transparent: true, opacity: 0.32, side: 2 };
-const floorMatNormal = { color: '#e0e0e0', side: 2 };
-const floorMatSelected = { color: '#cbd5e1', side: 2 };
+const wallMatNormal = {
+    color: '#93c5fd', transparent: true, opacity: 0.28,
+    roughness: 0.4, metalness: 0.05,
+    side: THREE.DoubleSide, depthWrite: false,
+};
+const wallMatSelected = {
+    color: '#3b82f6', transparent: true, opacity: 0.45,
+    roughness: 0.3, metalness: 0.1,
+    emissive: '#3b82f6', emissiveIntensity: 0.15,
+    side: THREE.DoubleSide, depthWrite: false,
+};
+const dividerMatNormal = {
+    color: '#bfdbfe', transparent: true, opacity: 0.14,
+    roughness: 0.5, metalness: 0,
+    side: THREE.DoubleSide, depthWrite: false,
+};
+const dividerMatSelected = {
+    color: '#3b82f6', transparent: true, opacity: 0.25,
+    roughness: 0.4, metalness: 0.05,
+    side: THREE.DoubleSide, depthWrite: false,
+};
+const floorMatNormal = { color: '#e5e7eb', roughness: 0.8, metalness: 0, side: THREE.DoubleSide };
+const floorMatSelected = { color: '#cbd5e1', roughness: 0.7, metalness: 0, side: THREE.DoubleSide };
 
 // Helper Components for UI
 const WallAddBtn = ({ position, onClick }) => {
@@ -441,7 +458,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                 }
 
                 return (
-                    <mesh key={wall.name} name={wall.name} position={wall.position} castShadow receiveShadow raycast={() => null}>
+                    <mesh key={wall.name} name={wall.name} position={wall.position} receiveShadow raycast={() => null}>
                         <boxGeometry args={wall.size} />
                         <meshStandardMaterial {...wallMaterialProps} />
                     </mesh>
