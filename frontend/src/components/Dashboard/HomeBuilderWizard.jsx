@@ -298,9 +298,9 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                 style={{
                     maxWidth: step === STEP_CUSTOM ? 900 : 820,
                     maxHeight: '90vh',
-                    background: '#111111',
-                    border: '1px solid #1e1e1e',
-                    boxShadow: '0 25px 80px rgba(0,0,0,0.9)',
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    boxShadow: '0 25px 80px rgba(0,0,0,0.6)',
                 }}
             >
                 {/* Glow */}
@@ -309,16 +309,16 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-5 flex-shrink-0"
-                    style={{ borderBottom: '1px solid #1e1e1e' }}>
+                    style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <div className="flex items-center gap-3">
                         <div className="p-2.5 rounded-xl" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
                             <Home className="w-5 h-5" style={{ color: '#10b981' }} />
                         </div>
                         <div>
-                            <h2 className="font-bold text-white text-base">
+                            <h2 className="font-bold text-base" style={{ color: 'var(--color-text)' }}>
                                 {step === STEP_CUSTOM ? t('customDesign') : t('setupHome')}
                             </h2>
-                            <p className="text-xs mt-0.5" style={{ color: '#555' }}>
+                            <p className="text-xs mt-0.5" style={{ color: 'var(--color-subtle)' }}>
                                 {step === STEP_CUSTOM
                                     ? t('designRooms')
                                     : t('selectOrCustom')}
@@ -330,18 +330,18 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                             <button
                                 onClick={() => setStep(STEP_SELECT)}
                                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                                style={{ color: '#888', background: '#1a1a1a', border: '1px solid #2a2a2a', cursor: 'pointer' }}
-                                onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = '#444'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.color = '#888'; e.currentTarget.style.borderColor = '#2a2a2a'; }}
+                                style={{ color: 'var(--color-subtle)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', cursor: 'pointer' }}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text)'; e.currentTarget.style.borderColor = 'var(--color-border-2)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-subtle)'; e.currentTarget.style.borderColor = 'var(--color-border)'; }}
                             >
                                 {t('back')}
                             </button>
                         )}
                         <button onClick={onClose}
                             className="p-2 rounded-xl transition-colors"
-                            style={{ color: '#555', cursor: 'pointer' }}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}>
+                            style={{ color: 'var(--color-subtle)', cursor: 'pointer' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-subtle)')}>
                             <X size={18} />
                         </button>
                     </div>
@@ -349,7 +349,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-6"
-                    style={{ scrollbarWidth: 'thin', scrollbarColor: '#2a2a2a transparent' }}>
+                    style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--color-border) transparent' }}>
 
                     <AnimatePresence mode="wait">
                         {step === STEP_SELECT && (
@@ -375,8 +375,8 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                 onClick={() => handlePresetSelect(key)}
                                                 className="relative rounded-2xl p-5 cursor-pointer transition-all"
                                                 style={{
-                                                    background: isSelected ? 'rgba(16,185,129,0.08)' : '#161616',
-                                                    border: isSelected ? '2px solid rgba(16,185,129,0.5)' : '2px solid #1e1e1e',
+                                                    background: isSelected ? 'rgba(16,185,129,0.08)' : 'var(--color-surface-2)',
+                                                    border: isSelected ? '2px solid rgba(16,185,129,0.5)' : '2px solid var(--color-border)',
                                                     boxShadow: isSelected ? '0 0 24px rgba(16,185,129,0.1)' : 'none',
                                                 }}
                                                 whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}
@@ -391,24 +391,24 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                 )}
 
                                                 <div className="text-3xl mb-3">{preset.icon}</div>
-                                                <h3 className="text-white font-bold text-base mb-0.5">{t(preset.labelKey)}</h3>
+                                                <h3 className="font-bold text-base mb-0.5" style={{ color: 'var(--color-text)' }}>{t(preset.labelKey)}</h3>
                                                 <span className="text-xs font-medium px-2 py-0.5 rounded-md inline-block mb-3"
                                                     style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>
                                                     {preset.subtitle}
                                                 </span>
-                                                <p className="text-xs leading-relaxed mb-4" style={{ color: '#777' }}>
+                                                <p className="text-xs leading-relaxed mb-4" style={{ color: 'var(--color-muted)' }}>
                                                     {t(preset.descKey)}
                                                 </p>
 
                                                 {/* Room list */}
                                                 <div className="mb-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#555' }}>
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--color-subtle)' }}>
                                                         {t('rooms')} ({preset.rooms.length})
                                                     </p>
                                                     <div className="flex flex-wrap gap-1.5">
                                                         {preset.rooms.map((r, i) => (
                                                             <span key={i} className="text-[11px] px-2 py-1 rounded-md"
-                                                                style={{ background: '#1e1e1e', color: '#aaa' }}>
+                                                                style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>
                                                                 {r.name}
                                                             </span>
                                                         ))}
@@ -417,7 +417,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
 
                                                 {/* Device list */}
                                                 <div>
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#555' }}>
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--color-subtle)' }}>
                                                         {t('devices')} ({roomDevices.length})
                                                     </p>
                                                     <div className="flex flex-wrap gap-1.5">
@@ -425,7 +425,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                             const count = roomDevices.filter((x) => x === d).length;
                                                             return (
                                                                 <span key={d} className="text-[11px] px-2 py-1 rounded-md flex items-center gap-1"
-                                                                    style={{ background: '#1e1e1e', color: '#aaa' }}>
+                                                                    style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>
                                                                     <span>{DEVICE_ICONS[d]}</span>
                                                                     <span>{t(`device.${d}`)}{count > 1 ? ` x${count}` : ''}</span>
                                                                 </span>
@@ -468,9 +468,9 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
 
                                 {/* Divider */}
                                 <div className="flex items-center gap-4 mb-6">
-                                    <div className="flex-1 h-px" style={{ background: '#1e1e1e' }} />
-                                    <span className="text-xs font-medium" style={{ color: '#555' }}>{t('or')}</span>
-                                    <div className="flex-1 h-px" style={{ background: '#1e1e1e' }} />
+                                    <div className="flex-1 h-px" style={{ background: 'var(--color-border)' }} />
+                                    <span className="text-xs font-medium" style={{ color: 'var(--color-subtle)' }}>{t('or')}</span>
+                                    <div className="flex-1 h-px" style={{ background: 'var(--color-border)' }} />
                                 </div>
 
                                 {/* Custom builder CTA */}
@@ -478,8 +478,8 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                     onClick={() => setStep(STEP_CUSTOM)}
                                     className="rounded-2xl p-5 cursor-pointer transition-all"
                                     style={{
-                                        background: '#161616',
-                                        border: '2px dashed #2a2a2a',
+                                        background: 'var(--color-surface-2)',
+                                        border: '2px dashed var(--color-border)',
                                     }}
                                     whileHover={{ borderColor: 'rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.03)' }}
                                     whileTap={{ scale: 0.99 }}
@@ -489,12 +489,12 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                             <Pencil size={20} style={{ color: '#818cf8' }} />
                                         </div>
                                         <div className="flex-1">
-                                            <h3 className="text-white font-bold text-sm mb-1">{t('customDesign')}</h3>
-                                            <p className="text-xs" style={{ color: '#777' }}>
+                                            <h3 className="font-bold text-sm mb-1" style={{ color: 'var(--color-text)' }}>{t('customDesign')}</h3>
+                                            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                                                 {t('customDesignDesc')}
                                             </p>
                                         </div>
-                                        <ChevronRight size={20} style={{ color: '#555' }} />
+                                        <ChevronRight size={20} style={{ color: 'var(--color-subtle)' }} />
                                     </div>
                                 </motion.div>
                             </motion.div>
@@ -512,14 +512,14 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                 <div className="space-y-4 mb-6">
                                     {customRooms.map((room) => (
                                         <div key={room.id} className="rounded-xl p-4"
-                                            style={{ background: '#161616', border: '1px solid #1e1e1e' }}>
+                                            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
 
                                             {/* Room header */}
                                             <div className="flex items-start gap-3 mb-3">
                                                 <div className="flex-1 grid grid-cols-2 gap-3">
                                                     {/* Room name */}
                                                     <div>
-                                                        <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: '#555' }}>
+                                                        <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: 'var(--color-subtle)' }}>
                                                             {t('roomName')}
                                                         </label>
                                                         <input
@@ -538,16 +538,17 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                     </div>
                                                     {/* Room type */}
                                                     <div>
-                                                        <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: '#555' }}>
+                                                        <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: 'var(--color-subtle)' }}>
                                                             {t('roomType')}
                                                         </label>
                                                         <select
                                                             value={room.roomType}
                                                             onChange={(e) => updateCustomRoom(room.id, 'roomType', e.target.value)}
-                                                            className="w-full text-sm py-2 px-3 rounded-lg outline-none text-white appearance-none"
+                                                            className="w-full text-sm py-2 px-3 rounded-lg outline-none appearance-none"
                                                             style={{
-                                                                background: '#1e1e1e',
-                                                                border: '1px solid #2a2a2a',
+                                                                background: 'var(--color-surface)',
+                                                                border: '1px solid var(--color-border)',
+                                                                color: 'var(--color-text)',
                                                                 cursor: 'pointer',
                                                             }}
                                                         >
@@ -562,9 +563,9 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                     <button
                                                         onClick={() => removeCustomRoom(room.id)}
                                                         className="p-2 rounded-lg transition-colors mt-5"
-                                                        style={{ color: '#555', cursor: 'pointer' }}
+                                                        style={{ color: 'var(--color-subtle)', cursor: 'pointer' }}
                                                         onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
-                                                        onMouseLeave={(e) => { e.currentTarget.style.color = '#555'; e.currentTarget.style.background = 'transparent'; }}
+                                                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-subtle)'; e.currentTarget.style.background = 'transparent'; }}
                                                     >
                                                         <Trash2 size={16} />
                                                     </button>
@@ -579,24 +580,24 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                     { key: 'height', label: `${t('height')} (m)` },
                                                 ].map(({ key, label }) => (
                                                     <div key={key}>
-                                                        <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: '#555' }}>
+                                                        <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: 'var(--color-subtle)' }}>
                                                             {label}
                                                         </label>
                                                         <div className="flex items-center gap-1">
                                                             <button
                                                                 onClick={() => updateCustomRoom(room.id, key, Math.max(2, (room[key] || 3) - 0.5))}
                                                                 className="p-1 rounded-md transition-colors"
-                                                                style={{ background: '#1e1e1e', color: '#888', cursor: 'pointer', border: '1px solid #2a2a2a' }}
+                                                                style={{ background: 'var(--color-border)', color: 'var(--color-muted)', cursor: 'pointer', border: '1px solid var(--color-border)' }}
                                                             >
                                                                 <Minus size={12} />
                                                             </button>
-                                                            <span className="text-sm text-white font-medium text-center flex-1">
+                                                            <span className="text-sm font-medium text-center flex-1" style={{ color: 'var(--color-text)' }}>
                                                                 {room[key]}
                                                             </span>
                                                             <button
                                                                 onClick={() => updateCustomRoom(room.id, key, Math.min(12, (room[key] || 3) + 0.5))}
                                                                 className="p-1 rounded-md transition-colors"
-                                                                style={{ background: '#1e1e1e', color: '#888', cursor: 'pointer', border: '1px solid #2a2a2a' }}
+                                                                style={{ background: 'var(--color-border)', color: 'var(--color-muted)', cursor: 'pointer', border: '1px solid var(--color-border)' }}
                                                             >
                                                                 <Plus size={12} />
                                                             </button>
@@ -607,7 +608,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
 
                                             {/* Device toggles */}
                                             <div>
-                                                <label className="text-[10px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#555' }}>
+                                                <label className="text-[10px] font-bold uppercase tracking-widest mb-2 block" style={{ color: 'var(--color-subtle)' }}>
                                                     {t('devices')}
                                                 </label>
                                                 <div className="flex flex-wrap gap-2">
@@ -619,9 +620,9 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                                                 onClick={() => toggleDevice(room.id, type)}
                                                                 className="text-[11px] px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"
                                                                 style={{
-                                                                    background: active ? 'rgba(16,185,129,0.12)' : '#1e1e1e',
-                                                                    border: active ? '1px solid rgba(16,185,129,0.4)' : '1px solid #2a2a2a',
-                                                                    color: active ? '#10b981' : '#777',
+                                                                    background: active ? 'rgba(16,185,129,0.12)' : 'var(--color-surface)',
+                                                                    border: active ? '1px solid rgba(16,185,129,0.4)' : '1px solid var(--color-border)',
+                                                                    color: active ? '#10b981' : 'var(--color-muted)',
                                                                     cursor: 'pointer',
                                                                 }}
                                                             >
@@ -641,13 +642,13 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                     onClick={addCustomRoom}
                                     className="w-full py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all mb-4"
                                     style={{
-                                        background: '#161616',
-                                        border: '2px dashed #2a2a2a',
-                                        color: '#888',
+                                        background: 'var(--color-surface-2)',
+                                        border: '2px dashed var(--color-border)',
+                                        color: 'var(--color-subtle)',
                                         cursor: 'pointer',
                                     }}
                                     onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.color = '#10b981'; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#888'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.color = 'var(--color-subtle)'; }}
                                 >
                                     <Plus size={16} />
                                     {t('addRoom')}
@@ -661,7 +662,7 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                                         className="px-8 py-3 rounded-xl text-sm font-semibold text-white flex items-center gap-2 transition-all"
                                         style={{
                                             background: customRooms.length === 0
-                                                ? '#1e1e1e'
+                                                ? 'var(--color-border)'
                                                 : 'linear-gradient(135deg, #059669, #047857)',
                                             boxShadow: customRooms.length === 0
                                                 ? 'none'
