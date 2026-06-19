@@ -221,6 +221,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
             daily_usage_hours = parseFloat(usageValue) ?? (picked.daily_usage_hours || model.default_hours || 4);
         }
 
+        const cycles = model.unit === 'cycles' ? (parseFloat(usageValue) || model.default_cycles) : null;
         onDeviceSelect({
             type:                 picked.type || selectedType,
             name:                 picked.name,
@@ -229,6 +230,9 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
             standby_power_watts:  picked.standby_power_watts || 0,
             efficiency_class:     picked.efficiency_class    || 'A',
             year_of_purchase:     picked.year_of_purchase    || new Date().getFullYear(),
+            usage_basis:          model.unit === 'cycles' ? 'cycles' : 'hours',
+            cycles_per_week:      cycles,
+            cycle_hours:          model.unit === 'cycles' ? model.cycle_hours : null,
         });
         onClose();
     };

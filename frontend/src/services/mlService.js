@@ -33,6 +33,9 @@ export function buildDeviceInput(id, spec) {
         standby_power_watts: spec.standby_power_watts || 0,
         efficiency_class: spec.efficiency_class || 'A',
         year_of_purchase: spec.year_of_purchase || new Date().getFullYear(),
+        ...(spec.usage_basis    != null && { usage_basis:    spec.usage_basis    }),
+        ...(spec.cycles_per_week != null && { cycles_per_week: spec.cycles_per_week }),
+        ...(spec.cycle_hours    != null && { cycle_hours:    spec.cycle_hours    }),
     };
 }
 
@@ -139,6 +142,8 @@ export async function runFullAnalysis(deviceId, spec, userId) {
                 projected_monthly_cost:   r.projected_monthly_cost,
                 potential_savings_amount: r.potential_savings_amount,
                 status:                   r.status || 'pending',
+                device_name:              spec?.name ?? null,
+                device_type:              spec?.type ?? null,
             }));
 
             const { error } = await supabase.from('recommendations').insert(rows);

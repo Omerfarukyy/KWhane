@@ -155,6 +155,9 @@ function dbDeviceSpecFromRow(row) {
         standby_power_watts: row.standby_power_watts ?? 0,
         efficiency_class:    row.efficiency_class    ?? 'A',
         year_of_purchase:    row.year_of_purchase    ?? new Date().getFullYear(),
+        usage_basis:         row.usage_basis         ?? null,
+        cycles_per_week:     row.cycles_per_week     ?? null,
+        cycle_hours:         row.cycle_hours         ?? null,
     };
 }
 
@@ -165,8 +168,10 @@ const useSceneStore = create((set, get) => ({
     toggleCreationMode: () => set((s) => ({ isCreationMode: !s.isCreationMode })),
 
     // Persistence state
-    homeId:         null,
-    isLoadingFromDB: true,
+    homeId:             null,
+    isLoadingFromDB:    true,
+    billingScaleFactor: null,
+    lastDeviceAddedAt:  null,
 
     // Scene state — starts EMPTY; populated by loadFromSupabase on login
     rooms:        [],
@@ -193,6 +198,9 @@ const useSceneStore = create((set, get) => ({
     // green instead of blue. Yellow/red are unchanged regardless.
     homeBillValidated: false,
     setHomeBillValidated: (v) => set({ homeBillValidated: !!v }),
+
+    setBillingScaleFactor: (f) => set({ billingScaleFactor: f }),
+    setLastDeviceAddedAt:  (ts) => set({ lastDeviceAddedAt: ts }),
 
     // ─── Energy / spec setters ────────────────────────────────────────────────
     setEnergyData: (id, data) =>
@@ -467,10 +475,10 @@ const useSceneStore = create((set, get) => ({
     loadFromSupabase: async (userId) => {
         set({ isLoadingFromDB: true });
         try {
-            const { homeId, rooms: dbRooms, devices: dbDevices } =
+            const { homeId, billingScaleFactor, rooms: dbRooms, devices: dbDevices } =
                 await houseService.loadHouseState(userId);
 
-            set({ homeId });
+            set({ homeId, billingScaleFactor });
 
             if (dbRooms.length === 0) {
                 // First login — leave scene empty so the setup wizard appears

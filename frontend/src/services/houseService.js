@@ -124,6 +124,9 @@ export async function insertDevice(roomId, deviceId, spec, position) {
             standby_power_watts:  spec.standby_power_watts  ?? 0,
             efficiency_class:     spec.efficiency_class     ?? 'A',
             year_of_purchase:     spec.year_of_purchase     ?? new Date().getFullYear(),
+            usage_basis:          spec.usage_basis          ?? null,
+            cycles_per_week:      spec.cycles_per_week      ?? null,
+            cycle_hours:          spec.cycle_hours          ?? null,
             spatial_config:       {
                 x:        position[0],
                 y:        position[1],
@@ -200,6 +203,17 @@ export async function deleteDevice(deviceId) {
 export async function loadHouseState(userId) {
     const homeId = await ensureHome(userId);
 
+    // Fetch billing_scale_factor for this home (migration 007)
+    let billingScaleFactor = null;
+    try {
+        const { data: homeRow } = await withTimeout(
+            supabase.from('homes').select('billing_scale_factor').eq('id', homeId).single()
+        );
+        billingScaleFactor = homeRow?.billing_scale_factor ?? null;
+    } catch {
+        // Column may not exist in older schema — silently ignore
+    }
+
     // Fetch rooms ordered by creation time (preserves layout order)
     const { data: rooms, error: roomsError } = await withTimeout(
         supabase
@@ -212,7 +226,7 @@ export async function loadHouseState(userId) {
     if (roomsError) throw new Error(`loadHouseState rooms failed: ${roomsError.message}`);
 
     if (!rooms || rooms.length === 0) {
-        return { homeId, rooms: [], devices: [] };
+        return { homeId, billingScaleFactor, rooms: [], devices: [] };
     }
 
     // Fetch all devices belonging to any of these rooms
@@ -227,5 +241,5 @@ export async function loadHouseState(userId) {
 
     if (devicesError) throw new Error(`loadHouseState devices failed: ${devicesError.message}`);
 
-    return { homeId, rooms: rooms ?? [], devices: devices ?? [] };
+    return { homeId, billingScaleFactor, rooms: rooms ?? [], devices: devices ?? [] };
 }

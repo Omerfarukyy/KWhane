@@ -82,6 +82,11 @@ const Card = ({ rec, t, lang }) => {
                         style={{ color: 'var(--color-text)' }}>
                         {displayTitle}
                     </h4>
+                    {(rec.device_name || rec.device_type) && (
+                        <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-subtle)' }}>
+                            {rec.device_name}{rec.device_name && rec.device_type ? ` · ${rec.device_type}` : rec.device_type}
+                        </p>
+                    )}
                 </div>
             </div>
 

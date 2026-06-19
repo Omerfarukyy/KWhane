@@ -20,6 +20,7 @@ import { useLanguage } from '../../../contexts/LanguageProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import { runFullAnalysis, getCachedResult } from '../../../services/mlService';
 import { listBills, getBillSummary } from '../../../services/billsService';
+import { updateDeviceFields } from '../../../services/houseService';
 import { supabase } from '../../../lib/supabase';
 import { USAGE_MODEL } from '../../../utils/usageModels';
 import { efficiencyColor } from '../../../utils/efficiencyColor';
@@ -69,6 +70,8 @@ const DashboardLayout = () => {
     const pinnedDeviceId         = useSceneStore((s) => s.pinnedDeviceId);
     const setPinnedDeviceId      = useSceneStore((s) => s.setPinnedDeviceId);
     const setHomeBillValidated   = useSceneStore((s) => s.setHomeBillValidated);
+    const billingScaleFactor     = useSceneStore((s) => s.billingScaleFactor);
+    const setLastDeviceAddedAt   = useSceneStore((s) => s.setLastDeviceAddedAt);
 
     // ── Store read ─────────────────────────────────────────────────────────
     const rooms          = useSceneStore((s) => s.rooms);
@@ -256,10 +259,11 @@ const DashboardLayout = () => {
         try {
             const result = await runFullAnalysis(newId, enrichedSpec, user?.id);
             setEnergyData(newId, result ?? 'error');
+            setLastDeviceAddedAt(Date.now());
         } catch {
             setEnergyData(newId, 'error');
         }
-    }, [pendingGhostId, addDevice, removeGhost, setEnergyData]);
+    }, [pendingGhostId, addDevice, removeGhost, setEnergyData, setLastDeviceAddedAt]);
 
     // Room creation modal save
     const handleRoomSave = useCallback((roomData) => {
@@ -669,6 +673,11 @@ const DashboardLayout = () => {
                                                     <span className="text-xs font-bold tracking-widest mt-1" style={{ color: '#3b82f6' }}>
                                                         {t('kwh')}
                                                     </span>
+                                                    {billingScaleFactor && billingScaleFactor !== 1 && gaugeKwh > 0 && (
+                                                        <span className="text-[10px] mt-0.5 font-semibold" style={{ color: '#22c55e' }}>
+                                                            ≈{Math.round(gaugeKwh * billingScaleFactor)} kWh kalibre
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -688,6 +697,11 @@ const DashboardLayout = () => {
                                                     style={{ color: '#3b82f6' }}
                                                   />
                                             }
+                                            {billingScaleFactor && billingScaleFactor !== 1 && homeTotals.cost > 0 && (
+                                                <span className="text-[10px] font-semibold" style={{ color: '#22c55e' }}>
+                                                    ≈₺{Math.round(homeTotals.cost * billingScaleFactor)} kalibre
+                                                </span>
+                                            )}
                                             {/* Trend indikatörü */}
                                             {gaugeKwh > 0 && (() => {
                                                 const delta = ((gaugeKwh - trendRef) / trendRef) * 100;
@@ -1031,7 +1045,8 @@ const ProfileMenuItem = ({ icon, label, onClick, danger = false }) => (
 
 const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDeviceSpec, user }) => {
     const { t } = useLanguage();
-    const validated = useSceneStore((s) => s.homeBillValidated);
+    const validated          = useSceneStore((s) => s.homeBillValidated);
+    const billingScaleFactor = useSceneStore((s) => s.billingScaleFactor);
     const isLoading = data === null || data === undefined;
     const isError   = data === 'error';
 
@@ -1048,7 +1063,9 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
     const cycleHours   = usageModel?.cycle_hours ?? 1;
 
     const initHours  = spec?.daily_usage_hours ?? usageModel?.default_hours ?? 8;
-    const initCycles = isCycles ? Math.round(initHours / cycleHours) : 0;
+    const initCycles = isCycles
+        ? Math.round((spec?.cycles_per_week ?? (initHours * 7 / cycleHours)))
+        : 0;
 
     const [editHours,  setEditHours]  = useState(initHours);
     const [editCycles, setEditCycles] = useState(initCycles);
@@ -1058,18 +1075,30 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
     useEffect(() => {
         const h = spec?.daily_usage_hours ?? usageModel?.default_hours ?? 8;
         setEditHours(h);
-        setEditCycles(isCycles ? Math.round(h / cycleHours) : 0);
+        setEditCycles(isCycles
+            ? Math.round(spec?.cycles_per_week ?? (h * 7 / cycleHours))
+            : 0);
     }, [obj.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const currentHours = isCycles ? editCycles * cycleHours : editHours;
+    const currentHours = isCycles ? (editCycles * cycleHours) / 7 : editHours;
     const hasChanged   = Math.abs(currentHours - initHours) > 0.01;
 
     const handleSave = async () => {
         if (!hasChanged || isSaving) return;
         setIsSaving(true);
-        const newSpec = { ...spec, daily_usage_hours: currentHours };
+        const newSpec = {
+            ...spec,
+            daily_usage_hours: currentHours,
+            ...(isCycles && { cycles_per_week: editCycles }),
+        };
         setDeviceSpec(obj.id, newSpec);
         setEnergyData(obj.id, null);
+        // Persist usage changes to devices table
+        const patch = { daily_usage_hours: currentHours };
+        if (isCycles) patch.cycles_per_week = editCycles;
+        updateDeviceFields(obj.id, patch).catch((e) =>
+            console.warn('[DeviceDetailPanel] updateDeviceFields failed:', e.message)
+        );
         try {
             const result = await runFullAnalysis(obj.id, newSpec, user?.id);
             setEnergyData(obj.id, result ?? 'error');
@@ -1179,6 +1208,11 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                             <span className="text-2xl font-black mt-1" style={{ color: accentColor }}>
                                 {kwh.toFixed(1)}
                             </span>
+                            {billingScaleFactor && billingScaleFactor !== 1 && (
+                                <span className="text-[10px] font-semibold mt-0.5" style={{ color: '#22c55e' }}>
+                                    ≈{(kwh * billingScaleFactor).toFixed(1)} kalibre
+                                </span>
+                            )}
                         </div>
                         <div className="rounded-xl p-3 flex flex-col"
                             style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
@@ -1186,6 +1220,11 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                             <span className="text-2xl font-black mt-1" style={{ color: 'var(--color-text)' }}>
                                 {Math.round(cost)}
                             </span>
+                            {billingScaleFactor && billingScaleFactor !== 1 && (
+                                <span className="text-[10px] font-semibold mt-0.5" style={{ color: '#22c55e' }}>
+                                    ≈₺{Math.round(cost * billingScaleFactor)} kalibre
+                                </span>
+                            )}
                         </div>
                     </div>
 

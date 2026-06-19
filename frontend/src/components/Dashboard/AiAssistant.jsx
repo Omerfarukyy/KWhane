@@ -40,6 +40,14 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
 
     const scrollRef = useRef(null);
 
+    const lastDeviceAddedAt = useSceneStore((s) => s.lastDeviceAddedAt);
+    // Refresh embedded context when a new device is added and fully analyzed
+    useEffect(() => {
+        if (embedded && contextReady && lastDeviceAddedAt) {
+            setContextReady(false);
+        }
+    }, [lastDeviceAddedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleTranscript = useCallback((text) => setInputText(text), []);
     const { listening, supported: micSupported, start: startMic, stop: stopMic } = useSpeechToText({ onTranscript: handleTranscript });
 
@@ -63,14 +71,14 @@ const AiAssistant = ({ isOpen, onOpen, onClose, embedded = false }) => {
                 const spec   = deviceSpecs[obj.id]  || {};
                 const energy = energyData[obj.id]   || {};
                 return {
-                    name:                 spec.name              || obj.type || t('device'),
-                    type:                 spec.deviceType        || obj.type || 'unknown',
-                    efficiency_class:     spec.efficiencyClass   || 'A',
-                    nominal_power_watts:  spec.nominalPowerWatts || spec.power || 0,
-                    daily_usage_hours:    spec.dailyUsageHours   || spec.usageHours || 0,
-                    monthly_kwh:          energy.monthly_kwh     ?? null,
-                    monthly_cost:         energy.monthly_cost    ?? null,
-                    efficiency_score:     energy.efficiency_score ?? null,
+                    name:                 spec.name                || obj.type || t('device'),
+                    type:                 spec.type                || obj.type || 'unknown',
+                    efficiency_class:     spec.efficiency_class    || 'A',
+                    nominal_power_watts:  spec.nominal_power_watts || 0,
+                    daily_usage_hours:    spec.daily_usage_hours   || 0,
+                    monthly_kwh:          energy.monthly_kwh       ?? null,
+                    monthly_cost:         energy.monthly_cost      ?? null,
+                    efficiency_score:     energy.efficiency_score  ?? null,
                 };
             });
 
