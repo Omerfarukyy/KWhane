@@ -146,7 +146,7 @@ def score_recommendations(
         if is_cycle_mode and cycle_hours and typical_cycles is not None and usage.cycles_per_week is not None:
             current_usage_value = usage.cycles_per_week
             target_usage_value = typical_cycles
-            trigger = current_usage_value > target_usage_value * 1.2
+            trigger = current_usage_value > target_usage_value
             overrides = {
                 "usage_basis": "cycles",
                 "cycles_per_week": target_usage_value,
@@ -167,7 +167,7 @@ def score_recommendations(
             typical_mid = (profile["daily_hours_range"][0] + profile["daily_hours_range"][1]) / 2
             current_usage_value = usage.effective_daily_hours
             target_usage_value = typical_mid
-            trigger = current_usage_value > target_usage_value * 1.2
+            trigger = current_usage_value > target_usage_value
             overrides = {"daily_usage_hours": target_usage_value, "usage_basis": "hours"}
             title = f"Gunluk kullanimi {round(target_usage_value, 1)} saate dusur"
             title_en = f"Reduce daily usage to {round(target_usage_value, 1)} hours"
@@ -181,7 +181,7 @@ def score_recommendations(
             )
             slug = "reduce-daily-usage"
 
-        if trigger:  # 20% above typical midpoint/default cycles
+        if trigger:  # Above the typical midpoint/default cycles
             projected_estimate = estimate_device_energy(device, energy_predictor, overrides)
             projected_kwh = projected_estimate.total_kwh
             projected_cost = tariff_calculator.calculate_cost(projected_kwh)

@@ -185,10 +185,19 @@ export async function updateDeviceFields(deviceId, patch) {
  * @param {string} deviceId
  */
 export async function deleteDevice(deviceId) {
+    // Keep legacy databases without the expected ON DELETE CASCADE clean too.
+    const { error: recommendationsError } = await withTimeout(
+        supabase.from('recommendations').delete().eq('device_id', deviceId)
+    );
+    if (recommendationsError) {
+        throw new Error(`deleteDevice recommendations cleanup failed: ${recommendationsError.message}`);
+    }
+
     const { error } = await withTimeout(
         supabase.from('devices').delete().eq('id', deviceId)
     );
     if (error) throw new Error(`deleteDevice failed: ${error.message}`);
+    window.dispatchEvent(new Event('recommendations-changed'));
 }
 
 // ─── LOAD FULL HOUSE STATE ───────────────────────────────────────────────────

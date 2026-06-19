@@ -154,25 +154,31 @@ const SuggestionCards = ({ compact = false }) => {
     const timerRef = useRef(null);
 
     useEffect(() => {
-        if (!user?.id) { setLoading(false); return; }
+        if (!user?.id) return;
 
+        const fetchCards = () => {
+            // Try recommendations table — fall back gracefully if table doesn't exist
+            supabase
+                .from('recommendations')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('potential_savings_amount', { ascending: false })
+                .limit(10)
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.warn('[SuggestionCards] fetch failed:', error.message);
+                        setCards([]);
+                    } else {
+                        setCards(data || []);
+                        setIdx(0);
+                    }
+                })
+                .finally(() => setLoading(false));
+        };
 
-        // Try recommendations table — fall back gracefully if table doesn't exist
-        supabase
-            .from('recommendations')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('potential_savings_amount', { ascending: false })
-            .limit(10)
-            .then(({ data, error }) => {
-                if (error) {
-                    console.warn('[SuggestionCards] fetch failed:', error.message);
-                    setCards([]);
-                } else {
-                    setCards(data || []);
-                }
-            })
-            .finally(() => setLoading(false));
+        fetchCards();
+        window.addEventListener('recommendations-changed', fetchCards);
+        return () => window.removeEventListener('recommendations-changed', fetchCards);
     }, [user?.id]);
 
     const prev = useCallback(() => {
@@ -192,7 +198,7 @@ const SuggestionCards = ({ compact = false }) => {
         return () => clearTimeout(timerRef.current);
     }, [idx, paused, cards.length, next]);
 
-    if (loading) {
+    if (loading && user?.id) {
         return (
             <div className="flex items-center justify-center" style={{ height: compact ? 80 : 160, color: 'var(--color-subtle)' }}>
                 <Loader2 size={20} className="animate-spin" />
