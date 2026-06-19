@@ -315,7 +315,7 @@ const DashboardLayout = () => {
                 right column when in home view (dashboard takes the left). */}
             <div
                 className="absolute top-0 bottom-0 right-0 z-0 pointer-events-auto transition-[left] duration-300"
-                style={{ left: homeView ? '60%' : 0 }}
+                style={{ left: homeView ? '50%' : 0 }}
             >
                 <SceneContainer
                     onGhostClick={handleGhostClick}
@@ -337,8 +337,8 @@ const DashboardLayout = () => {
                 flips to device-detail when a device is pinned. */}
             {homeView && (
                 <div
-                    className="absolute top-0 bottom-0 left-0 z-0 pointer-events-auto p-4 sm:p-6 lg:p-8"
-                    style={{ width: '60%' }}
+                    className="absolute top-0 bottom-0 left-0 z-0 pointer-events-auto pt-4 sm:pt-6 lg:pt-8"
+                    style={{ width: '50%' }}
                 >
                     {pinnedObj ? (
                         <aside
@@ -393,7 +393,7 @@ const DashboardLayout = () => {
                 the right 40% in home view so the dashboard owns the left. */}
             <div
                 className="absolute top-0 bottom-0 right-0 z-10 pointer-events-none flex flex-col justify-between p-4 sm:p-6 lg:p-8 transition-[left] duration-300"
-                style={{ left: homeView ? '60%' : 0 }}
+                style={{ left: homeView ? '50%' : 0 }}
             >
 
                 {/* HEADER */}
