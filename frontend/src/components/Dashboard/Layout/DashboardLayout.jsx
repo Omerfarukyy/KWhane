@@ -220,10 +220,10 @@ const DashboardLayout = () => {
         setIsCatalogOpen(true);
     }, []);
 
-    // Ghost dismiss (× button)
+    // Ghost dismiss (× button) — records the dismissal so it stays gone on reload
     const handleGhostDismiss = useCallback((id) => {
-        removeGhost(id);
-    }, [removeGhost]);
+        useSceneStore.getState().dismissGhost(id);
+    }, []);
 
     // Device selected from catalog → add to scene + persist + call ML
     const handleDeviceSelect = useCallback(async (spec) => {
@@ -903,7 +903,7 @@ const DashboardLayout = () => {
                 {!homeView && (
                     <AiAssistant   isOpen={isAiAssistantOpen} onOpen={openAiAssistant} onClose={closeAiAssistant} chatMode={chatMode} onSetChatMode={setChatMode} />
                 )}
-                <HomeBuilderWizard isOpen={isBuilderOpen}     onOpen={openBuilder}     onClose={closeBuilder}     hidden={isAiAssistantOpen} />
+                <HomeBuilderWizard isOpen={isBuilderOpen}     onOpen={openBuilder}     onClose={closeBuilder}     hidden={isAiAssistantOpen || homeView} />
 
                 {isTicketModalOpen && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-auto"

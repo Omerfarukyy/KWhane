@@ -27,14 +27,14 @@ const Lights = () => {
                 intensity={isDark ? 0.5 : 1.4}
                 color={isDark ? '#cdd9ff' : '#fff2d6'}
                 castShadow
-                shadow-mapSize-width={1024}
-                shadow-mapSize-height={1024}
+                shadow-mapSize-width={2048}
+                shadow-mapSize-height={2048}
                 shadow-camera-near={0.5}
-                shadow-camera-far={150}
-                shadow-camera-left={-40}
-                shadow-camera-right={40}
-                shadow-camera-top={40}
-                shadow-camera-bottom={-40}
+                shadow-camera-far={260}
+                shadow-camera-left={-105}
+                shadow-camera-right={105}
+                shadow-camera-top={105}
+                shadow-camera-bottom={-105}
                 shadow-bias={-0.0005}
             />
         </>

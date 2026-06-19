@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Lightbulb, Thermometer, Zap, Droplets, Wind, Monitor, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageProvider';
+import useSceneStore from '../../store/useSceneStore';
 
 const AUTO_ADVANCE_MS = 5000;
 
@@ -82,11 +83,14 @@ const Card = ({ rec, t, lang }) => {
                         style={{ color: 'var(--color-text)' }}>
                         {displayTitle}
                     </h4>
-                    {(rec.device_name || rec.device_type) && (
-                        <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-subtle)' }}>
-                            {rec.device_name}{rec.device_name && rec.device_type ? ` · ${rec.device_type}` : rec.device_type}
-                        </p>
-                    )}
+                    {(rec.device_name || rec.device_type) && (() => {
+                        const typeLabel = rec.device_type ? t(`device.${rec.device_type}`, rec.device_type) : '';
+                        return (
+                            <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-subtle)' }}>
+                                {rec.device_name}{rec.device_name && typeLabel ? ` · ${typeLabel}` : typeLabel}
+                            </p>
+                        );
+                    })()}
                 </div>
             </div>
 
@@ -146,12 +150,25 @@ const EmptyState = ({ t }) => (
 const SuggestionCards = ({ compact = false }) => {
     const { user } = useAuth();
     const { t, lang } = useLanguage();
+    const objects = useSceneStore((s) => s.objects);
     const [cards, setCards] = useState([]);
     const [loading, setLoading] = useState(true);
     const [idx, setIdx] = useState(0);
     const [direction, setDirection] = useState('left');
     const [paused, setPaused] = useState(false);
     const timerRef = useRef(null);
+
+    // Only show recs whose device still exists in the scene (house-level recs
+    // with no device_id always show). Keeps stale cards from lingering after a
+    // device is removed, regardless of DB-cleanup timing. Also drop low-value
+    // recs (< 10 TL/month savings) — not worth surfacing.
+    const visibleCards = useMemo(
+        () => cards.filter((c) =>
+            Number(c.potential_savings_amount ?? 0) >= 10 &&
+            (!c.device_id || objects.some((o) => o.id === c.device_id))
+        ),
+        [cards, objects]
+    );
 
     useEffect(() => {
         if (!user?.id) return;
@@ -183,20 +200,25 @@ const SuggestionCards = ({ compact = false }) => {
 
     const prev = useCallback(() => {
         setDirection('right');
-        setIdx(i => (i === 0 ? cards.length - 1 : i - 1));
-    }, [cards.length]);
+        setIdx(i => (i === 0 ? visibleCards.length - 1 : i - 1));
+    }, [visibleCards.length]);
 
     const next = useCallback(() => {
         setDirection('left');
-        setIdx(i => (i === cards.length - 1 ? 0 : i + 1));
-    }, [cards.length]);
+        setIdx(i => (i === visibleCards.length - 1 ? 0 : i + 1));
+    }, [visibleCards.length]);
 
     // Auto-advance
     useEffect(() => {
-        if (paused || cards.length <= 1) return;
+        if (paused || visibleCards.length <= 1) return;
         timerRef.current = setTimeout(next, AUTO_ADVANCE_MS);
         return () => clearTimeout(timerRef.current);
-    }, [idx, paused, cards.length, next]);
+    }, [idx, paused, visibleCards.length, next]);
+
+    // Keep the index in range when the visible set shrinks (device removed)
+    useEffect(() => {
+        if (idx >= visibleCards.length) setIdx(0);
+    }, [visibleCards.length, idx]);
 
     if (loading && user?.id) {
         return (
@@ -206,7 +228,7 @@ const SuggestionCards = ({ compact = false }) => {
         );
     }
 
-    if (cards.length === 0) return <EmptyState t={t} />;
+    if (visibleCards.length === 0) return <EmptyState t={t} />;
 
     return (
         <div className="flex flex-col gap-3"
@@ -217,12 +239,12 @@ const SuggestionCards = ({ compact = false }) => {
             <div className="rounded-2xl overflow-hidden"
                 style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', minHeight: compact ? 100 : 160 }}>
                 <div key={idx} className={`p-4 h-full suggestion-slide-${direction}`}>
-                    <Card rec={cards[idx]} t={t} lang={lang} />
+                    <Card rec={visibleCards[idx] || visibleCards[0]} t={t} lang={lang} />
                 </div>
             </div>
 
             {/* Navigation */}
-            {cards.length > 1 && (
+            {visibleCards.length > 1 && (
                 <div className="flex items-center justify-between">
                     <button onClick={prev}
                         className="p-1.5 rounded-lg transition-all"
@@ -234,7 +256,7 @@ const SuggestionCards = ({ compact = false }) => {
 
                     {/* Dot indicators */}
                     <div className="flex gap-1.5">
-                        {cards.map((_, i) => (
+                        {visibleCards.map((_, i) => (
                             <button key={i} onClick={() => { setDirection(i > idx ? 'left' : 'right'); setIdx(i); }}
                                 className="rounded-full transition-all"
                                 style={{

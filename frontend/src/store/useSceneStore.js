@@ -5,6 +5,22 @@ import * as houseService from '../services/houseService';
 
 export const objectRefs = {};
 
+// ─── Dismissed-ghost persistence (localStorage, keyed by roomId:type) ─────────
+// Ghost UUIDs regenerate on every recompute, so we key by the stable
+// room+device-type pair. This lets ghosts survive a reload while keeping any
+// the user explicitly dismissed (×) gone.
+const GHOST_DISMISS_KEY = 'kwhane-dismissed-ghosts';
+const ghostKey = (roomId, type) => `${roomId}:${type}`;
+
+function loadDismissedGhosts() {
+    try { return new Set(JSON.parse(localStorage.getItem(GHOST_DISMISS_KEY) || '[]')); }
+    catch { return new Set(); }
+}
+function persistDismissedGhosts(set) {
+    try { localStorage.setItem(GHOST_DISMISS_KEY, JSON.stringify([...set])); }
+    catch { /* storage unavailable — ignore */ }
+}
+
 // ─── Device size / placement configs ─────────────────────────────────────────
 // `mount` controls where the device must sit:
 //   'wall'    → must snap to one of the 4 room walls (klima, tv)
@@ -201,6 +217,12 @@ const useSceneStore = create((set, get) => ({
     setBillingScaleFactor: (f) => set({ billingScaleFactor: f }),
     setLastDeviceAddedAt:  (ts) => set({ lastDeviceAddedAt: ts }),
 
+    // While true, addRoom/addDevice skip their per-insert error toasts. Used by
+    // the home-builder bulk apply so a burst of fire-and-forget inserts doesn't
+    // spam false "couldn't be saved" toasts (rows still persist).
+    suppressPersistToasts: false,
+    setSuppressPersistToasts: (v) => set({ suppressPersistToasts: !!v }),
+
     // ─── Energy / spec setters ────────────────────────────────────────────────
     setEnergyData: (id, data) =>
         set((s) => ({ energyData: { ...s.energyData, [id]: data } })),
@@ -209,8 +231,23 @@ const useSceneStore = create((set, get) => ({
         set((s) => ({ deviceSpecs: { ...s.deviceSpecs, [id]: spec } })),
 
     // ─── Ghost management ─────────────────────────────────────────────────────
+    // removeGhost: consume a ghost (e.g. a device was added in its place). Does
+    // NOT record a dismissal, so the ghost could reappear if that device is later
+    // removed and the room is reloaded.
     removeGhost: (id) =>
         set((s) => ({ ghostObjects: s.ghostObjects.filter((g) => g.id !== id) })),
+
+    // dismissGhost: user clicked the × — remember it so it stays gone across
+    // reloads (persisted in localStorage by roomId:type).
+    dismissGhost: (id) => {
+        const ghost = get().ghostObjects.find((g) => g.id === id);
+        if (ghost) {
+            const dismissed = loadDismissedGhosts();
+            dismissed.add(ghostKey(ghost.roomId, ghost.type));
+            persistDismissedGhosts(dismissed);
+        }
+        set((s) => ({ ghostObjects: s.ghostObjects.filter((g) => g.id !== id) }));
+    },
 
     clearRoomGhosts: (roomId) =>
         set((s) => ({ ghostObjects: s.ghostObjects.filter((g) => g.roomId !== roomId) })),
@@ -344,7 +381,7 @@ const useSceneStore = create((set, get) => ({
         if (homeId) {
             houseService.insertRoom(homeId, newRoom).catch((err) => {
                 console.error('[store] insertRoom failed:', err.message);
-                toast.error('Oda kaydedilemedi. İnternet bağlantınızı kontrol edin.');
+                if (!get().suppressPersistToasts) toast.error('Oda kaydedilemedi. İnternet bağlantınızı kontrol edin.');
             });
         }
 
@@ -391,7 +428,7 @@ const useSceneStore = create((set, get) => ({
         if (homeId) {
             houseService.insertDevice(targetRoom.id, newId, enrichedSpec, position).catch((err) => {
                 console.error('[store] insertDevice failed:', err.message);
-                toast.error('Cihaz kaydedilemedi. İnternet bağlantınızı kontrol edin.');
+                if (!get().suppressPersistToasts) toast.error('Cihaz kaydedilemedi. İnternet bağlantınızı kontrol edin.');
             });
         }
 
@@ -489,7 +526,19 @@ const useSceneStore = create((set, get) => ({
                 // Rebuild deviceSpecs so ML can re-calculate on session restore
                 const deviceSpecs = {};
                 dbDevices.forEach((row) => { deviceSpecs[row.id] = dbDeviceSpecFromRow(row); });
-                set({ rooms, objects, ghostObjects: [], energyData: {}, deviceSpecs });
+
+                // Recompute ghosts so suggestions survive a reload — excluding
+                // device types already placed in the room and any the user
+                // explicitly dismissed (persisted in localStorage).
+                const dismissed = loadDismissedGhosts();
+                const ghostObjects = rooms
+                    .flatMap((r) => computeGhosts(r, r.roomType))
+                    .filter((g) =>
+                        !dismissed.has(ghostKey(g.roomId, g.type)) &&
+                        !objects.some((o) => o.roomId === g.roomId && o.type === g.type)
+                    );
+
+                set({ rooms, objects, ghostObjects, energyData: {}, deviceSpecs });
             }
         } catch (err) {
             console.error('[store] loadFromSupabase failed:', err.message);

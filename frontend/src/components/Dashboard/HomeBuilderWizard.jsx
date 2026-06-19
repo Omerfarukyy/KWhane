@@ -126,6 +126,9 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
     // ── Apply rooms + devices to the scene ───────────────────────────────────
     const applyConfig = useCallback(async (roomConfigs) => {
         setStep(STEP_APPLYING);
+        // Mute the per-insert error toasts during this burst of fire-and-forget
+        // persists — rows still save; the spurious toasts just spam the screen.
+        useSceneStore.getState().setSuppressPersistToasts(true);
 
         for (const room of roomConfigs) {
             const roomId = addRoom({
@@ -176,6 +179,10 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
             setStep(STEP_SELECT);
             setSelectedPreset(null);
         }, 600);
+
+        // Re-enable persist toasts only after the insert window (incl. the 10s
+        // Supabase timeout) has fully settled, so late false rejections stay muted.
+        setTimeout(() => useSceneStore.getState().setSuppressPersistToasts(false), 11000);
     }, [addRoom, addDevice, setEnergyData, user?.id, onClose]);
 
     // ── Preset handlers ──────────────────────────────────────────────────────
@@ -254,10 +261,10 @@ const HomeBuilderWizard = ({ isOpen, onOpen, onClose, hidden = false }) => {
                 title="Ev Kur"
                 className="fixed z-50 flex items-center justify-center rounded-full transition-transform hover:scale-105"
                 style={{
-                    bottom: 82, right: 24,
+                    bottom: 92, left: 44,
                     width: 44, height: 44,
-                    background: 'linear-gradient(135deg, #059669, #047857)',
-                    boxShadow: '0 8px 24px rgba(5,150,105,0.4)',
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    boxShadow: '0 8px 24px rgba(245,158,11,0.45)',
                     border: '1px solid rgba(255,255,255,0.08)',
                     color: '#ffffff', cursor: 'pointer',
                 }}

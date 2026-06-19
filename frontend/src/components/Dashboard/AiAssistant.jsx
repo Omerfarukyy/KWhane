@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, X, Send, Mic, MicOff, Home, ArrowLeftRight } from 'lucide-react';
+import { Bot, X, Send, Mic, MicOff, Home } from 'lucide-react';
 import { sendMessage } from '../../services/chatService';
 import { getBillSummary, readCachedDiagnosticSummary } from '../../services/billsService';
 import { supabase } from '../../lib/supabase';
@@ -55,22 +55,36 @@ const AiAssistant = ({
     // ── Dual-mode message persistence ──────────────────────────────────────
     const advisorMsgsRef = useRef(null);
     const builderMsgsRef = useRef(null);
+    // Per-mode draft text and loading state, so a half-typed message (and the
+    // "typing" indicator) never bleeds into the other conversation on switch.
+    const advisorInputRef   = useRef('');
+    const builderInputRef   = useRef('');
+    const advisorLoadingRef = useRef(false);
+    const builderLoadingRef = useRef(false);
     const prevModeRef = useRef(chatMode);
 
     useEffect(() => {
         if (prevModeRef.current === chatMode) return;
-        // Save current messages to the outgoing mode's ref
+        // Save current state to the outgoing mode's refs
         if (prevModeRef.current === 'advisor') {
-            advisorMsgsRef.current = messages;
+            advisorMsgsRef.current    = messages;
+            advisorInputRef.current   = inputText;
+            advisorLoadingRef.current = isLoading;
         } else {
-            builderMsgsRef.current = messages;
+            builderMsgsRef.current    = messages;
+            builderInputRef.current   = inputText;
+            builderLoadingRef.current = isLoading;
         }
-        // Restore incoming mode's messages (or init fresh)
+        // Restore incoming mode's state (or init fresh)
         if (chatMode === 'advisor') {
             setMessages(advisorMsgsRef.current || [{ role: 'assistant', content: t('analyzingHome') }]);
             if (!advisorMsgsRef.current) setContextReady(false);
+            setInputText(advisorInputRef.current || '');
+            setIsLoading(advisorLoadingRef.current || false);
         } else {
             setMessages(builderMsgsRef.current || [{ role: 'assistant', content: t('builderWelcome') }]);
+            setInputText(builderInputRef.current || '');
+            setIsLoading(builderLoadingRef.current || false);
         }
         prevModeRef.current = chatMode;
     }, [chatMode]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -213,51 +227,44 @@ const AiAssistant = ({
         }
     };
 
-    const handleToggleMode = () => {
-        if (onSetChatMode) {
-            onSetChatMode(chatMode === 'advisor' ? 'builder' : 'advisor');
-        }
-    };
-
     // ── Floating launchers (sim mode only, not embedded) ────────────────────
     if (!embedded && !isOpen) {
         return (
-            <div className="fixed bottom-6 left-20 z-50 flex flex-col gap-3">
+            // Aligned with the left toolbar column. One launcher: left half is the
+            // left of a green house icon, right half is the right of a blue robot
+            // icon — split by a thin vertical line. Opens the chat (switch inside).
+            <div className="fixed bottom-6 z-50 flex flex-col items-center gap-3" style={{ left: 38 }}>
                 <button
                     type="button"
-                    onClick={() => { if (onSetChatMode) onSetChatMode('builder'); onOpen(); }}
-                    aria-label={t('homeBuilderChat')}
-                    title={t('homeBuilderChat')}
-                    className="flex items-center justify-center rounded-full transition-transform hover:scale-105"
-                    style={{
-                        width:      48,
-                        height:     48,
-                        background: 'linear-gradient(135deg, #10b981, #059669)',
-                        boxShadow:  '0 8px 24px rgba(16,185,129,0.4)',
-                        border:     '1px solid rgba(255,255,255,0.08)',
-                        color:      '#ffffff',
-                        cursor:     'pointer',
-                    }}
-                >
-                    <Home size={20} />
-                </button>
-                <button
-                    type="button"
-                    onClick={() => { if (onSetChatMode) onSetChatMode('advisor'); onOpen(); }}
+                    onClick={() => onOpen()}
                     aria-label={t('aiAdvisor')}
                     title={t('aiAdvisor')}
-                    className="flex items-center justify-center rounded-full transition-transform hover:scale-105"
+                    className="relative rounded-full transition-transform hover:scale-105"
                     style={{
-                        width:      48,
-                        height:     48,
-                        background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                        boxShadow:  '0 8px 24px rgba(59,130,246,0.4)',
-                        border:     '1px solid rgba(255,255,255,0.08)',
-                        color:      '#ffffff',
-                        cursor:     'pointer',
+                        width: 56, height: 56, overflow: 'hidden', cursor: 'pointer',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
                     }}
                 >
-                    <Sparkles size={20} />
+                    {/* Left green half → left of house icon */}
+                    <span
+                        className="absolute inset-0 flex items-center justify-center"
+                        style={{ background: 'linear-gradient(135deg, #10b981, #059669)', clipPath: 'inset(0 50% 0 0)', color: '#ffffff' }}
+                    >
+                        <Home size={24} />
+                    </span>
+                    {/* Right blue half → right of robot icon */}
+                    <span
+                        className="absolute inset-0 flex items-center justify-center"
+                        style={{ background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', clipPath: 'inset(0 0 0 50%)', color: '#ffffff' }}
+                    >
+                        <Bot size={29} style={{ transform: 'translateY(-3px)' }} />
+                    </span>
+                    {/* Thin vertical separator */}
+                    <span
+                        className="absolute top-0 bottom-0"
+                        style={{ left: '50%', width: 1, transform: 'translateX(-0.5px)', background: 'rgba(255,255,255,0.7)' }}
+                    />
                 </button>
             </div>
         );
@@ -301,12 +308,35 @@ const AiAssistant = ({
                 style={{ background: 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}
             >
                 <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl" style={{ background: `${accentColor}18` }}>
-                        {isBuilder
-                            ? <Home className="w-4 h-4" style={{ color: accentColor }} />
-                            : <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
-                        }
-                    </div>
+                    {/* Mode switch — ONE toggle button: clicking it flips the mode,
+                        and a knob slides to the active side (house = green, chat = blue). */}
+                    <button
+                        onClick={() => { if (onSetChatMode) onSetChatMode(isBuilder ? 'advisor' : 'builder'); }}
+                        title={isBuilder ? t('switchToAdvisor') : t('switchToBuilder')}
+                        aria-label={isBuilder ? t('switchToAdvisor') : t('switchToBuilder')}
+                        className="relative flex items-center rounded-full"
+                        style={{
+                            width: 72, height: 30, padding: 2, cursor: 'pointer',
+                            background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                        }}
+                    >
+                        {/* sliding knob */}
+                        <span
+                            className="absolute rounded-full transition-all"
+                            style={{
+                                top: 2, left: isBuilder ? 2 : 36, width: 34, height: 24,
+                                background: accentColor, boxShadow: `0 2px 8px ${accentColor}66`,
+                            }}
+                        />
+                        <span className="relative flex items-center justify-center"
+                            style={{ width: 34, height: 26, zIndex: 1, color: isBuilder ? '#ffffff' : 'var(--color-subtle)' }}>
+                            <Home size={15} />
+                        </span>
+                        <span className="relative flex items-center justify-center"
+                            style={{ width: 34, height: 26, zIndex: 1, color: !isBuilder ? '#ffffff' : 'var(--color-subtle)' }}>
+                            <Bot size={15} />
+                        </span>
+                    </button>
                     <div>
                         <h3 className="font-bold text-sm leading-none" style={{ color: 'var(--color-text)' }}>
                             {headerTitle}
@@ -318,17 +348,6 @@ const AiAssistant = ({
                     </div>
                 </div>
                 <div className="flex items-center gap-1">
-                    {/* Mode toggle */}
-                    <button
-                        onClick={handleToggleMode}
-                        title={isBuilder ? t('switchToAdvisor') : t('switchToBuilder')}
-                        className="p-1.5 rounded-lg transition-colors"
-                        style={{ color: 'var(--color-subtle)', cursor: 'pointer', background: 'transparent' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = accentColor; e.currentTarget.style.background = `${accentColor}12`; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-subtle)'; e.currentTarget.style.background = 'transparent'; }}
-                    >
-                        {isBuilder ? <Sparkles size={16} /> : <Home size={16} />}
-                    </button>
                     {!embedded && (
                         <button
                             onClick={onClose}

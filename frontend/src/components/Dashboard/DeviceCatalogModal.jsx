@@ -63,7 +63,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
 
     const [selectedType, setSelectedType] = useState(initialType || 'fridge');
     const [search, setSearch]             = useState(initialQuery || '');
-    const [cards, setCards]               = useState([]);
+    const [allCards, setAllCards]         = useState([]);   // every catalog row (all types)
     const [loading, setLoading]           = useState(false);
     const [picked, setPicked]             = useState(null);
 
@@ -100,7 +100,8 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
         }
     }, [picked, selectedType]);
 
-    // Load cards when type changes
+    // Load the WHOLE catalog once when the modal opens, so search can span all
+    // categories (not just the selected one).
     useEffect(() => {
         if (!isOpen) return;
         let cancelled = false;
@@ -113,24 +114,12 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                 const { data, error } = await supabase
                     .from('device_catalog')
                     .select('*')
-                    .eq('type', selectedType)
                     .order('name');
 
                 if (cancelled) return;
-
-                if (!error && data && data.length > 0) {
-                    setCards(data);
-                } else {
-                    const profile = DEVICE_PROFILES[selectedType] || {};
-                    const name = profile.nameKey ? `${t('standard')} ${t(`device.${profile.nameKey}`)}` : selectedType;
-                    setCards([{ id: 'default', type: selectedType, ...profile, name, year_of_purchase: new Date().getFullYear() }]);
-                }
+                setAllCards(!error && data ? data : []);
             } catch {
-                if (!cancelled) {
-                    const profile = DEVICE_PROFILES[selectedType] || {};
-                    const name = profile.nameKey ? `${t('standard')} ${t(`device.${profile.nameKey}`)}` : selectedType;
-                    setCards([{ id: 'default', type: selectedType, ...profile, name, year_of_purchase: new Date().getFullYear() }]);
-                }
+                if (!cancelled) setAllCards([]);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -138,11 +127,34 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
 
         fetchCatalog();
         return () => { cancelled = true; };
-    }, [selectedType, isOpen]);
+    }, [isOpen]);
 
-    const filtered = cards.filter((c) =>
-        !search || c.name?.toLowerCase().includes(search.toLowerCase())
-    );
+    // Build a single fallback card for a category that has no catalog rows.
+    const fallbackCardFor = (type) => {
+        const profile = DEVICE_PROFILES[type] || {};
+        const name = profile.nameKey ? `${t('standard')} ${t(`device.${profile.nameKey}`)}` : type;
+        return { id: `default-${type}`, type, ...profile, name, year_of_purchase: new Date().getFullYear() };
+    };
+
+    // Full browsable set across all categories: real catalog rows where they
+    // exist, otherwise the standard fallback card for that category. Built this
+    // way so search always has something to match even when the device_catalog
+    // table is empty/sparse (the app mostly relies on the fallback profiles).
+    const allBrowsable = DEVICE_CATEGORIES.flatMap((cat) => {
+        const rows = allCards.filter((c) => c.type === cat.type);
+        return rows.length > 0 ? rows : [fallbackCardFor(cat.type)];
+    });
+
+    // Displayed list:
+    //   - search active  → match by name OR category label across EVERY category
+    //   - browse (empty) → cards of the selected category
+    const q = search.trim().toLowerCase();
+    const filtered = q
+        ? allBrowsable.filter((c) =>
+            c.name?.toLowerCase().includes(q) ||
+            t(`device.${c.type}`).toLowerCase().includes(q)
+        )
+        : allBrowsable.filter((c) => c.type === selectedType);
 
     // Build the spec we'd pass to addDevice if the user clicked "Ekle" right now.
     // Re-derived on every render — cheap, used only as the preview fetch key.
@@ -358,7 +370,7 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                     return (
                                         <button
                                             key={card.id}
-                                            onClick={() => setPicked(card)}
+                                            onClick={() => { if (card.type) setSelectedType(card.type); setPicked(card); }}
                                             className="text-left p-4 rounded-xl transition"
                                             style={{
                                                 background: isSelected ? 'rgba(59,130,246,0.1)' : 'var(--color-surface-2)',
@@ -385,6 +397,12 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
                                                     </span>
                                                 )}
                                             </div>
+                                            {q && card.type && (
+                                                <div className="mt-1 text-[10px] font-medium uppercase tracking-wider"
+                                                    style={{ color: '#60a5fa' }}>
+                                                    {t(`device.${card.type}`)}
+                                                </div>
+                                            )}
                                             <div className="mt-2 text-xs flex gap-3"
                                                 style={{ color: 'var(--color-subtle)' }}>
                                                 <span>{card.nominal_power_watts}W</span>
