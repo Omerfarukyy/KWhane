@@ -4,6 +4,7 @@ import { USAGE_MODEL } from '../../utils/usageModels';
 import { calculate, buildDeviceInput } from '../../services/mlService';
 import DeltaPreviewPanel from './DeltaPreviewPanel';
 import { useLanguage } from '../../contexts/LanguageProvider';
+import { buildClassVariants, EFFICIENCY_COLORS } from '../../utils/energyClasses';
 
 // Placeholder UUIDs for the preview /calculate call. The endpoint is
 // room-id-agnostic — it just echoes the device_id back — so any valid UUID works.
@@ -13,27 +14,17 @@ const PREVIEW_ROOM_ID   = '00000000-0000-0000-0000-00000000cafe';
 // ─── Fallback device profiles (used when Supabase returns 0 rows) ─────────────
 const DEVICE_PROFILES = {
     fridge:          { nameKey: 'fridge',          nominal_power_watts: 150,  daily_usage_hours: 24,  standby_power_watts: 5,   efficiency_class: 'A'   },
-    tv:              { nameKey: 'tv',              nominal_power_watts: 100,  daily_usage_hours: 5,   standby_power_watts: 2,   efficiency_class: 'A+'  },
-    ac:              { nameKey: 'ac',              nominal_power_watts: 2000, daily_usage_hours: 8,   standby_power_watts: 10,  efficiency_class: 'A'   },
+    tv:              { nameKey: 'tv',              nominal_power_watts: 100,  daily_usage_hours: 5,   standby_power_watts: 2,   efficiency_class: 'A'   },
+    ac:              { nameKey: 'ac',              nominal_power_watts: 2000, daily_usage_hours: 8,   standby_power_watts: 10,  efficiency_class: 'A+++'},
     washing_machine: { nameKey: 'washing_machine', nominal_power_watts: 1000, daily_usage_hours: 1,   standby_power_watts: 3,   efficiency_class: 'A'   },
     dishwasher:      { nameKey: 'dishwasher',      nominal_power_watts: 1800, daily_usage_hours: 1.5, standby_power_watts: 3,   efficiency_class: 'A'   },
-    oven:            { nameKey: 'oven',            nominal_power_watts: 2000, daily_usage_hours: 1,   standby_power_watts: 0,   efficiency_class: 'A+'  },
+    oven:            { nameKey: 'oven',            nominal_power_watts: 2000, daily_usage_hours: 1,   standby_power_watts: 0,   efficiency_class: 'A'   },
     computer:        { nameKey: 'computer',        nominal_power_watts: 200,  daily_usage_hours: 8,   standby_power_watts: 5,   efficiency_class: 'A'   },
-    lighting:        { nameKey: 'lighting',        nominal_power_watts: 20,   daily_usage_hours: 8,   standby_power_watts: 0,   efficiency_class: 'A++' },
+    lighting:        { nameKey: 'lighting',        nominal_power_watts: 20,   daily_usage_hours: 8,   standby_power_watts: 0,   efficiency_class: 'A'   },
     water_heater:    { nameKey: 'water_heater',    nominal_power_watts: 2000, daily_usage_hours: 2,   standby_power_watts: 5,   efficiency_class: 'A'   },
     dryer:           { nameKey: 'dryer',           nominal_power_watts: 2500, daily_usage_hours: 1,   standby_power_watts: 3,   efficiency_class: 'A'   },
 };
 
-
-const EFFICIENCY_COLORS = {
-    'A+++': '#22d3ee',
-    'A++':  '#34d399',
-    'A+':   '#60a5fa',
-    'A':    '#94a3b8',
-    'B':    '#fbbf24',
-    'C':    '#f97316',
-    'D':    '#f87171',
-};
 
 /**
  * DeviceCatalogModal
@@ -129,20 +120,11 @@ const DeviceCatalogModal = ({ isOpen, onClose, onDeviceSelect, initialType = nul
         return () => { cancelled = true; };
     }, [isOpen]);
 
-    // Build a single fallback card for a category that has no catalog rows.
-    const fallbackCardFor = (type) => {
-        const profile = DEVICE_PROFILES[type] || {};
-        const name = profile.nameKey ? `${t('standard')} ${t(`device.${profile.nameKey}`)}` : type;
-        return { id: `default-${type}`, type, ...profile, name, year_of_purchase: new Date().getFullYear() };
-    };
-
-    // Full browsable set across all categories: real catalog rows where they
-    // exist, otherwise the standard fallback card for that category. Built this
-    // way so search always has something to match even when the device_catalog
-    // table is empty/sparse (the app mostly relies on the fallback profiles).
+    // Full browsable set across all categories: real catalog rows first, then
+    // generated class variants so every class remains selectable.
     const allBrowsable = DEVICE_CATEGORIES.flatMap((cat) => {
         const rows = allCards.filter((c) => c.type === cat.type);
-        return rows.length > 0 ? rows : [fallbackCardFor(cat.type)];
+        return [...rows, ...buildClassVariants(cat, DEVICE_PROFILES[cat.type], t)];
     });
 
     // Displayed list:

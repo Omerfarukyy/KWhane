@@ -6,7 +6,7 @@ from datetime import datetime
 from data.device_profiles import (
     AGE_DEGRADATION_RATE,
     DEVICE_PROFILES,
-    EFFICIENCY_CLASS_MAP,
+    efficiency_penalty,
 )
 
 CURRENT_YEAR = datetime.now().year
@@ -175,8 +175,8 @@ def build_prediction_features(device, overrides: dict | None = None) -> dict:
         "nominal_power_watts": device.nominal_power_watts,
         "daily_usage_hours": usage.effective_daily_hours,
         "standby_power_watts": device.standby_power_watts,
-        "efficiency_class_numeric": EFFICIENCY_CLASS_MAP.get(
-            device.efficiency_class, 0.15
+        "efficiency_class_numeric": efficiency_penalty(
+            device.type, device.efficiency_class
         ),
         "device_age_years": CURRENT_YEAR - device.year_of_purchase,
         "device_type": device.type,
@@ -234,7 +234,7 @@ def build_features_from_row(row: dict) -> dict:
         "nominal_power_watts": int(row.get("nominal_power_watts") or default_nominal_watts(device_type)),
         "daily_usage_hours": usage.effective_daily_hours,
         "standby_power_watts": int(row.get("standby_power_watts") or 0),
-        "efficiency_class_numeric": EFFICIENCY_CLASS_MAP.get(efficiency_class, 0.15),
+        "efficiency_class_numeric": efficiency_penalty(device_type, efficiency_class),
         "device_age_years": max(0, CURRENT_YEAR - int(year)),
         "device_type": device_type,
         "usage_basis": usage.usage_basis,

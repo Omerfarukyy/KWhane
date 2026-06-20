@@ -49,9 +49,9 @@ def calculate_energy(
     # 4. Efficiency score: the device's true energy efficiency — its class and
     # age measured against an ideal (best-class, brand-new) device of the same
     # kind. Deliberately independent of usage hours, duty cycle and standby
-    # (those are reported as kWh, not folded into "efficiency"), so an A+++
-    # device used heavily still scores well.
-    eff_penalty = 1.0 + estimate.features.get("efficiency_class_numeric", 0.15)
+    # (those are reported as kWh, not folded into "efficiency"), so a
+    # best-class device used heavily still scores well.
+    eff_penalty = 1.0 + estimate.features.get("efficiency_class_numeric", 0.0)
     age_penalty = 1.0 + AGE_DEGRADATION_RATE * estimate.features.get("device_age_years", 0)
     efficiency_score = max(0.0, min(100.0, 100.0 / (eff_penalty * age_penalty)))
 

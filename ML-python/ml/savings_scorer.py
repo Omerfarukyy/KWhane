@@ -3,7 +3,7 @@ Rule-based scoring for energy saving recommendations.
 Ranks upgrade alternatives and behavioral changes by monthly savings potential.
 """
 
-from data.device_profiles import DEVICE_PROFILES, EFFICIENCY_CLASS_MAP
+from data.device_profiles import DEVICE_PROFILES, efficiency_penalty
 from services.energy_calculations import (
     default_cycle_hours,
     default_cycles_per_week,
@@ -52,7 +52,10 @@ def score_recommendations(
 
     # 1. Catalog upgrade recommendations
     for alt in catalog_alternatives:
-        eff_numeric = EFFICIENCY_CLASS_MAP.get(alt.get("efficiency_class", "A"), 0.15)
+        alt_type = alt.get("type", device.type)
+        eff_numeric = efficiency_penalty(
+            alt_type, alt.get("efficiency_class", "A")
+        )
         alt_standby = alt.get("standby_power_watts")
         if alt_standby is None:
             alt_standby = default_standby_watts(device.type)
@@ -63,7 +66,7 @@ def score_recommendations(
             "standby_power_watts": alt_standby,
             "efficiency_class_numeric": eff_numeric,
             "device_age_years": 0,  # new device
-            "device_type": alt.get("type", device.type),
+            "device_type": alt_type,
             "usage_basis": usage.usage_basis,
             "cycles_per_week": usage.cycles_per_week,
             "cycle_hours": usage.cycle_hours,

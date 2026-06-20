@@ -9,9 +9,9 @@ from datetime import datetime
 
 from data.device_profiles import (
     DEVICE_PROFILES,
-    EFFICIENCY_CLASS_MAP,
     AGE_DEGRADATION_RATE,
     TURKISH_CITIES,
+    efficiency_penalty,
 )
 
 CURRENT_YEAR = datetime.now().year
@@ -40,17 +40,17 @@ def generate_energy_dataset(n_samples: int = 5000, seed: int = 42) -> pd.DataFra
         # Compute target: real monthly kWh
         base_kwh = (nominal_watts * daily_hours * duty_cycle * 30) / 1000
         standby_kwh = (standby_watts * (24 - daily_hours) * 30) / 1000
-        efficiency_penalty = 1.0 + EFFICIENCY_CLASS_MAP.get(eff_class, 0.15)
+        class_penalty = efficiency_penalty(dtype, eff_class)
         age_penalty = 1.0 + AGE_DEGRADATION_RATE * (CURRENT_YEAR - year)
         noise = rng.normal(1.0, 0.05)
-        real_kwh = max(0.1, (base_kwh * efficiency_penalty * age_penalty + standby_kwh) * noise)
+        real_kwh = max(0.1, (base_kwh * (1.0 + class_penalty) * age_penalty + standby_kwh) * noise)
 
         rows.append({
             "device_type": dtype,
             "nominal_power_watts": int(nominal_watts),
             "daily_usage_hours": round(daily_hours, 2),
             "standby_power_watts": int(standby_watts),
-            "efficiency_class_numeric": EFFICIENCY_CLASS_MAP.get(eff_class, 0.15),
+            "efficiency_class_numeric": class_penalty,
             "device_age_years": CURRENT_YEAR - year,
             "real_monthly_kwh": round(real_kwh, 3),
         })

@@ -18,7 +18,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-from data.device_profiles import DEVICE_PROFILES, EFFICIENCY_CLASS_MAP
+from data.device_profiles import DEVICE_PROFILES, efficiency_penalty
 from data.synthetic import generate_energy_dataset
 
 CURRENT_YEAR = datetime.now().year
@@ -49,7 +49,7 @@ class EnergyPredictor:
 
     def train(self) -> dict:
         """Train on synthetic data, persist the model, and write metadata."""
-        n_samples = 5000
+        n_samples = 20000
         df = generate_energy_dataset(n_samples=n_samples)
         X = df[ALL_FEATURES]
         y = df[TARGET]
@@ -221,8 +221,8 @@ class EnergyPredictor:
             "nominal_power_watts": device.nominal_power_watts,
             "daily_usage_hours": device.daily_usage_hours,
             "standby_power_watts": device.standby_power_watts,
-            "efficiency_class_numeric": EFFICIENCY_CLASS_MAP.get(
-                device.efficiency_class, 0.15
+            "efficiency_class_numeric": efficiency_penalty(
+                device.type, device.efficiency_class
             ),
             "device_age_years": max(0, CURRENT_YEAR - device.year_of_purchase),
             "device_type": device.type,

@@ -1,11 +1,11 @@
 {
   "model_name": "energy_regressor",
   "model_type": "GradientBoostingRegressor",
-  "model_version": "energy_regressor_2026-06-06T12:52:12Z",
-  "trained_at": "2026-06-06T12:52:12Z",
+  "model_version": "energy_regressor_2026-06-20T08:25:05Z",
+  "trained_at": "2026-06-20T08:25:05Z",
   "target": "real_monthly_kwh",
   "target_description": "total monthly kWh including standby",
-  "synthetic_dataset_size": 5000,
+  "synthetic_dataset_size": 20000,
   "features": [
     "nominal_power_watts",
     "daily_usage_hours",
@@ -15,45 +15,45 @@
     "device_type"
   ],
   "metrics": {
-    "mae": 7.2347,
-    "r2": 0.9891,
+    "mae": 8.0631,
+    "r2": 0.9928,
     "per_device_type_mae": {
-      "ac": 28.1711,
-      "computer": 5.0762,
-      "dishwasher": 5.046,
-      "dryer": 7.4587,
-      "fridge": 3.0638,
-      "lighting": 2.0616,
-      "oven": 3.837,
-      "tv": 2.561,
-      "washing_machine": 3.8918,
-      "water_heater": 12.1754
+      "ac": 36.464,
+      "computer": 5.2189,
+      "dishwasher": 6.7832,
+      "dryer": 7.1051,
+      "fridge": 4.0301,
+      "lighting": 1.6552,
+      "oven": 4.1559,
+      "tv": 2.2327,
+      "washing_machine": 4.6478,
+      "water_heater": 9.4854
     }
   },
   "feature_importances": [
     {
       "feature": "nominal_power_watts",
-      "importance": 0.2211
+      "importance": 0.1719
     },
     {
       "feature": "daily_usage_hours",
-      "importance": 0.1555
+      "importance": 0.141
     },
     {
       "feature": "standby_power_watts",
-      "importance": 0.0004
+      "importance": 0.0002
     },
     {
       "feature": "efficiency_class_numeric",
-      "importance": 0.0458
+      "importance": 0.0882
     },
     {
       "feature": "device_age_years",
-      "importance": 0.0103
+      "importance": 0.0079
     },
     {
       "feature": "device_type",
-      "importance": 0.5669
+      "importance": 0.5907
     }
   ]
 }

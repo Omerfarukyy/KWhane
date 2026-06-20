@@ -20,6 +20,7 @@ openai_stub.OpenAIError = Exception
 sys.modules.setdefault("openai", openai_stub)
 
 from ml.savings_scorer import score_recommendations
+from data.device_profiles import efficiency_penalty
 from models.schemas import DeviceInput
 from models.schemas import ChatRequest, DeviceContext, RecommendationContext
 from services.calculate_service import calculate_energy
@@ -106,6 +107,13 @@ class DummyClusterer:
 
 
 class EnergyLogicTests(unittest.TestCase):
+    def test_efficiency_penalties_use_device_specific_scales(self):
+        self.assertEqual(efficiency_penalty("fridge", "A"), 0.0)
+        self.assertEqual(efficiency_penalty("fridge", "G"), 1.65)
+        self.assertEqual(efficiency_penalty("fridge", "A+++"), 0.0)
+        self.assertEqual(efficiency_penalty("ac", "A+++"), 0.0)
+        self.assertEqual(efficiency_penalty("ac", "A"), 0.88)
+
     def test_calculate_does_not_double_count_standby(self):
         device = DeviceInput(
             id="d1",
@@ -135,9 +143,9 @@ class EnergyLogicTests(unittest.TestCase):
         from datetime import datetime
         this_year = datetime.now().year
 
-        def make(efficiency_class, year, hours):
+        def make(efficiency_class, year, hours, device_type="tv"):
             return DeviceInput(
-                id="d", room_id="r", name="dev", type="tv",
+                id="d", room_id="r", name="dev", type=device_type,
                 nominal_power_watts=100, daily_usage_hours=hours,
                 standby_power_watts=2, efficiency_class=efficiency_class,
                 year_of_purchase=year,
@@ -145,15 +153,19 @@ class EnergyLogicTests(unittest.TestCase):
 
         with patch("services.calculate_service.fetch_tariffs", return_value=TARIFFS):
             # Best class, brand new — used lightly vs heavily.
-            a_light = calculate_energy(make("A+++", this_year, 2), FixedPredictor(50.0))
-            a_heavy = calculate_energy(make("A+++", this_year, 20), FixedPredictor(500.0))
+            a_light = calculate_energy(make("A", this_year, 2), FixedPredictor(50.0))
+            a_heavy = calculate_energy(make("A", this_year, 20), FixedPredictor(500.0))
             # Worst class, 20 years old.
             g_old = calculate_energy(make("G", this_year - 20, 2), FixedPredictor(50.0))
+            ac_best = calculate_energy(
+                make("A+++", this_year, 8, "ac"), FixedPredictor(250.0)
+            )
 
-        # A+++ & new → perfect score regardless of usage hours or predicted kWh.
+        # Best class and new → perfect score regardless of usage or predicted kWh.
         self.assertEqual(a_light.efficiency_score, 100.0)
         self.assertEqual(a_heavy.efficiency_score, 100.0)
         self.assertEqual(a_light.efficiency_score, a_heavy.efficiency_score)
+        self.assertEqual(ac_best.efficiency_score, 100.0)
         # Bad class + old device scores clearly lower (but still bounded > 0).
         self.assertLess(g_old.efficiency_score, 60.0)
         self.assertGreater(g_old.efficiency_score, 0.0)
@@ -243,7 +255,7 @@ class EnergyLogicTests(unittest.TestCase):
                 "type": "tv",
                 "nominal_power_watts": 60,
                 "standby_power_watts": 2,
-                "efficiency_class": "A+++",
+                "efficiency_class": "A",
             }],
             tariff_calculator=tariff,
             energy_predictor=SavingsPredictor(),
