@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from data.device_profiles import DEVICE_PROFILES
+from data.device_profiles import AGE_DEGRADATION_RATE, DEVICE_PROFILES
 from models.schemas import DeviceInput, CalculateResponse
 from services.energy_calculations import estimate_device_energy
 from services.supabase_client import fetch_tariffs
@@ -46,12 +46,14 @@ def calculate_energy(
     scaled_kwh = round(total_kwh * scale_factor, 2) if scale_factor else None
     scaled_cost = round(total_cost * scale_factor, 2) if scale_factor else None
 
-    # 4. Efficiency score: how close total modeled usage is to theoretical use.
-    if theoretical_kwh > 0:
-        ratio = total_kwh / theoretical_kwh
-        efficiency_score = max(0, min(100, 100 / ratio))
-    else:
-        efficiency_score = 100.0
+    # 4. Efficiency score: the device's true energy efficiency — its class and
+    # age measured against an ideal (best-class, brand-new) device of the same
+    # kind. Deliberately independent of usage hours, duty cycle and standby
+    # (those are reported as kWh, not folded into "efficiency"), so an A+++
+    # device used heavily still scores well.
+    eff_penalty = 1.0 + estimate.features.get("efficiency_class_numeric", 0.15)
+    age_penalty = 1.0 + AGE_DEGRADATION_RATE * estimate.features.get("device_age_years", 0)
+    efficiency_score = max(0.0, min(100.0, 100.0 / (eff_penalty * age_penalty)))
 
     return CalculateResponse(
         device_id=device.id,

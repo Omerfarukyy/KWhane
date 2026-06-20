@@ -24,6 +24,7 @@ import { updateDeviceFields } from '../../../services/houseService';
 import { supabase } from '../../../lib/supabase';
 import { USAGE_MODEL } from '../../../utils/usageModels';
 import { efficiencyColor } from '../../../utils/efficiencyColor';
+import { classifyHome, deviationStatus } from '../../../utils/homeBaseline';
 
 // Lazy-loaded modals
 const TicketSystem      = lazy(() => import('../TicketSystem'));
@@ -297,9 +298,12 @@ const DashboardLayout = () => {
             .sort((a, b) => b.kwh - a.kwh);
     }, [objects, energyData]);
 
-    // ── Trend: tahmin vs fatura ortalaması (veya Türkiye ort. 416 kWh) ───
-    const trendRef  = billsAvgKwh && billsAvgKwh > 0 ? billsAvgKwh : 416;
-    const trendLabel = billsAvgKwh && billsAvgKwh > 0 ? t('billAvg') : t('turkeyAvg');
+    // ── Trend: tahmin vs fatura ort. (veya ev-tipi ortalaması) ──────────
+    // Bills take precedence; otherwise compare against the per-home-type
+    // baseline (studio / 2+1 / 3+1 / villa) instead of a static 416 kWh.
+    const homeBaseline = classifyHome(rooms);
+    const usingBills = billsAvgKwh && billsAvgKwh > 0;
+    const trendRef  = usingBills ? billsAvgKwh : homeBaseline.baselineKwh;
 
     // Gauge offset — clamp totalKwh to 0-600 for visual
     const gaugeKwh    = homeTotals.kwh;
@@ -698,10 +702,15 @@ const DashboardLayout = () => {
                                                     ≈₺{Math.round(homeTotals.cost * billingScaleFactor)} kalibre
                                                 </span>
                                             )}
-                                            {/* Trend indikatörü */}
+                                            {/* Trend indikatörü — aynı "ortalama" mekaniği (±%10 bandı) */}
                                             {gaugeKwh > 0 && (() => {
-                                                const delta = ((gaugeKwh - trendRef) / trendRef) * 100;
-                                                const isBelow = delta <= 0;
+                                                const { status, deltaPct } = deviationStatus(gaugeKwh, trendRef);
+                                                const isAbove = status === 'above';
+                                                const icon = status === 'in_range' ? '≈' : (status === 'below' ? '▼' : '▲');
+                                                const text = status === 'in_range'
+                                                    ? t('homeType.inRange')
+                                                    : t(status === 'above' ? 'homeType.above' : 'homeType.below')
+                                                        .replace('{pct}', Math.abs(deltaPct));
                                                 return (
                                                     <motion.div
                                                         initial={{ opacity: 0, y: 4 }}
@@ -709,13 +718,13 @@ const DashboardLayout = () => {
                                                         transition={{ delay: 0.6, duration: 0.4 }}
                                                         className="flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold"
                                                         style={{
-                                                            color:      isBelow ? '#22c55e' : '#f87171',
-                                                            background: isBelow ? 'rgba(34,197,94,0.1)' : 'rgba(248,113,113,0.1)',
-                                                            border:     `1px solid ${isBelow ? 'rgba(34,197,94,0.2)' : 'rgba(248,113,113,0.2)'}`,
+                                                            color:      isAbove ? '#f87171' : '#22c55e',
+                                                            background: isAbove ? 'rgba(248,113,113,0.1)' : 'rgba(34,197,94,0.1)',
+                                                            border:     `1px solid ${isAbove ? 'rgba(248,113,113,0.2)' : 'rgba(34,197,94,0.2)'}`,
                                                         }}
                                                     >
-                                                        <span>{isBelow ? '▼' : '▲'}</span>
-                                                        <span>{t('trendCompare').replace('{label}', trendLabel).replace('{pct}', Math.abs(delta).toFixed(0)).replace('{dir}', t(isBelow ? 'less' : 'more'))}</span>
+                                                        <span>{icon}</span>
+                                                        <span>{text}</span>
                                                     </motion.div>
                                                 );
                                             })()}

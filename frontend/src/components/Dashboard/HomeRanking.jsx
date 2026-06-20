@@ -17,10 +17,11 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, Users, BarChart3, Zap } from 'lucide-react';
+import { Loader2, BarChart3, Zap } from 'lucide-react';
 import { fetchHomeComparison, getHomeMeta } from '../../services/peerComparisonService';
 import { getBillSummary } from '../../services/billsService';
 import { useLanguage } from '../../contexts/LanguageProvider';
+import HomeAverageComparison from './Home/HomeAverageComparison';
 
 const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
     const [data, setData]               = useState(null);
@@ -29,12 +30,6 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
     const [billsActualKwh, setBillsActualKwh] = useState(null);
     const [billsLoaded, setBillsLoaded] = useState(false);
     const { t } = useLanguage();
-
-    const LABEL_COPY = {
-        below_average: { color: '#22c55e', text: t('belowAverage') },
-        average:       { color: '#3b82f6', text: t('atAverage') },
-        above_average: { color: '#f87171', text: t('aboveAverage') },
-    };
 
     const SOURCE_COPY = {
         bill: {
@@ -109,194 +104,81 @@ const HomeRanking = ({ userId, predictedKwh, nDevices }) => {
         return () => { cancelled = true; };
     }, [userId, monthlyKwh, source, nDevices]);
 
-    // Common section header (no source pill — only shown when data is loaded).
-    const SectionHeader = () => (
-        <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
-                {t('householdRanking')}
-            </p>
-        </div>
-    );
-
-    if (!billsLoaded) {
-        return (
-            <div className="flex flex-col gap-4">
-                <SectionHeader />
+    // Peer comparison body. This block depends on the clustered API result;
+    // the home-type average card below renders regardless of its state.
+    const renderPeer = () => {
+        if (!billsLoaded || loading) {
+            return (
                 <div className="flex items-center justify-center py-8" style={{ color: 'var(--color-subtle)' }}>
                     <Loader2 size={20} className="animate-spin" />
                 </div>
-            </div>
-        );
-    }
+            );
+        }
 
-    if (!monthlyKwh) {
-        return (
-            <div className="flex flex-col gap-4">
-                <SectionHeader />
+        if (!monthlyKwh) {
+            return (
                 <div className="flex flex-col items-center justify-center py-8 gap-3"
                     style={{ color: 'var(--color-subtle)' }}>
                     <Zap size={28} />
                     <p className="text-xs text-center">
                         {t('noComparisonData')}<br />
-                        <span style={{ color: 'var(--color-muted)' }}>
-                            {t('noComparisonDesc')}
-                        </span>
+                        <span style={{ color: 'var(--color-muted)' }}>{t('noComparisonDesc')}</span>
                     </p>
                 </div>
-            </div>
-        );
-    }
+            );
+        }
 
-    if (loading) {
-        return (
-            <div className="flex flex-col gap-4">
-                <SectionHeader />
-                <div className="flex items-center justify-center py-8" style={{ color: 'var(--color-subtle)' }}>
-                    <Loader2 size={20} className="animate-spin" />
-                </div>
-            </div>
-        );
-    }
-
-    if (error || !data) {
-        return (
-            <div className="flex flex-col gap-4">
-                <SectionHeader />
+        if (error || !data) {
+            return (
                 <div className="flex flex-col items-center justify-center py-8 gap-2 text-center"
                     style={{ color: 'var(--color-subtle)' }}>
                     <BarChart3 size={24} />
                     <p className="text-xs">{t('rankingFailed')}<br />{t('rankingFailedDesc')}</p>
                 </div>
-            </div>
-        );
-    }
+            );
+        }
 
-    const labelInfo  = LABEL_COPY[data.comparison_label] || LABEL_COPY.average;
-    const sourceInfo = SOURCE_COPY[data.source] || SOURCE_COPY.predicted;
-    // Percentile semantics: 100 = uses MORE than everyone (top consumer).
-    // For UX we want to celebrate LOW consumption — so display the inverse.
-    const betterThanPct = Math.max(0, Math.min(100, 100 - data.percentile));
+        const sourceInfo = SOURCE_COPY[data.source] || SOURCE_COPY.predicted;
+        // Percentile semantics: 100 = uses MORE than everyone (top consumer).
+        // For UX we want to celebrate LOW consumption — so display the inverse.
+        const betterThanPct = Math.max(0, Math.min(100, 100 - data.percentile));
 
-    // Position of user marker on the cluster distribution bar.
-    // We don't have full distribution here, only cluster average. So show:
-    // [0  --|cluster avg|--  user marker  --  100]
-    // where the bar is normalized by cluster avg, capped at 2× avg.
-    const avg = data.cluster_avg_monthly_kwh || 1;
-    const userOnBar = Math.max(0, Math.min(100, (data.user_monthly_kwh / (avg * 2)) * 100));
-    const avgOnBar  = 50;  // by definition
-
-    const deltaVsAvg = data.user_monthly_kwh - avg;
-    const deltaPct   = avg > 0 ? (deltaVsAvg / avg) * 100 : 0;
-
-    return (
-        <div className="flex flex-col gap-4">
-            {/* Section header — title + source pill on the right */}
-            <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-widest"
-                    style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
-                    {t('householdRanking')}
-                </p>
-                <span
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-md whitespace-nowrap"
-                    style={{
-                        color:      sourceInfo.color,
-                        background: sourceInfo.bg,
-                        border:     `1px solid ${sourceInfo.border}`,
-                    }}
-                >
-                    {sourceInfo.tag}
-                </span>
-            </div>
-
-            {/* Headline — tinted to match source */}
+        return (
+            // Headline — tinted to match source, brighter text.
             <div className="p-4 rounded-2xl text-center"
                 style={{ background: sourceInfo.headlineBg, border: `1px solid ${sourceInfo.headlineBorder}` }}>
-                <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+                <p className="text-xs mb-2" style={{ color: 'var(--color-text)' }}>
                     {t('homeInCluster').replace('{n}', data.cluster_size)}
                 </p>
                 <p className="text-5xl font-black" style={{ color: sourceInfo.headlineNumber }}>
                     %{betterThanPct}
                 </p>
-                <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+                <p className="text-xs mt-2" style={{ color: 'var(--color-text)' }}>
                     {t('usesLessEnergy')}
                 </p>
             </div>
+        );
+    };
 
-            {/* Distribution bar — user vs cluster average */}
-            <div>
-                <div className="flex justify-between text-[10px] mb-1" style={{ color: 'var(--color-subtle)' }}>
-                    <span>{t('lowConsumption')}</span>
-                    <span>{t('highConsumption')}</span>
-                </div>
+    // One source pill for the whole card — it applies to both the peer
+    // comparison and the home-type average below it.
+    const pillInfo = source ? (SOURCE_COPY[source] || SOURCE_COPY.predicted) : null;
 
-                {/* "Sen" marker ABOVE the bar so it never overlaps "Ortalama" */}
-                <div className="relative h-5">
-                    <div className="absolute -translate-x-1/2 flex flex-col items-center leading-none"
-                        style={{ left: `${userOnBar}%` }}>
-                        <span className="text-[10px] font-bold whitespace-nowrap"
-                            style={{ color: labelInfo.color }}>{t('me')}</span>
-                        <span style={{ color: labelInfo.color, fontSize: 8, lineHeight: 1 }}>▼</span>
-                    </div>
-                </div>
-
-                <div className="relative h-3 rounded-full overflow-hidden" style={{ background: 'var(--color-border-2)' }}>
-                    <div className="absolute inset-0"
-                        style={{ background: 'linear-gradient(90deg, #22c55e, #f59e0b 50%, #ef4444)' }}
-                    />
-                    <div className="absolute top-0 bottom-0 w-px"
-                        style={{ left: `${avgOnBar}%`, background: 'rgba(255,255,255,0.6)' }}
-                        title={t('average')}
-                    />
-                </div>
-
-                {/* "Ortalama" label BELOW the bar */}
-                <div className="relative mt-1 h-3">
-                    <div className="absolute -translate-x-1/2 text-[9px] uppercase tracking-wider whitespace-nowrap"
-                        style={{ left: `${avgOnBar}%`, color: 'var(--color-subtle)' }}>
-                        {t('average')}
-                    </div>
-                </div>
-            </div>
-
-            {/* Numeric breakdown */}
-            <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-xl p-3 flex flex-col"
-                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>{t('you')}</span>
-                    <span className="text-lg font-black mt-0.5" style={{ color: 'var(--color-text)' }}>
-                        {Math.round(data.user_monthly_kwh)}
+    return (
+        <div className="flex flex-col gap-4">
+            {pillInfo && (
+                <div className="flex items-center justify-end">
+                    <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md whitespace-nowrap"
+                        style={{ color: pillInfo.color, background: pillInfo.bg, border: `1px solid ${pillInfo.border}` }}
+                    >
+                        {pillInfo.tag}
                     </span>
-                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>{t('kwhPerMonth')}</span>
                 </div>
-                <div className="rounded-xl p-3 flex flex-col"
-                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>{t('average')}</span>
-                    <span className="text-lg font-black mt-0.5" style={{ color: 'var(--color-text)' }}>
-                        {Math.round(avg)}
-                    </span>
-                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>{t('kwhPerMonth')}</span>
-                </div>
-                <div className="rounded-xl p-3 flex flex-col"
-                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                    <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>{t('difference')}</span>
-                    <span className="text-lg font-black mt-0.5" style={{ color: labelInfo.color }}>
-                        {deltaVsAvg >= 0 ? '+' : ''}{Math.round(deltaVsAvg)}
-                    </span>
-                    <span className="text-[10px]" style={{ color: 'var(--color-subtle)' }}>{t('kwhPerMonth')}</span>
-                </div>
-            </div>
-
-            {/* Label pill */}
-            <div className="text-xs px-3 py-2 rounded-xl text-center flex items-center justify-center gap-2"
-                style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                <Users size={12} style={{ color: labelInfo.color }} />
-                <span style={{ color: 'var(--color-muted)' }}>
-                    {t('homeConsumptionLabel').split('{label}')[0]}
-                    <strong style={{ color: labelInfo.color }}>{labelInfo.text.toLowerCase()}</strong>
-                    {t('homeConsumptionLabel').split('{label}')[1]}
-                </span>
-            </div>
+            )}
+            {renderPeer()}
+            {/* Home-type average — sits at the bottom of this same card */}
+            <HomeAverageComparison userKwh={monthlyKwh || 0} />
         </div>
     );
 };

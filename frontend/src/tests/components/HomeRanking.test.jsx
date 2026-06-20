@@ -51,7 +51,8 @@ describe('HomeRanking', () => {
     getHomeMeta.mockResolvedValue({});
     fetchHomeComparison.mockResolvedValue(mockComparison);
     renderRanking();
-    await waitFor(() => expect(screen.getByText('Faturanıza göre')).toBeInTheDocument());
+    // Both the peer block and the home-type average card carry the source pill.
+    await waitFor(() => expect(screen.getAllByText('Faturanıza göre').length).toBeGreaterThan(0));
   });
 
   it('shows predicted source pill when only predicted data available', async () => {
@@ -59,7 +60,7 @@ describe('HomeRanking', () => {
     getHomeMeta.mockResolvedValue({});
     fetchHomeComparison.mockResolvedValue({ ...mockComparison, source: 'predicted' });
     renderRanking({ predictedKwh: 300 });
-    await waitFor(() => expect(screen.getByText('Tahmine göre')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Tahmine göre').length).toBeGreaterThan(0));
   });
 
   it('prefers bill kWh over predicted kWh', async () => {
@@ -82,12 +83,14 @@ describe('HomeRanking', () => {
     );
   });
 
-  it('shows numeric breakdown grid with user / average / delta', async () => {
+  it('renders the home-type average card at the bottom with the user number', async () => {
     getBillSummary.mockResolvedValue({ avgMonthlyKwh: 250 });
     getHomeMeta.mockResolvedValue({});
     fetchHomeComparison.mockResolvedValue(mockComparison);
     renderRanking();
+    // The user's monthly kWh now lives in the home-type average card.
     await waitFor(() => expect(screen.getByText('250')).toBeInTheDocument());
-    expect(screen.getByText('350')).toBeInTheDocument();
+    // With no rooms in the store it falls back to the generic Türkiye average.
+    expect(screen.getByText(/416/)).toBeInTheDocument();
   });
 });

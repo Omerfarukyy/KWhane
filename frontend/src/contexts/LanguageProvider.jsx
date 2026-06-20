@@ -120,7 +120,7 @@ const translations = {
         "room.laundry": "Çamaşır Odası",
         "room.office": "Ofis",
         "room.hallway": "Koridor",
-        "room.general": "Genel",
+        "room.general": "Koridor",
 
         // Room type hints
         "roomHint.kitchen": "Buzdolabı, fırın, bulaşık makinesi önerilir",
@@ -165,14 +165,28 @@ const translations = {
         noSuggestionsYet: "Henüz öneri yok.",
         noSuggestionsDesc: "Cihaz ekledikten sonra AI öneriler üretecek.",
 
+        // ── Home-type average comparison (HomeAverageComparison) ─
+        "homeType.studio": "Stüdyo (0+1)",
+        "homeType.2plus1": "2+1",
+        "homeType.3plus1": "3+1",
+        "homeType.smallVilla": "Küçük villa",
+        "homeType.bigVilla": "Büyük villa",
+        "homeType.generic": "Türkiye hanehalkı",
+        "homeType.consumesAvg": "{type} evler ortalama {kwh} kWh tüketir",
+        "homeType.genericAvg": "Türkiye hanehalkı ortalaması {kwh} kWh",
+        "homeType.inRange": "Ortalama aralıktasınız",
+        "homeType.above": "Ortalamanın %{pct} üzerinde",
+        "homeType.below": "Ortalamanın %{pct} altında",
+        "homeType.cardTitle": "Ev Tipi Ortalaması",
+
         // ── Peer Comparison (HomeRanking) ──────────────────────
-        peerComparison: "Komşu Karşılaştırması",
-        householdRanking: "Hanehalkı Sıralaması",
+        peerComparison: "Diğer Kullanıcılara Göre",
+        householdRanking: "Diğer Kullanıcılar",
         noComparisonData: "Henüz karşılaştırma verisi yok.",
         noComparisonDesc: "Bir cihaz ekleyin veya bir fatura kaydedin.",
         rankingFailed: "Sıralama hesaplanamadı.",
         rankingFailedDesc: "ML servisinin çalıştığından emin olun.",
-        homeInCluster: "Eviniz benzer {n} hane içinde",
+        homeInCluster: "Diğer {n} kullanıcının hanesine göre",
         usesLessEnergy: "'inden daha az enerji kullanıyor",
         lowConsumption: "Az tüketim",
         highConsumption: "Çok tüketim",
@@ -534,7 +548,7 @@ const translations = {
         "room.laundry": "Laundry Room",
         "room.office": "Office",
         "room.hallway": "Hallway",
-        "room.general": "General",
+        "room.general": "Corridor",
 
         // Room type hints
         "roomHint.kitchen": "Fridge, oven, dishwasher recommended",
@@ -579,14 +593,28 @@ const translations = {
         noSuggestionsYet: "No suggestions yet.",
         noSuggestionsDesc: "AI will generate suggestions after you add a device.",
 
+        // ── Home-type average comparison (HomeAverageComparison) ─
+        "homeType.studio": "Studio (0+1)",
+        "homeType.2plus1": "2+1",
+        "homeType.3plus1": "3+1",
+        "homeType.smallVilla": "Small villa",
+        "homeType.bigVilla": "Large villa",
+        "homeType.generic": "Turkish household",
+        "homeType.consumesAvg": "{type} homes consume on average {kwh} kWh",
+        "homeType.genericAvg": "Turkish household average is {kwh} kWh",
+        "homeType.inRange": "You're in the average range",
+        "homeType.above": "{pct}% above average",
+        "homeType.below": "{pct}% below average",
+        "homeType.cardTitle": "Home-type Average",
+
         // ── Peer Comparison (HomeRanking) ──────────────────────
-        peerComparison: "Peer Comparison",
-        householdRanking: "Household Ranking",
+        peerComparison: "Compared to Other Users",
+        householdRanking: "Other Users",
         noComparisonData: "No comparison data yet.",
         noComparisonDesc: "Add a device or enter a bill.",
         rankingFailed: "Ranking couldn't be calculated.",
         rankingFailedDesc: "Make sure the ML service is running.",
-        homeInCluster: "Your home among {n} similar households",
+        homeInCluster: "Compared to {n} other users' homes",
         usesLessEnergy: "uses less energy than",
         lowConsumption: "Low consumption",
         highConsumption: "High consumption",

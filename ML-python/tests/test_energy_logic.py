@@ -131,6 +131,33 @@ class EnergyLogicTests(unittest.TestCase):
         self.assertEqual(result.confidence_label, "high")
         self.assertEqual(result.top_factors[0]["feature"], "daily_usage_hours")
 
+    def test_efficiency_score_reflects_class_and_age_not_usage(self):
+        from datetime import datetime
+        this_year = datetime.now().year
+
+        def make(efficiency_class, year, hours):
+            return DeviceInput(
+                id="d", room_id="r", name="dev", type="tv",
+                nominal_power_watts=100, daily_usage_hours=hours,
+                standby_power_watts=2, efficiency_class=efficiency_class,
+                year_of_purchase=year,
+            )
+
+        with patch("services.calculate_service.fetch_tariffs", return_value=TARIFFS):
+            # Best class, brand new — used lightly vs heavily.
+            a_light = calculate_energy(make("A+++", this_year, 2), FixedPredictor(50.0))
+            a_heavy = calculate_energy(make("A+++", this_year, 20), FixedPredictor(500.0))
+            # Worst class, 20 years old.
+            g_old = calculate_energy(make("G", this_year - 20, 2), FixedPredictor(50.0))
+
+        # A+++ & new → perfect score regardless of usage hours or predicted kWh.
+        self.assertEqual(a_light.efficiency_score, 100.0)
+        self.assertEqual(a_heavy.efficiency_score, 100.0)
+        self.assertEqual(a_light.efficiency_score, a_heavy.efficiency_score)
+        # Bad class + old device scores clearly lower (but still bounded > 0).
+        self.assertLess(g_old.efficiency_score, 60.0)
+        self.assertGreater(g_old.efficiency_score, 0.0)
+
     def test_cycle_usage_normalizes_weekly_cycles_to_daily_hours(self):
         usage = normalize_usage(
             device_type="dishwasher",

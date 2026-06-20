@@ -76,10 +76,6 @@ const HomeDashboard = ({ onCatalogSearch, chatMode, onSetChatMode }) => {
                         <SuggestionCards />
                     </div>,
                     <div key="peer" className="kw-card p-4 mb-3.5" style={{ breakInside: 'avoid', display: 'inline-block', width: '100%' }}>
-                        <p className="text-[10px] font-bold uppercase tracking-widest mb-3"
-                            style={{ color: 'var(--color-subtle)', letterSpacing: '0.15em' }}>
-                            {t('peerComparison')}
-                        </p>
                         <HomeRanking
                             userId={user?.id}
                             predictedKwh={totalKwh}

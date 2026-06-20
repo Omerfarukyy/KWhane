@@ -16,14 +16,14 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
         { value: 'Banyo',         label: `🚿 ${t('room.bathroom')}`, hint: t('roomHint.bathroom') },
         { value: 'Çamaşır Odası', label: `👕 ${t('room.laundry')}`,  hint: t('roomHint.laundry') },
         { value: 'Ofis',          label: `💼 ${t('room.office')}`,   hint: t('roomHint.office') },
-        { value: 'Genel',         label: `🏠 ${t('room.general')}`,  hint: t('roomHint.general') },
+        { value: 'Genel',         label: `🚪 ${t('room.general')}`,  hint: t('roomHint.general') },
     ];
 
     if (!isOpen) return null;
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        const finalName = name.trim() || roomType;
+        const finalName = name.trim() || (roomType === 'Genel' ? t('room.general') : roomType);
         onSave({
             name: finalName,
             roomType,
@@ -85,7 +85,7 @@ const RoomCreationModal = ({ isOpen, onClose, onSave }) => {
                             onChange={(e) => setName(e.target.value)}
                             className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none transition"
                             style={{ ...inputStyle, outlineColor: '#3b82f6' }}
-                            placeholder={roomType || t('exampleRoomName')}
+                            placeholder={roomType === 'Genel' ? t('room.general') : roomType || t('exampleRoomName')}
                             onFocus={e => e.currentTarget.style.borderColor = '#3b82f6'}
                             onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
                         />

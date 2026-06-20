@@ -4,6 +4,7 @@ import { useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import useSceneStore, { objectRefs } from '../../store/useSceneStore';
+import { useLanguage } from '../../contexts/LanguageProvider';
 import RoomFurnishings from './RoomFurnishings';
 
 const WALL_THICKNESS = 0.1;
@@ -144,6 +145,7 @@ function heatColor(t) {
 }
 
 const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0], adjacentSides = {}, heatLevel = 0 }) => {
+    const { t } = useLanguage();
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
 
@@ -484,7 +486,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                     textShadow: '1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black'
                 }}
             >
-                {name}
+                {roomType === 'Genel' && name === 'Genel' ? t('room.general') : name}
             </Html>
 
             {/* Hızlı Ekleme ve Yeniden Boyutlandırma Kontrolleri */}
