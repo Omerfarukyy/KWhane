@@ -22,10 +22,13 @@ const HomeDashboard = ({ onCatalogSearch, chatMode, onSetChatMode }) => {
 
     const objects    = useSceneStore((s) => s.objects);
     const energyData = useSceneStore((s) => s.energyData);
+    const homeBillValidated = useSceneStore((s) => s.homeBillValidated);
+    const billingScaleFactor = useSceneStore((s) => s.billingScaleFactor);
+    const activeBillingScale = homeBillValidated && billingScaleFactor > 0 ? billingScaleFactor : 1;
     const totalKwh = objects.reduce((acc, o) => {
         const ed = energyData[o.id];
         if (!ed || ed === 'error') return acc;
-        return acc + (ed.total_monthly_kwh ?? ed.monthly_kwh ?? 0);
+        return acc + (ed.total_monthly_kwh ?? ed.monthly_kwh ?? 0) * activeBillingScale;
     }, 0);
 
     return (

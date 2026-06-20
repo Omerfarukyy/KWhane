@@ -49,7 +49,14 @@ export async function fetchCalibration({ actualKwh, devices, billCount }) {
  * @param {number} params.toHours
  * @returns {Promise<{ok: true} | {error: string}>}
  */
-export async function applyCalibration({ deviceId, fromHours, toHours }) {
+export async function applyCalibration({
+    deviceId,
+    field = 'daily_usage_hours',
+    fromHours,
+    toHours,
+    fromValue = fromHours,
+    toValue = toHours,
+}) {
     // Read existing row so we don't overwrite an already-stored original.
     const { data: existing, error: readError } = await supabase
         .from('devices')
@@ -63,13 +70,13 @@ export async function applyCalibration({ deviceId, fromHours, toHours }) {
     }
 
     const patch = {
-        daily_usage_hours:           toHours,
-        usage_hours_calibrated_at:   new Date().toISOString(),
+        [field]: toValue,
+        usage_hours_calibrated_at: new Date().toISOString(),
     };
 
     // Only stamp the original on the very first calibration.
-    if (existing && existing.daily_usage_hours_original == null) {
-        patch.daily_usage_hours_original = fromHours;
+    if (field === 'daily_usage_hours' && existing && existing.daily_usage_hours_original == null) {
+        patch.daily_usage_hours_original = fromValue;
     }
 
     const { error } = await supabase
@@ -79,6 +86,76 @@ export async function applyCalibration({ deviceId, fromHours, toHours }) {
 
     if (error) {
         console.warn('[calibrationService] update failed:', error.message);
+        return { error: error.message };
+    }
+    return { ok: true };
+}
+
+export function updateGeneratedClassName(name, fromClass, toClass) {
+    if (!name || !fromClass || !toClass) return name;
+    const escapedClass = fromClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const turkishPattern = new RegExp(`^${escapedClass}\\s+Sınıfı\\s+`, 'u');
+    const englishPattern = new RegExp(`^Class\\s+${escapedClass}\\s+`, 'iu');
+
+    if (turkishPattern.test(name)) {
+        return name.replace(turkishPattern, `${toClass} Sınıfı `);
+    }
+    if (englishPattern.test(name)) {
+        return name.replace(englishPattern, `Class ${toClass} `);
+    }
+    return name;
+}
+
+export async function applyEfficiencyCalibration({ deviceId, fromClass, toClass, currentName }) {
+    const nextName = updateGeneratedClassName(currentName, fromClass, toClass);
+    const patch = { efficiency_class: toClass };
+    if (nextName && nextName !== currentName) patch.name = nextName;
+
+    const { error } = await supabase
+        .from('devices')
+        .update(patch)
+        .eq('id', deviceId);
+
+    if (error) {
+        console.warn('[calibrationService] efficiency update failed:', error.message);
+        return { error: error.message };
+    }
+    return { ok: true, name: nextName };
+}
+
+export async function applyBillingScale({ homeId, scaleFactor, billCount, actualKwh, predictedKwh }) {
+    const { error } = await supabase
+        .from('homes')
+        .update({
+            billing_scale_factor: scaleFactor,
+            billing_scale_bill_count: billCount,
+            billing_scale_actual_kwh: actualKwh,
+            billing_scale_predicted_kwh: predictedKwh,
+            billing_scale_updated_at: new Date().toISOString(),
+        })
+        .eq('id', homeId);
+
+    if (error) {
+        console.warn('[calibrationService] billing scale update failed:', error.message);
+        return { error: error.message };
+    }
+    return { ok: true };
+}
+
+export async function clearBillingScale({ homeId }) {
+    const { error } = await supabase
+        .from('homes')
+        .update({
+            billing_scale_factor: null,
+            billing_scale_bill_count: null,
+            billing_scale_actual_kwh: null,
+            billing_scale_predicted_kwh: null,
+            billing_scale_updated_at: null,
+        })
+        .eq('id', homeId);
+
+    if (error) {
+        console.warn('[calibrationService] billing scale clear failed:', error.message);
         return { error: error.message };
     }
     return { ok: true };

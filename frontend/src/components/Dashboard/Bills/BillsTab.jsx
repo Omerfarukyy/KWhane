@@ -78,7 +78,7 @@ const BillsTab = ({ userId }) => {
 
             {/* Phase C: calibration suggestions, only when at least one bill exists */}
             {summary && summary.billCount >= 1 && (
-                <CalibrationCard summary={summary} onApplied={refresh} />
+                <CalibrationCard summary={summary} userId={userId} onApplied={refresh} />
             )}
 
             {/* Summary */}

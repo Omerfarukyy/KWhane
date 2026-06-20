@@ -19,7 +19,7 @@ import useSceneStore from '../../../store/useSceneStore';
 import { useLanguage } from '../../../contexts/LanguageProvider';
 import { useAuth } from '../../../contexts/AuthContext';
 import { runFullAnalysis, getCachedResult } from '../../../services/mlService';
-import { listBills, getBillSummary } from '../../../services/billsService';
+import { getBillSummary } from '../../../services/billsService';
 import { updateDeviceFields } from '../../../services/houseService';
 import { supabase } from '../../../lib/supabase';
 import { USAGE_MODEL } from '../../../utils/usageModels';
@@ -52,7 +52,11 @@ const DashboardLayout = () => {
     // Home panel sub-tabs
     const [homeTab,             setHomeTab]             = useState('ozet');
     const [isPanelCollapsed,    setIsPanelCollapsed]    = useState(false);
-    const [billsAvgKwh,         setBillsAvgKwh]         = useState(null);
+    const [billSummary,         setBillSummary]         = useState({
+        billCount: 0,
+        avgMonthlyKwh: null,
+        avgMonthlyCost: null,
+    });
 
     const { t } = useLanguage();
     const { user, signOut } = useAuth();
@@ -72,6 +76,7 @@ const DashboardLayout = () => {
     const pinnedDeviceId         = useSceneStore((s) => s.pinnedDeviceId);
     const setPinnedDeviceId      = useSceneStore((s) => s.setPinnedDeviceId);
     const setHomeBillValidated   = useSceneStore((s) => s.setHomeBillValidated);
+    const homeBillValidated      = useSceneStore((s) => s.homeBillValidated);
     const billingScaleFactor     = useSceneStore((s) => s.billingScaleFactor);
     const setLastDeviceAddedAt   = useSceneStore((s) => s.setLastDeviceAddedAt);
 
@@ -83,22 +88,23 @@ const DashboardLayout = () => {
     const deviceSpecs    = useSceneStore((s) => s.deviceSpecs);
     const isLoadingFromDB = useSceneStore((s) => s.isLoadingFromDB);
 
-    // ── Eagerly probe bills so device badges paint green from the first
-    //    paint, regardless of whether the user opens the home dashboard. ──
+    // Load the bill-backed overview and device validation state on login.
     useEffect(() => {
-        if (!user?.id) return;
-        listBills(user.id)
-            .then((bills) => setHomeBillValidated((bills || []).length > 0))
+        if (!user?.id) {
+            setBillSummary({ billCount: 0, avgMonthlyKwh: null, avgMonthlyCost: null });
+            return;
+        }
+        const refreshBillSummary = () => getBillSummary(user.id)
+            .then((summary) => {
+                const next = summary || { billCount: 0, avgMonthlyKwh: null, avgMonthlyCost: null };
+                setBillSummary(next);
+                setHomeBillValidated(next.billCount > 0);
+            })
             .catch(() => { /* ignore — flag stays false */ });
+        refreshBillSummary();
+        window.addEventListener('bills-changed', refreshBillSummary);
+        return () => window.removeEventListener('bills-changed', refreshBillSummary);
     }, [user?.id, setHomeBillValidated]);
-
-    // ── Bills average for trend indicator ─────────────────────────────────
-    useEffect(() => {
-        if (!user?.id) return;
-        getBillSummary(user.id)
-            .then((s) => setBillsAvgKwh(s?.avgMonthlyKwh ?? null))
-            .catch(() => {});
-    }, [user?.id]);
 
     // ── Session persistence + ML restore ──────────────────────────────────
     useEffect(() => {
@@ -173,6 +179,14 @@ const DashboardLayout = () => {
         });
         return { kwh: totalKwh, cost: totalCost };
     }, [objects, energyData]);
+    const hasBillSummary = billSummary.billCount > 0
+        && billSummary.avgMonthlyKwh != null
+        && billSummary.avgMonthlyCost != null;
+    const overviewTotals = hasBillSummary
+        ? { kwh: billSummary.avgMonthlyKwh, cost: billSummary.avgMonthlyCost }
+        : homeTotals;
+    const activeBillingScale = homeBillValidated && billingScaleFactor > 0 ? billingScaleFactor : 1;
+    const billAccent = hasBillSummary ? '#22c55e' : '#3b82f6';
 
     // Selected device / room
     const selectedObj  = useMemo(() => objects.find((o) => o.id === selectedId), [objects, selectedId]);
@@ -291,23 +305,21 @@ const DashboardLayout = () => {
             .map(o => {
                 const ed = energyData[o.id];
                 const kwh = (ed && ed !== 'error')
-                    ? (ed.total_monthly_kwh ?? ed.monthly_kwh ?? 0) : 0;
+                    ? (ed.total_monthly_kwh ?? ed.monthly_kwh ?? 0) * activeBillingScale : 0;
                 return { ...o, kwh };
             })
             .filter(o => o.kwh > 0)
             .sort((a, b) => b.kwh - a.kwh);
-    }, [objects, energyData]);
+    }, [objects, energyData, activeBillingScale]);
 
-    // ── Trend: tahmin vs fatura ort. (veya ev-tipi ortalaması) ──────────
-    // Bills take precedence; otherwise compare against the per-home-type
-    // baseline (studio / 2+1 / 3+1 / villa) instead of a static 416 kWh.
+    // Compare the displayed source (bill average or simulation) with the
+    // matching home-type baseline instead of comparing a bill to itself.
     const homeBaseline = classifyHome(rooms);
-    const usingBills = billsAvgKwh && billsAvgKwh > 0;
-    const trendRef  = usingBills ? billsAvgKwh : homeBaseline.baselineKwh;
+    const trendRef = homeBaseline.baselineKwh;
 
     // Gauge offset — clamp totalKwh to 0-600 for visual
-    const gaugeKwh    = homeTotals.kwh;
-    const gaugeOffset = objects.length === 0
+    const gaugeKwh = overviewTotals.kwh;
+    const gaugeOffset = !hasBillSummary && objects.length === 0
         ? 283  // full empty
         : Math.max(0, Math.min(283, 283 - (gaugeKwh / 600) * 283));
 
@@ -640,44 +652,39 @@ const DashboardLayout = () => {
                                     <div className="flex flex-col gap-6 pb-2">
                                         <div className="flex flex-col items-center">
                                             <h3 className="text-[10px] font-bold uppercase mb-5"
-                                                style={{ color: 'var(--color-subtle)', letterSpacing: '0.2em' }}>
-                                                {t('monthlyConsumptionStatus')}
+                                                style={{ color: hasBillSummary ? billAccent : 'var(--color-subtle)', letterSpacing: '0.2em' }}>
+                                                {hasBillSummary ? t('billMonthlyConsumptionStatus') : t('monthlyConsumptionStatus')}
                                             </h3>
                                             <div className="relative w-40 h-40 flex items-center justify-center">
                                                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100"
-                                                    style={{ filter: 'drop-shadow(0 0 12px rgba(59,130,246,0.25))' }}>
+                                                    style={{ filter: hasBillSummary ? 'drop-shadow(0 0 12px rgba(34,197,94,0.25))' : 'drop-shadow(0 0 12px rgba(59,130,246,0.25))' }}>
                                                     <circle cx="50" cy="50" r="45" fill="none" stroke="var(--color-border)" strokeWidth="6" />
                                                     <motion.circle
-                                                        cx="50" cy="50" r="45" fill="none" stroke="url(#blueGradient)"
+                                                        cx="50" cy="50" r="45" fill="none" stroke="url(#summaryGradient)"
                                                         strokeWidth="6" strokeDasharray="283" strokeLinecap="round"
                                                         initial={{ strokeDashoffset: 283 }}
                                                         animate={{ strokeDashoffset: gaugeOffset }}
                                                         transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
                                                     />
                                                     <defs>
-                                                        <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                                            <stop offset="0%" stopColor="#60a5fa" />
-                                                            <stop offset="100%" stopColor="#2563eb" />
+                                                        <linearGradient id="summaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                            <stop offset="0%" stopColor={hasBillSummary ? '#4ade80' : '#60a5fa'} />
+                                                            <stop offset="100%" stopColor={hasBillSummary ? '#16a34a' : '#2563eb'} />
                                                         </linearGradient>
                                                     </defs>
                                                 </svg>
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                    {objects.length === 0
+                                                    {!hasBillSummary && objects.length === 0
                                                         ? <span className="text-4xl font-black" style={{ color: 'var(--color-text)' }}>—</span>
                                                         : <NumberTicker
                                                             value={Math.round(gaugeKwh)}
                                                             className="text-4xl font-black"
-                                                            style={{ color: 'var(--color-text)' }}
+                                                            style={{ color: hasBillSummary ? billAccent : 'var(--color-text)' }}
                                                           />
                                                     }
-                                                    <span className="text-xs font-bold tracking-widest mt-1" style={{ color: '#3b82f6' }}>
+                                                    <span className="text-xs font-bold tracking-widest mt-1" style={{ color: billAccent }}>
                                                         {t('kwh')}
                                                     </span>
-                                                    {billingScaleFactor && billingScaleFactor !== 1 && gaugeKwh > 0 && (
-                                                        <span className="text-[10px] mt-0.5 font-semibold" style={{ color: '#22c55e' }}>
-                                                            ≈{Math.round(gaugeKwh * billingScaleFactor)} kWh kalibre
-                                                        </span>
-                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -685,23 +692,18 @@ const DashboardLayout = () => {
                                         <div className="w-full h-px" style={{ background: 'linear-gradient(to right, transparent, var(--color-border), transparent)' }} />
 
                                         <div className="flex flex-col gap-1 items-center">
-                                            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-subtle)' }}>
-                                                {t('estimatedBill')}
+                                            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: hasBillSummary ? billAccent : 'var(--color-subtle)' }}>
+                                                {hasBillSummary ? t('billMonthlyAmount') : t('estimatedBill')}
                                             </span>
-                                            {objects.length === 0
+                                            {!hasBillSummary && objects.length === 0
                                                 ? <span className="text-3xl font-black" style={{ color: '#3b82f6' }}>₺—</span>
                                                 : <NumberTicker
-                                                    value={Math.round(homeTotals.cost)}
+                                                    value={Math.round(overviewTotals.cost)}
                                                     prefix="₺"
                                                     className="text-3xl font-black"
-                                                    style={{ color: '#3b82f6' }}
+                                                    style={{ color: billAccent }}
                                                   />
                                             }
-                                            {billingScaleFactor && billingScaleFactor !== 1 && homeTotals.cost > 0 && (
-                                                <span className="text-[10px] font-semibold" style={{ color: '#22c55e' }}>
-                                                    ≈₺{Math.round(homeTotals.cost * billingScaleFactor)} kalibre
-                                                </span>
-                                            )}
                                             {/* Trend indikatörü — aynı "ortalama" mekaniği (±%10 bandı) */}
                                             {gaugeKwh > 0 && (() => {
                                                 const { status, deltaPct } = deviationStatus(gaugeKwh, trendRef);
@@ -731,7 +733,7 @@ const DashboardLayout = () => {
                                         </div>
 
                                         {/* Phase E: monthly energy goal tracker */}
-                                        <StreakCard userId={user?.id} predictedKwh={homeTotals.kwh} />
+                                        <StreakCard userId={user?.id} predictedKwh={gaugeKwh} />
 
                                         {/* Cihaz tüketim sıralaması */}
                                         {devicesByKwh.length > 0 && (
@@ -830,7 +832,7 @@ const DashboardLayout = () => {
                                 {homeTab === 'siralama' && (
                                     <HomeRanking
                                         userId={user?.id}
-                                        predictedKwh={homeTotals.kwh}
+                                        predictedKwh={gaugeKwh}
                                         nDevices={objects.length}
                                     />
                                 )}
@@ -1026,6 +1028,9 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
 
     const kwh         = (!isLoading && !isError) ? (data.total_monthly_kwh  ?? data.monthly_kwh  ?? 0) : 0;
     const cost        = (!isLoading && !isError) ? (data.total_monthly_cost ?? data.monthly_cost ?? 0) : 0;
+    const activeBillingScale = validated && billingScaleFactor > 0 ? billingScaleFactor : 1;
+    const displayedKwh = kwh * activeBillingScale;
+    const displayedCost = cost * activeBillingScale;
     const score       = (!isLoading && !isError) ? (data.efficiency_score   ?? 75) : 0;
     const theoretical = spec ? (spec.nominal_power_watts * spec.daily_usage_hours * 30) / 1000 : 0;
 
@@ -1180,25 +1185,15 @@ const DeviceDetailPanel = ({ obj, data, spec, onDelete, setEnergyData, setDevice
                             style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
                             <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>kWh/ay</span>
                             <span className="text-2xl font-black mt-1" style={{ color: accentColor }}>
-                                {kwh.toFixed(1)}
+                                {displayedKwh.toFixed(1)}
                             </span>
-                            {billingScaleFactor && billingScaleFactor !== 1 && (
-                                <span className="text-[10px] font-semibold mt-0.5" style={{ color: '#22c55e' }}>
-                                    ≈{(kwh * billingScaleFactor).toFixed(1)} kalibre
-                                </span>
-                            )}
                         </div>
                         <div className="rounded-xl p-3 flex flex-col"
                             style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
                             <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-subtle)' }}>₺/ay</span>
                             <span className="text-2xl font-black mt-1" style={{ color: 'var(--color-text)' }}>
-                                {Math.round(cost)}
+                                {Math.round(displayedCost)}
                             </span>
-                            {billingScaleFactor && billingScaleFactor !== 1 && (
-                                <span className="text-[10px] font-semibold mt-0.5" style={{ color: '#22c55e' }}>
-                                    ≈₺{Math.round(cost * billingScaleFactor)} kalibre
-                                </span>
-                            )}
                         </div>
                     </div>
 

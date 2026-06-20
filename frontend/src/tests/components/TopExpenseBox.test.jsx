@@ -11,9 +11,9 @@ import TopExpenseBox from '../../components/Dashboard/Home/TopExpenseBox';
 
 const renderBox = () => render(<LanguageProvider><TopExpenseBox /></LanguageProvider>);
 
-const makeStoreState = ({ objects = [], energyData = {}, deviceSpecs = {}, homeBillValidated = false } = {}) => {
+const makeStoreState = ({ objects = [], energyData = {}, deviceSpecs = {}, homeBillValidated = false, billingScaleFactor = null } = {}) => {
   useSceneStore.mockImplementation((selector) =>
-    selector({ objects, energyData, deviceSpecs, homeBillValidated })
+    selector({ objects, energyData, deviceSpecs, homeBillValidated, billingScaleFactor })
   );
 };
 
@@ -91,5 +91,17 @@ describe('TopExpenseBox', () => {
     });
     renderBox();
     expect(screen.getByText('Tahmin')).toBeInTheDocument();
+  });
+
+  it('uses the billing scale as the primary device cost', () => {
+    makeStoreState({
+      objects: [{ id: 'o1', type: 'fridge' }],
+      energyData: { o1: { total_monthly_cost: 300, efficiency_score: 85 } },
+      deviceSpecs: { o1: { name: 'Buzdolabı' } },
+      homeBillValidated: true,
+      billingScaleFactor: 1.5,
+    });
+    renderBox();
+    expect(screen.getByText('₺450')).toBeInTheDocument();
   });
 });

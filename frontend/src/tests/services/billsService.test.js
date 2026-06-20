@@ -12,8 +12,9 @@ vi.mock('axios', () => ({
   default: { post: vi.fn() },
 }));
 
-import { getBillSummary, cacheDiagnosticSummary, readCachedDiagnosticSummary } from '../../services/billsService';
+import { insertBill, deleteBill, getBillSummary, cacheDiagnosticSummary, readCachedDiagnosticSummary } from '../../services/billsService';
 import { supabase } from '../../lib/supabase';
+import { cacheDeletePrefix } from '../../lib/cache';
 
 const mockChain = (returnValue) => {
   const chain = {
@@ -29,7 +30,10 @@ const mockChain = (returnValue) => {
 };
 
 describe('getBillSummary', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    cacheDeletePrefix('bills:');
+  });
 
   it('returns zero summary when userId is missing', async () => {
     const result = await getBillSummary(null);
@@ -91,5 +95,29 @@ describe('cacheDiagnosticSummary / readCachedDiagnosticSummary', () => {
     cacheDiagnosticSummary('uid-b', 'summary-b');
     expect(readCachedDiagnosticSummary('uid-a')).toBe('summary-a');
     expect(readCachedDiagnosticSummary('uid-b')).toBe('summary-b');
+  });
+});
+
+describe('bill change notifications', () => {
+  it('notifies the dashboard after inserting or deleting a bill', async () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    supabase.from
+      .mockReturnValueOnce(mockChain({ data: { id: 'bill-1' }, error: null }))
+      .mockReturnValueOnce(mockChain({ error: null }));
+
+    await insertBill({
+      userId: 'user-1',
+      periodStart: '2026-01-01',
+      periodEnd: '2026-01-31',
+      totalKwh: 200,
+      totalCostTl: 600,
+    });
+    await deleteBill('bill-1');
+
+    const billEvents = dispatchSpy.mock.calls
+      .map(([event]) => event.type)
+      .filter((type) => type === 'bills-changed');
+    expect(billEvents).toHaveLength(2);
+    dispatchSpy.mockRestore();
   });
 });

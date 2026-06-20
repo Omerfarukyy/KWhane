@@ -12,6 +12,10 @@ import { cacheGet, cacheSet, cacheDeletePrefix } from '../lib/cache';
 
 const ML_API_URL = import.meta.env.VITE_ML_API_URL || 'http://localhost:8000';
 
+function notifyBillsChanged() {
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('bills-changed'));
+}
+
 /**
  * Insert a new bill row. Returns the inserted row, or { error } on failure.
  *
@@ -53,6 +57,7 @@ export async function insertBill({
         return { error };
     }
     cacheDeletePrefix('bills:');
+    notifyBillsChanged();
     return { data };
 }
 
@@ -98,6 +103,7 @@ export async function deleteBill(id) {
         return { error };
     }
     cacheDeletePrefix('bills:');
+    notifyBillsChanged();
     return { ok: true };
 }
 

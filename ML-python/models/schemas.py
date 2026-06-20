@@ -342,6 +342,18 @@ class ScaledCalibrationDevice(BaseModel):
     scaled_monthly_kwh: float
 
 
+class EfficiencyClassSuggestion(BaseModel):
+    type: str = "efficiency_class"
+    device_id: str
+    device_name: str
+    device_type_label: str
+    from_class: str
+    to_class: str
+    impact_kwh_per_month: float
+    message_tr: str
+    suggested_action: dict
+
+
 class CalibrationResponse(BaseModel):
     predicted_kwh: float
     actual_kwh: float
@@ -351,7 +363,7 @@ class CalibrationResponse(BaseModel):
     scale_factor: float | None = None
     scaled_devices: list[ScaledCalibrationDevice] = Field(default_factory=list)
     suggested_adjustments: list[CalibrationSuggestion] = Field(default_factory=list)
-    efficiency_review: dict | None = None
+    efficiency_review: EfficiencyClassSuggestion | None = None
     reconciled: bool = False
 
 

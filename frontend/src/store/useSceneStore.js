@@ -553,16 +553,17 @@ const useSceneStore = create((set, get) => ({
     // ─── RESET (called on logout) ─────────────────────────────────────────────
     resetStore: () =>
         set({
-            homeId:         null,
-            isLoadingFromDB: false,
-            rooms:           [],
-            roomLinks:       [],
-            objects:         [],
-            ghostObjects:    [],
-            energyData:      {},
-            deviceSpecs:     {},
-            selectedId:      null,
-            isDragging:      false,
+            homeId:             null,
+            billingScaleFactor: null,
+            isLoadingFromDB:    false,
+            rooms:              [],
+            roomLinks:          [],
+            objects:            [],
+            ghostObjects:       [],
+            energyData:         {},
+            deviceSpecs:        {},
+            selectedId:         null,
+            isDragging:         false,
         }),
 
     // ─── RESIZE ROOM ──────────────────────────────────────────────────────────

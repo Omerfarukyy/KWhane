@@ -18,6 +18,7 @@ const DeviceInfoPopup = ({ object, energyData }) => {
     const removeSelected = useSceneStore((s) => s.removeSelected);
     const spec = useSceneStore((s) => s.deviceSpecs[object.id]);
     const validated = useSceneStore((s) => s.homeBillValidated);
+    const billingScaleFactor = useSceneStore((s) => s.billingScaleFactor);
 
     const isPinned = pinnedDeviceId === object.id;
 
@@ -26,6 +27,9 @@ const DeviceInfoPopup = ({ object, energyData }) => {
 
     const kwh = (!isLoading && !isError) ? (energyData.total_monthly_kwh ?? energyData.monthly_kwh ?? 0) : 0;
     const cost = (!isLoading && !isError) ? (energyData.total_monthly_cost ?? energyData.monthly_cost ?? 0) : 0;
+    const activeBillingScale = validated && billingScaleFactor > 0 ? billingScaleFactor : 1;
+    const displayedKwh = kwh * activeBillingScale;
+    const displayedCost = cost * activeBillingScale;
     const score = (!isLoading && !isError) ? (energyData.efficiency_score ?? 75) : 0;
     const accentColor = efficiencyColor(score, validated);
 
@@ -102,7 +106,14 @@ const DeviceInfoPopup = ({ object, energyData }) => {
                         <div style={styles.deviceName}>
                             {spec?.name || t(`device.${object.type}`) || object.type}
                         </div>
-                        <div style={styles.typeBadge}>{object.type}</div>
+                        <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
+                            <div style={{ ...styles.typeBadge, marginTop: 0 }}>{object.type}</div>
+                            {spec?.efficiency_class && (
+                                <div style={styles.classBadge}>
+                                    {t('efficiency')}: {spec.efficiency_class}
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div style={{ display: 'flex', gap: 4 }}>
                         <button style={styles.deleteBtn} onClick={handleDelete} title={t('delete')}>
@@ -138,11 +149,11 @@ const DeviceInfoPopup = ({ object, energyData }) => {
                         <div style={styles.statsRow}>
                             <div style={styles.statBox}>
                                 <span style={styles.statLabel}>kWh/ay</span>
-                                <span style={{ ...styles.statValue, color: accentColor }}>{kwh.toFixed(1)}</span>
+                                <span style={{ ...styles.statValue, color: accentColor }}>{displayedKwh.toFixed(1)}</span>
                             </div>
                             <div style={styles.statBox}>
                                 <span style={styles.statLabel}>₺/ay</span>
-                                <span style={styles.statValue}>{Math.round(cost)}</span>
+                                <span style={styles.statValue}>{Math.round(displayedCost)}</span>
                             </div>
                             <div style={styles.statBox}>
                                 <span style={styles.statLabel}>{t('efficiencyShort')}</span>
@@ -248,6 +259,17 @@ const styles = {
         border: '1px solid rgba(59,130,246,0.2)',
         borderRadius: 6,
         padding: '1px 5px',
+    },
+    classBadge: {
+        display: 'inline-block',
+        color: '#a5b4fc',
+        fontSize: 8,
+        fontWeight: 700,
+        padding: '1px 5px',
+        borderRadius: 6,
+        background: 'rgba(99,102,241,0.12)',
+        border: '1px solid rgba(99,102,241,0.25)',
+        whiteSpace: 'nowrap',
     },
     closeBtn: {
         background: 'rgba(255,255,255,0.06)',

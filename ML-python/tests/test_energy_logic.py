@@ -508,7 +508,7 @@ class EnergyLogicTests(unittest.TestCase):
         self.assertLess(suggestion["to_value"], suggestion["from_value"])
         self.assertLess(suggestion["impact_kwh_per_month"], 0)
 
-    def test_calibration_returns_scale_and_efficiency_review_fallback(self):
+    def test_calibration_returns_scale_and_specific_efficiency_class(self):
         result = calibrate(
             actual_kwh=200,
             bill_count=2,
@@ -526,7 +526,71 @@ class EnergyLogicTests(unittest.TestCase):
         self.assertEqual(result["scale_factor"], 2.0)
         self.assertEqual(result["scaled_devices"][0]["scaled_monthly_kwh"], 200.0)
         self.assertEqual(result["suggested_adjustments"], [])
-        self.assertEqual(result["efficiency_review"]["type"], "efficiency_review")
+        self.assertEqual(result["efficiency_review"]["type"], "efficiency_class")
+        self.assertEqual(result["efficiency_review"]["from_class"], "A")
+        self.assertEqual(result["efficiency_review"]["to_class"], "E")
+        self.assertGreater(result["efficiency_review"]["impact_kwh_per_month"], 0)
+
+    def test_calibration_suggests_more_efficient_class_when_prediction_is_high(self):
+        result = calibrate(
+            actual_kwh=100,
+            bill_count=2,
+            devices=[
+                CalibrationDeviceInput(
+                    id="tv1",
+                    name="TV",
+                    type="tv",
+                    predicted_monthly_kwh=190,
+                    daily_usage_hours=5,
+                    efficiency_class="E",
+                )
+            ],
+        )
+
+        review = result["efficiency_review"]
+        self.assertIsNotNone(review)
+        self.assertEqual(review["from_class"], "E")
+        self.assertIn(review["to_class"], {"A", "B"})
+        self.assertLess(review["impact_kwh_per_month"], 0)
+
+    def test_calibration_uses_ac_class_sequence(self):
+        result = calibrate(
+            actual_kwh=150,
+            bill_count=1,
+            devices=[
+                CalibrationDeviceInput(
+                    id="ac1",
+                    name="AC",
+                    type="ac",
+                    predicted_monthly_kwh=100,
+                    daily_usage_hours=8,
+                    efficiency_class="A+++",
+                )
+            ],
+        )
+
+        review = result["efficiency_review"]
+        self.assertIsNotNone(review)
+        self.assertIn(review["to_class"], {"A++", "A+", "A"})
+        self.assertNotEqual(review["to_class"], "D")
+
+    def test_calibration_omits_class_change_when_none_improves_gap(self):
+        result = calibrate(
+            actual_kwh=50,
+            bill_count=1,
+            devices=[
+                CalibrationDeviceInput(
+                    id="tv1",
+                    name="TV",
+                    type="tv",
+                    predicted_monthly_kwh=100,
+                    daily_usage_hours=5,
+                    efficiency_class="A",
+                )
+            ],
+        )
+
+        self.assertIsNone(result["efficiency_review"])
 
 
 if __name__ == "__main__":

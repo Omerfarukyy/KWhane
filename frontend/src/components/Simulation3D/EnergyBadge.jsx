@@ -16,6 +16,7 @@ const EnergyBadge = ({ objectId, object, heightOffset = 0.3 }) => {
     const validated = useSceneStore((s) => s.homeBillValidated);
     const energyData = useSceneStore(useCallback((s) => s.energyData[objectId], [objectId]));
     const pinnedDeviceId = useSceneStore((s) => s.pinnedDeviceId);
+    const billingScaleFactor = useSceneStore((s) => s.billingScaleFactor);
 
     // Hide badge when device is pinned so the detail popup/panel is visible without overlap
     if (pinnedDeviceId === objectId) return null;
@@ -27,12 +28,12 @@ const EnergyBadge = ({ objectId, object, heightOffset = 0.3 }) => {
             center
             style={{ pointerEvents: 'auto' }}
         >
-            <BadgeContent energyData={energyData} validated={validated} />
+            <BadgeContent energyData={energyData} validated={validated} billingScaleFactor={billingScaleFactor} />
         </Html>
     );
 };
 
-const BadgeContent = ({ energyData, validated }) => {
+const BadgeContent = ({ energyData, validated, billingScaleFactor }) => {
     if (energyData === null || energyData === undefined) {
         return (
             <div style={styles.badge}>
@@ -49,8 +50,9 @@ const BadgeContent = ({ energyData, validated }) => {
         );
     }
 
-    const kwh   = energyData.total_monthly_kwh  ?? energyData.monthly_kwh  ?? 0;
-    const cost  = energyData.total_monthly_cost ?? energyData.monthly_cost ?? 0;
+    const activeBillingScale = validated && billingScaleFactor > 0 ? billingScaleFactor : 1;
+    const kwh   = (energyData.total_monthly_kwh  ?? energyData.monthly_kwh  ?? 0) * activeBillingScale;
+    const cost  = (energyData.total_monthly_cost ?? energyData.monthly_cost ?? 0) * activeBillingScale;
     const score = energyData.efficiency_score   ?? 75;
 
     const accentColor = efficiencyColor(score, validated);

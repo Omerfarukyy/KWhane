@@ -324,7 +324,10 @@ const AiAssistant = ({
                         <span
                             className="absolute rounded-full transition-all"
                             style={{
-                                top: 2, left: isBuilder ? 2 : 36, width: 34, height: 24,
+                                top: 2,
+                                left: 2,
+                                transform: isBuilder ? 'translateX(0)' : 'translateX(32px)',
+                                width: 34, height: 24,
                                 background: accentColor, boxShadow: `0 2px 8px ${accentColor}66`,
                             }}
                         />

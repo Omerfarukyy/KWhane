@@ -23,6 +23,7 @@ const TopExpenseBox = () => {
     const energyData  = useSceneStore((s) => s.energyData);
     const deviceSpecs = useSceneStore((s) => s.deviceSpecs);
     const homeBillValidated = useSceneStore((s) => s.homeBillValidated);
+    const billingScaleFactor = useSceneStore((s) => s.billingScaleFactor);
 
     const top = useMemo(() => {
         const rows = objects
@@ -30,7 +31,8 @@ const TopExpenseBox = () => {
                 const ed = energyData[o.id];
                 const spec = deviceSpecs[o.id];
                 if (!ed || ed === 'error') return null;
-                const cost = ed.total_monthly_cost ?? ed.monthly_cost ?? 0;
+                const activeBillingScale = homeBillValidated && billingScaleFactor > 0 ? billingScaleFactor : 1;
+                const cost = (ed.total_monthly_cost ?? ed.monthly_cost ?? 0) * activeBillingScale;
                 const score = ed.efficiency_score ?? 75;
                 return {
                     id: o.id,
@@ -45,7 +47,7 @@ const TopExpenseBox = () => {
             .sort((a, b) => b.cost - a.cost)
             .slice(0, 3);
         return rows;
-    }, [objects, energyData, deviceSpecs, homeBillValidated]);
+    }, [objects, energyData, deviceSpecs, homeBillValidated, billingScaleFactor]);
 
     const maxCost = top.length > 0 ? top[0].cost : 0;
 
