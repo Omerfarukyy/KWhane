@@ -32,7 +32,7 @@ export const DEVICE_CONFIGS = {
     ac:              { size: [0.9, 0.3, 0.3], color: '#f8fafc', defaultY: 2.2, mount: 'wall' },
     washing_machine: { size: [0.6, 0.85, 0.6], color: '#f1f5f9', defaultY: null },
     dishwasher:      { size: [0.6, 0.85, 0.6], color: '#e2e8f0', defaultY: null },
-    oven:            { size: [0.6, 0.6, 0.6],  color: '#9ca3af', defaultY: null },
+    oven:            { size: [0.6, 0.9, 0.6],  color: '#9ca3af', defaultY: null },
     computer:        { size: [0.5, 0.4, 0.35], color: '#334155', defaultY: 0.75 },
     lighting:        { size: [0.4, 0.1, 0.4],  color: '#fef3c7', defaultY: 2.8, mount: 'ceiling' },
     water_heater:    { size: [0.5, 1.5, 0.5],  color: '#dbeafe', defaultY: null },
@@ -70,19 +70,33 @@ const ROOM_PRESETS = {
 const KITCHEN_GHOST_SPOTS = {
     // Fridge: left wall, back corner — clear of counters and dining table
     fridge: (w, d, sw, sd) => [
-        -(w / 2 - sw / 2 - 0.05),        // flush left wall
-        -(d / 2 - sd / 2 - 0.05),        // flush back wall
+        -(w / 2 - sw / 2 - 0.115),       // clear of the inner wall face
+        -(d / 2 - sd / 2 - 0.115),       // clear of the inner wall face
     ],
-    // Dishwasher: back wall, right of center (near sink side, but not ON it)
-    dishwasher: (w, d, sw, sd) => [
-        w / 4,                            // right quarter
-        -(d / 2 - sd / 2 - 0.05),        // flush back wall
-    ],
-    // Oven: back wall, left of center (away from sink)
-    oven: (w, d, sw, sd) => [
-        -(w / 4),                         // left quarter
-        -(d / 2 - sd / 2 - 0.05),        // flush back wall
-    ],
+    // Compact kitchens move the dishwasher to the right wall and the oven to
+    // the back-right bay so every appliance keeps a full-size opening.
+    dishwasher: (w, d, sw, sd) => w >= 3.8
+        ? [w / 4, -(d / 2 - sd / 2 - 0.115)]
+        : [w / 2 - sd / 2 - 0.115, 0],
+    oven: (w, d, sw, sd) => w >= 3.8
+        ? [-(w / 4), -(d / 2 - sd / 2 - 0.115)]
+        : [w / 2 - sw / 2 - 0.115, -(d / 2 - sd / 2 - 0.115)],
+};
+
+// Device suggestions should land on the furniture intended to support them,
+// not inside nearby cabinets or decorative stand-ins.
+const ROOM_GHOST_SPOTS = {
+    'Oturma Odası': {
+        tv: (_w, d, _sw, sd) => [0, d / 2 - 0.1 - sd / 2],
+        ac: (w, d, _sw, sd) => [w / 2 - 0.1 - sd / 2, -d / 4],
+    },
+    'Yatak Odası': {
+        ac: (_w, d, _sw, sd) => [0, -(d / 2 - 0.1 - sd / 2)],
+        computer: (w, d) => [w / 2 - 0.55, d / 2 - 0.38],
+    },
+    'Ofis': {
+        computer: (_w, d) => [0, -(d / 2 - 0.34)],
+    },
 };
 
 // ─── Ghost positioning ────────────────────────────────────────────────────────
@@ -93,7 +107,7 @@ function computeGhosts(room, roomType) {
 
     return presets.map((type, i) => {
         const cfg = DEVICE_CONFIGS[type] || DEVICE_CONFIGS.box;
-        const [sw, sh, sd] = cfg.size;
+        const [sw, , sd] = cfg.size;
         const yPos = cfg.defaultY !== null ? cfg.defaultY : 0;
         const margin = 0.3;
 
@@ -103,6 +117,10 @@ function computeGhosts(room, roomType) {
         // hand-tuned spots so ghosts don't spawn inside the static geometry.
         if (roomType === 'Mutfak' && KITCHEN_GHOST_SPOTS[type]) {
             const [ox, oz] = KITCHEN_GHOST_SPOTS[type](width, depth, sw, sd);
+            gx = rx + ox;
+            gz = rz + oz;
+        } else if (ROOM_GHOST_SPOTS[roomType]?.[type]) {
+            const [ox, oz] = ROOM_GHOST_SPOTS[roomType][type](width, depth, sw, sd);
             gx = rx + ox;
             gz = rz + oz;
         } else if (i === 0) {
@@ -198,6 +216,12 @@ const useSceneStore = create((set, get) => ({
 
     isDragging:  false,
     setIsDragging: (v) => set({ isDragging: v }),
+
+    // Adaptive render quality — 'high' | 'medium' | 'low'. Driven by the
+    // frame-time probe in SceneAnimationLoop; gates post-processing (N8AO,
+    // bloom) and pixel ratio so weak devices stay smooth.
+    qualityTier: 'high',
+    setQualityTier: (t) => { if (get().qualityTier !== t) set({ qualityTier: t }); },
 
     selectedId:  null,
     setSelectedId: (id) => set({ selectedId: id }),
@@ -605,10 +629,41 @@ const useSceneStore = create((set, get) => ({
             };
         }),
 
-    updateRoomPosition: (id, newPosition) =>
+    // Persist a room's geometry plus the shifted positions of every device
+    // inside it. Called once when a resize completes (ResizeHandle onDragEnd).
+    // resizeRoom itself runs on every pointer-move and stays local-only so we
+    // don't hammer Supabase mid-drag.
+    persistRoomLayout: (id) => {
+        const { homeId, rooms, objects } = get();
+        if (!homeId) return;
+        const room = rooms.find((r) => r.id === id);
+        if (!room) return;
+        houseService.updateRoom(id, room).catch((err) => {
+            console.error('[store] updateRoom (resize) failed:', err.message);
+        });
+        objects
+            .filter((o) => o.roomId === id)
+            .forEach((o) => {
+                houseService.updateDevicePosition(o.id, o.position, undefined, o.rotation)
+                    .catch((err) => {
+                        console.error('[store] updateDevicePosition (resize) failed:', err.message);
+                    });
+            });
+    },
+
+    updateRoomPosition: (id, newPosition) => {
         set((s) => ({
             rooms: s.rooms.map((r) => r.id === id ? { ...r, position: newPosition } : r),
-        })),
+        }));
+        // Persist so the room stays where the user dropped it across reloads.
+        // Called once on pointer-up (RoomBuilder), so this is a single write.
+        const room = get().rooms.find((r) => r.id === id);
+        if (room && get().homeId) {
+            houseService.updateRoom(id, room).catch((err) => {
+                console.error('[store] updateRoom (position) failed:', err.message);
+            });
+        }
+    },
 
     // ─── UPDATE OBJECT POSITION ───────────────────────────────────────────────
     updateObjectPosition: (id, newPosition) => {
@@ -628,15 +683,90 @@ const useSceneStore = create((set, get) => ({
     },
 
     // ─── ROTATE SELECTED ──────────────────────────────────────────────────────
-    rotateSelected: () =>
-        set((s) => {
-            if (!s.selectedId) return s;
-            return {
-                objects: s.objects.map((o) =>
-                    o.id === s.selectedId ? { ...o, rotation: o.rotation + Math.PI / 2 } : o
-                ),
-            };
-        }),
+    // Rotate the selected DEVICE 90° in `direction` (+1 = CW, -1 = CCW).
+    rotateSelected: (direction = 1) => {
+        const s = get();
+        if (!s.selectedId) return;
+        const target = s.objects.find((o) => o.id === s.selectedId);
+        if (!target) return;   // a room is selected — nothing to rotate
+        const step = (direction >= 0 ? 1 : -1) * (Math.PI / 2);
+        const newRotation = target.rotation + step;
+        set({
+            objects: s.objects.map((o) =>
+                o.id === s.selectedId ? { ...o, rotation: newRotation } : o
+            ),
+        });
+        // Persist rotation so the device keeps its facing across reloads.
+        if (get().homeId) {
+            houseService.updateDevicePosition(target.id, target.position, undefined, newRotation)
+                .catch((err) => {
+                    console.error('[store] updateDevicePosition (rotation) failed:', err.message);
+                });
+        }
+    },
+
+    // Rotate a whole room 90° (+1 = CW, -1 = CCW). Rooms stay axis-aligned, so a
+    // quarter-turn swaps width/depth and rotates every child device + ghost
+    // around the room center. Procedural furniture re-fits the new footprint.
+    rotateRoom: (id, direction = 1) => {
+        const s = get();
+        const room = s.rooms.find((r) => r.id === id);
+        if (!room) return;
+
+        const newSize = { width: room.size.depth, depth: room.size.width, height: room.size.height };
+
+        // Block the turn if the swapped footprint would collide with a neighbour.
+        const trial = { position: room.position, size: newSize };
+        if (s.rooms.some((r) => r.id !== id && roomsOverlap(trial, r))) {
+            toast.error('Oda döndürülemiyor: başka bir odayla çakışıyor.');
+            return;
+        }
+
+        const [cx, , cz] = room.position;
+        const theta = direction >= 0 ? Math.PI / 2 : -Math.PI / 2;
+        const cos = Math.cos(theta), sin = Math.sin(theta);
+        const rot = (x, z) => {
+            const rx = x - cx, rz = z - cz;
+            return [cx + rx * cos + rz * sin, cz - rx * sin + rz * cos];
+        };
+
+        const movedObjects = [];
+        const updatedObjects = s.objects.map((o) => {
+            if (o.roomId !== id) return o;
+            const [nx, nz] = rot(o.position[0], o.position[2]);
+            const updated = { ...o, position: [nx, o.position[1], nz], rotation: (o.rotation || 0) + theta };
+            const ref = objectRefs[o.id];
+            if (ref) { ref.position.x = nx; ref.position.z = nz; }
+            movedObjects.push(updated);
+            return updated;
+        });
+
+        const updatedGhosts = s.ghostObjects.map((g) => {
+            if (g.roomId !== id) return g;
+            const [nx, nz] = rot(g.position[0], g.position[2]);
+            return { ...g, position: [nx, g.position[1], nz] };
+        });
+
+        set({
+            rooms:        s.rooms.map((r) => (r.id === id ? { ...r, size: newSize } : r)),
+            objects:      updatedObjects,
+            ghostObjects: updatedGhosts,
+        });
+
+        // Persist the swapped footprint and every shifted/rotated device.
+        if (get().homeId) {
+            const updatedRoom = get().rooms.find((r) => r.id === id);
+            houseService.updateRoom(id, updatedRoom).catch((err) => {
+                console.error('[store] updateRoom (rotate) failed:', err.message);
+            });
+            movedObjects.forEach((o) => {
+                houseService.updateDevicePosition(o.id, o.position, undefined, o.rotation)
+                    .catch((err) => {
+                        console.error('[store] updateDevicePosition (rotate) failed:', err.message);
+                    });
+            });
+        }
+    },
 }));
 
 export default useSceneStore;

@@ -1,6 +1,6 @@
 import { Suspense, useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { Grid, Sky, Stars } from '@react-three/drei';
+import { Grid, Sky, Stars, ContactShadows, Instances, Instance } from '@react-three/drei';
 import * as THREE from 'three';
 import { Home, Loader2 } from 'lucide-react';
 import Lights, { SUN_POSITION } from './Lights';
@@ -13,8 +13,10 @@ import DraggableObject from './DraggableObject';
 import ProceduralDevices from './ProceduralDevices';
 import GhostDevice from './GhostDevice';
 import EnergyBadge from './EnergyBadge';
-import DeviceInfoPopup from './DeviceInfoPopup';
+import SelectionRotateControl from './SelectionRotateControl';
 import GardenProps from './GardenProps';
+import SceneEnvironment from './SceneEnvironment';
+import PostProcessing from './PostProcessing';
 import ElectricHub from './ElectricHub';
 import ElectricWiring from './ElectricWiring';
 import useCollision from './useCollision';
@@ -87,9 +89,15 @@ function SceneWarmup({ onReady }) {
 // Active interaction → 60 fps, idle > 3 s → 24 fps (saves GPU while
 // keeping LED animations visually smooth).
 function SceneAnimationLoop() {
-    const { invalidate } = useThree();
+    const { invalidate, setDpr } = useThree();
     const isDragging = useSceneStore((s) => s.isDragging);
+    const setQualityTier = useSceneStore((s) => s.setQualityTier);
     const lastActive = useRef(performance.now());
+
+    // Adaptive-quality probe state
+    const emaMs = useRef(16);
+    const sampleCount = useRef(0);
+    const tierRef = useRef('high');
 
     useEffect(() => {
         if (isDragging) lastActive.current = performance.now();
@@ -112,14 +120,40 @@ function SceneAnimationLoop() {
         return () => cancelAnimationFrame(rafId);
     }, [invalidate]);
 
-    // Keep lastActive fresh on pointer / scroll events inside the canvas
-    useFrame(({ gl }) => {
-        const dom = gl.domElement;
+    // Switch render quality tier: clamp pixel ratio + flag the store so
+    // PostProcessing scales (or unmounts) its effects.
+    const applyTier = useCallback((tier) => {
+        tierRef.current = tier;
+        const maxDpr = tier === 'high' ? 2 : tier === 'medium' ? 1.5 : 1;
+        setDpr(Math.min(window.devicePixelRatio || 1, maxDpr));
+        setQualityTier(tier);
+        invalidate();
+    }, [setDpr, setQualityTier, invalidate]);
+
+    useFrame((state, delta) => {
+        const dom = state.gl.domElement;
         if (!dom._kwhaneListeners) {
             const bump = () => { lastActive.current = performance.now(); };
             dom.addEventListener('pointerdown', bump, { passive: true });
             dom.addEventListener('wheel', bump, { passive: true });
             dom._kwhaneListeners = bump;
+        }
+
+        // Only sample real frame cost while actively rendering toward 60 fps —
+        // idle frames are deliberately throttled and would skew the average.
+        if (performance.now() - lastActive.current > 2500) return;
+        const ms = Math.min(delta * 1000, 100); // clamp tab-switch/pause spikes
+        emaMs.current = emaMs.current * 0.9 + ms * 0.1;
+        if (++sampleCount.current < 45) return;  // ~0.75 s before each decision
+        sampleCount.current = 0;
+
+        const e = emaMs.current;
+        const tier = tierRef.current;
+        // Degrade quickly when slow, upgrade conservatively (hysteresis gap).
+        if (e > 30 && tier !== 'low') {
+            applyTier(tier === 'high' ? 'medium' : 'low');
+        } else if (e < 17 && tier !== 'high') {
+            applyTier(tier === 'medium' ? 'high' : 'medium');
         }
     });
 
@@ -168,9 +202,12 @@ const SceneContainer = ({ children, onGhostClick, onGhostDismiss }) => {
             <Canvas
                 shadows="soft"
                 frameloop="demand"
+                dpr={[1, 2]}
                 gl={{
-                    toneMapping: THREE.NoToneMapping,
+                    toneMapping: THREE.ACESFilmicToneMapping,
+                    toneMappingExposure: 1.1,
                     outputColorSpace: THREE.SRGBColorSpace,
+                    antialias: true,
                 }}
                 camera={{
                     position: [cameraDistance, cameraDistance * 0.8, cameraDistance],
@@ -204,10 +241,28 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
     const objects      = useSceneStore((state) => state.objects);
     const ghostObjects = useSceneStore((state) => state.ghostObjects);
     const energyData   = useSceneStore((state) => state.energyData);
+    const isDragging   = useSceneStore((state) => state.isDragging);
+    const qualityTier  = useSceneStore((state) => state.qualityTier);
     const setSelectedId     = useSceneStore((state) => state.setSelectedId);
     const setPinnedDeviceId = useSceneStore((state) => state.setPinnedDeviceId);
 
     const adjacencies = useMemo(() => computeAdjacencies(rooms), [rooms]);
+
+    // Footprint of all rooms → where contact shadows are anchored & sized.
+    const footprint = useMemo(() => {
+        if (rooms.length === 0) return null;
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        rooms.forEach((r) => {
+            minX = Math.min(minX, r.position[0] - r.size.width / 2);
+            maxX = Math.max(maxX, r.position[0] + r.size.width / 2);
+            minZ = Math.min(minZ, r.position[2] - r.size.depth / 2);
+            maxZ = Math.max(maxZ, r.position[2] + r.size.depth / 2);
+        });
+        return {
+            center: [(minX + maxX) / 2, (minZ + maxZ) / 2],
+            scale: Math.max(maxX - minX, maxZ - minZ) + 3,
+        };
+    }, [rooms]);
 
     const roomHeatLevels = useMemo(() => {
         const roomKwh = {};
@@ -243,6 +298,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
             <KeyboardCameraControls />
 
             <Lights />
+            <SceneEnvironment isDark={isDark} />
 
             <SceneBackground isDark={isDark} />
             {isDark ? (
@@ -275,6 +331,23 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
 
             <GardenProps />
 
+            {/* Soft contact shadows anchor furniture/devices to the floor.
+                Live while dragging; re-baked once on layout change (key) under
+                demand mode so idle frames stay cheap. */}
+            {footprint && (
+                <ContactShadows
+                    key={`cs-${rooms.length}-${objects.length}-${isDragging}`}
+                    position={[footprint.center[0], 0.015, footprint.center[1]]}
+                    scale={footprint.scale}
+                    resolution={1024}
+                    blur={2.6}
+                    opacity={0.45}
+                    far={3.2}
+                    frames={isDragging ? Infinity : 1}
+                    color="#1a1205"
+                />
+            )}
+
             <Grid
                 args={[100, 100]}
                 cellSize={0.5}
@@ -305,6 +378,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                     height={r.size.height}
                     adjacentSides={adjacencies.get(r.id) || {}}
                     heatLevel={roomHeatLevels[r.id] ?? 0}
+                    collision={collision}
                 />
             ))}
 
@@ -353,15 +427,11 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                 />
             ))}
 
-            {objects.map((obj) => (
-                <DeviceInfoPopup
-                    key={`popup-${obj.id}`}
-                    object={obj}
-                    energyData={energyData[obj.id]}
-                />
-            ))}
+            <SelectionRotateControl />
 
             {children}
+
+            <PostProcessing tier={qualityTier || 'high'} />
         </group>
     );
 };
@@ -385,22 +455,16 @@ const CLOUD_PUFFS = [
     { p: [4,  24, 22],   r: 2.2 }, { p: [7,  24, 22],  r: 1.7 }, { p: [5, 25, 20], r: 1.5 },
     { p: [-8, 20, 24],   r: 2.0 }, { p: [-5, 20, 24],  r: 1.6 },
 ];
-const cloudMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false });
-
+// Instanced: all puffs share one unit-sphere geometry + material → 1 draw call.
 function DecorativeClouds() {
-    const geometries = useMemo(
-        () => CLOUD_PUFFS.map((c) => new THREE.SphereGeometry(c.r, 12, 8)),
-        [],
-    );
-
-    useEffect(() => () => geometries.forEach((g) => g.dispose()), [geometries]);
-
     return (
-        <group>
+        <Instances limit={CLOUD_PUFFS.length} range={CLOUD_PUFFS.length} frustumCulled={false}>
+            <sphereGeometry args={[1, 12, 8]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.85} depthWrite={false} />
             {CLOUD_PUFFS.map((c, i) => (
-                <mesh key={i} position={c.p} geometry={geometries[i]} material={cloudMaterial} />
+                <Instance key={i} position={c.p} scale={c.r} />
             ))}
-        </group>
+        </Instances>
     );
 }
 

@@ -1,0 +1,49 @@
+{
+  "catalogBytes": 101260,
+  "sources": {
+    "kenney": {
+      "sourcePage": "https://kenney.nl/assets/furniture-kit",
+      "author": "Kenney",
+      "license": "CC0 1.0 Universal",
+      "pack": "Furniture Kit 2.0",
+      "processingCommand": "npx gltf-transform optimize <input.glb> <output.glb> --compress draco"
+    }
+  },
+  "assets": [
+    { "file": "kenney/bathroomCabinetDrawer.glb", "originalFilename": "bathroomCabinetDrawer.glb", "source": "kenney", "triangles": 508, "bytes": 5276 },
+    { "file": "kenney/bathroomSink.glb", "originalFilename": "bathroomSink.glb", "source": "kenney", "triangles": 314, "bytes": 3792 },
+    { "file": "kenney/bathroomSinkSquare.glb", "originalFilename": "bathroomSinkSquare.glb", "source": "kenney", "triangles": 234, "bytes": 3664 },
+    { "file": "kenney/bathtub.glb", "originalFilename": "bathtub.glb", "source": "kenney", "triangles": 575, "bytes": 4432 },
+    { "file": "kenney/bedDouble.glb", "originalFilename": "bedDouble.glb", "source": "kenney", "triangles": 264, "bytes": 4844 },
+    { "file": "kenney/bedSingle.glb", "originalFilename": "bedSingle.glb", "source": "kenney", "triangles": 214, "bytes": 4596 },
+    { "file": "kenney/benchCushionLow.glb", "originalFilename": "benchCushionLow.glb", "source": "kenney", "triangles": 138, "bytes": 2964 },
+    { "file": "kenney/bookcaseClosedWide.glb", "originalFilename": "bookcaseClosedWide.glb", "source": "kenney", "triangles": 372, "bytes": 2132 },
+    { "file": "kenney/bookcaseOpen.glb", "originalFilename": "bookcaseOpen.glb", "source": "kenney", "triangles": 320, "bytes": 1992 },
+    { "file": "kenney/bookcaseOpenLow.glb", "originalFilename": "bookcaseOpenLow.glb", "source": "kenney", "triangles": 184, "bytes": 1684 },
+    { "file": "kenney/cabinetBedDrawer.glb", "originalFilename": "cabinetBedDrawer.glb", "source": "kenney", "triangles": 180, "bytes": 3348 },
+    { "file": "kenney/cabinetBedDrawerTable.glb", "originalFilename": "cabinetBedDrawerTable.glb", "source": "kenney", "triangles": 138, "bytes": 3176 },
+    { "file": "kenney/cabinetTelevisionDoors.glb", "originalFilename": "cabinetTelevisionDoors.glb", "source": "kenney", "triangles": 210, "bytes": 2732 },
+    { "file": "kenney/chairDesk.glb", "originalFilename": "chairDesk.glb", "source": "kenney", "triangles": 588, "bytes": 4284 },
+    { "file": "kenney/chairModernFrameCushion.glb", "originalFilename": "chairModernFrameCushion.glb", "source": "kenney", "triangles": 284, "bytes": 2856 },
+    { "file": "kenney/coatRackStanding.glb", "originalFilename": "coatRackStanding.glb", "source": "kenney", "triangles": 190, "bytes": 1840 },
+    { "file": "kenney/desk.glb", "originalFilename": "desk.glb", "source": "kenney", "triangles": 198, "bytes": 2616 },
+    { "file": "kenney/deskCorner.glb", "originalFilename": "deskCorner.glb", "source": "kenney", "triangles": 246, "bytes": 2716 },
+    { "file": "kenney/hoodModern.glb", "originalFilename": "hoodModern.glb", "source": "kenney", "triangles": 24, "bytes": 1280 },
+    { "file": "kenney/kitchenCabinet.glb", "originalFilename": "kitchenCabinet.glb", "source": "kenney", "triangles": 114, "bytes": 3116 },
+    { "file": "kenney/kitchenCabinetCornerInner.glb", "originalFilename": "kitchenCabinetCornerInner.glb", "source": "kenney", "triangles": 54, "bytes": 2068 },
+    { "file": "kenney/kitchenCabinetUpper.glb", "originalFilename": "kitchenCabinetUpper.glb", "source": "kenney", "triangles": 80, "bytes": 3008 },
+    { "file": "kenney/kitchenCabinetUpperCorner.glb", "originalFilename": "kitchenCabinetUpperCorner.glb", "source": "kenney", "triangles": 204, "bytes": 1848 },
+    { "file": "kenney/kitchenSink.glb", "originalFilename": "kitchenSink.glb", "source": "kenney", "triangles": 318, "bytes": 2816 },
+    { "file": "kenney/lampRoundFloor.glb", "originalFilename": "lampRoundFloor.glb", "source": "kenney", "triangles": 76, "bytes": 2160 },
+    { "file": "kenney/lampRoundTable.glb", "originalFilename": "lampRoundTable.glb", "source": "kenney", "triangles": 76, "bytes": 2172 },
+    { "file": "kenney/lampSquareTable.glb", "originalFilename": "lampSquareTable.glb", "source": "kenney", "triangles": 60, "bytes": 2056 },
+    { "file": "kenney/loungeDesignSofa.glb", "originalFilename": "loungeDesignSofa.glb", "source": "kenney", "triangles": 116, "bytes": 2332 },
+    { "file": "kenney/loungeDesignChair.glb", "originalFilename": "loungeDesignChair.glb", "source": "kenney", "triangles": 116, "bytes": 2352 },
+    { "file": "kenney/showerRound.glb", "originalFilename": "showerRound.glb", "source": "kenney", "triangles": 959, "bytes": 6572 },
+    { "file": "kenney/sideTable.glb", "originalFilename": "sideTable.glb", "source": "kenney", "triangles": 118, "bytes": 2152 },
+    { "file": "kenney/tableCoffee.glb", "originalFilename": "tableCoffee.glb", "source": "kenney", "triangles": 124, "bytes": 1516 },
+    { "file": "kenney/tableCross.glb", "originalFilename": "tableCross.glb", "source": "kenney", "triangles": 176, "bytes": 1704 },
+    { "file": "kenney/toiletSquare.glb", "originalFilename": "toiletSquare.glb", "source": "kenney", "triangles": 226, "bytes": 2820 },
+    { "file": "kenney/trashcan.glb", "originalFilename": "trashcan.glb", "source": "kenney", "triangles": 68, "bytes": 2344 }
+  ]
+}

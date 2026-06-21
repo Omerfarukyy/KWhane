@@ -91,6 +91,30 @@ export async function insertRoom(homeId, room) {
 }
 
 /**
+ * Update a room's position and dimensions in Supabase.
+ * Called from the store after a room drag or resize, so the layout survives
+ * reloads. Without this, dragging/resizing a room is lost on the next login.
+ *
+ * @param {string} roomId
+ * @param {object} room — Zustand room shape: {position, size}
+ */
+export async function updateRoom(roomId, room) {
+    const { error } = await withTimeout(
+        supabase.from('rooms').update({
+            dimensions: {
+                width:  room.size.width,
+                depth:  room.size.depth,
+                height: room.size.height,
+            },
+            position_x: room.position[0],
+            position_z: room.position[2],
+        }).eq('id', roomId)
+    );
+
+    if (error) throw new Error(`updateRoom failed: ${error.message}`);
+}
+
+/**
  * Delete a room. Cascade removes all child devices automatically.
  * @param {string} roomId
  */

@@ -14,17 +14,20 @@ const Lights = () => {
 
     return (
         <>
+            {/* IBL (SceneEnvironment) now supplies most of the ambient fill, so
+                hemisphere + ambient are dialled back and the sun is pushed up to
+                read correctly through ACES tone mapping. */}
             <hemisphereLight
                 args={isDark
-                    ? ['#1a2438', '#0a0f1c', 0.45]
-                    : ['#b8d9ff', '#4a6b3a', 0.55]}
+                    ? ['#1a2438', '#0a0f1c', 0.3]
+                    : ['#b8d9ff', '#4a6b3a', 0.4]}
             />
 
-            <ambientLight intensity={isDark ? 0.08 : 0.25} />
+            <ambientLight intensity={isDark ? 0.05 : 0.15} />
 
             <directionalLight
                 position={SUN_POSITION}
-                intensity={isDark ? 0.5 : 1.4}
+                intensity={isDark ? 0.7 : 2.0}
                 color={isDark ? '#cdd9ff' : '#fff2d6'}
                 castShadow
                 shadow-mapSize-width={2048}

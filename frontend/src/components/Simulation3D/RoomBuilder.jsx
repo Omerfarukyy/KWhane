@@ -6,32 +6,36 @@ import * as THREE from 'three';
 import useSceneStore, { objectRefs } from '../../store/useSceneStore';
 import { useLanguage } from '../../contexts/LanguageProvider';
 import RoomFurnishings from './RoomFurnishings';
+import { buildFurnitureCollisionBoxes, buildFurnitureLayout } from './FurnitureLayouts';
 
 const WALL_THICKNESS = 0.1;
-const DIVIDER_THICKNESS = 0.04;
+const DIVIDER_THICKNESS = 0.08;
+const BASEBOARD_HEIGHT = 0.13;
+const CUTAWAY_WALL_HEIGHT = 1.25;
+const WALL_CAP_HEIGHT = 0.04;
+
 const wallMatNormal = {
-    color: '#93c5fd', transparent: true, opacity: 0.28,
-    roughness: 0.4, metalness: 0.05,
-    side: THREE.DoubleSide, depthWrite: false,
+    color: '#e9e3d6', roughness: 0.9, metalness: 0,
+    envMapIntensity: 0.4,
 };
 const wallMatSelected = {
-    color: '#3b82f6', transparent: true, opacity: 0.45,
-    roughness: 0.3, metalness: 0.1,
-    emissive: '#3b82f6', emissiveIntensity: 0.15,
-    side: THREE.DoubleSide, depthWrite: false,
+    color: '#cfe0fb', roughness: 0.8, metalness: 0,
+    emissive: '#3b82f6', emissiveIntensity: 0.16,
+    envMapIntensity: 0.4,
 };
 const dividerMatNormal = {
-    color: '#bfdbfe', transparent: true, opacity: 0.14,
-    roughness: 0.5, metalness: 0,
-    side: THREE.DoubleSide, depthWrite: false,
+    color: '#e2dccf', roughness: 0.9, metalness: 0,
+    envMapIntensity: 0.4,
 };
 const dividerMatSelected = {
-    color: '#3b82f6', transparent: true, opacity: 0.25,
-    roughness: 0.4, metalness: 0.05,
-    side: THREE.DoubleSide, depthWrite: false,
+    color: '#cfe0fb', roughness: 0.8, metalness: 0,
+    emissive: '#3b82f6', emissiveIntensity: 0.14,
+    envMapIntensity: 0.4,
 };
-const floorMatNormal = { color: '#e5e7eb', roughness: 0.8, metalness: 0, side: THREE.DoubleSide };
-const floorMatSelected = { color: '#cbd5e1', roughness: 0.7, metalness: 0, side: THREE.DoubleSide };
+const baseboardMat = { color: '#b6a892', roughness: 0.6, metalness: 0.02, envMapIntensity: 0.4 };
+const ghostWallMat = { color: '#dbe7ef', transparent: true, opacity: 0.045, depthWrite: false };
+const floorMatNormal = { color: '#e9e3d8', roughness: 0.68, metalness: 0.03, envMapIntensity: 0.5, side: THREE.DoubleSide };
+const floorMatSelected = { color: '#d7e2f0', roughness: 0.6, metalness: 0.03, envMapIntensity: 0.5, side: THREE.DoubleSide };
 
 // Helper Components for UI
 const WallAddBtn = ({ position, onClick }) => {
@@ -144,7 +148,7 @@ function heatColor(t) {
     return c;
 }
 
-const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0], adjacentSides = {}, heatLevel = 0 }) => {
+const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0], adjacentSides = {}, heatLevel = 0, collision }) => {
     const { t } = useLanguage();
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
@@ -159,6 +163,7 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     const isCreationMode = useSceneStore((state) => state.isCreationMode);
     const setPendingRoomAttach = useSceneStore((state) => state.setPendingRoomAttach);
     const resizeRoom = useSceneStore((state) => state.resizeRoom);
+    const persistRoomLayout = useSceneStore((state) => state.persistRoomLayout);
     const moveRoomGhosts = useSceneStore((state) => state.moveRoomGhosts);
     const wallMaterialProps = isSelected ? wallMatSelected : wallMatNormal;
     const dividerMaterialProps = isSelected ? dividerMatSelected : dividerMatNormal;
@@ -171,6 +176,8 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     const offset = useRef(new THREE.Vector3());
     const lastValidPos = useRef(new THREE.Vector3(...position));
     const objectsInRoom = useRef([]);
+    const registerStaticBoxes = collision?.registerStaticBoxes;
+    const unregisterStaticRoom = collision?.unregisterStaticRoom;
 
     // Keep lastValidPos in sync with external position updates (like resizing)
     useEffect(() => {
@@ -180,16 +187,31 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     const walls = useMemo(() => {
         const halfW = width / 2;
         const halfD = depth / 2;
-        const halfH = height / 2;
+        const wallHeight = Math.min(height, CUTAWAY_WALL_HEIGHT);
+        const halfH = wallHeight / 2;
         const wt_half = WALL_THICKNESS / 2;
 
         return [
-            { name: 'wall-back', position: [0, halfH, -halfD + wt_half], size: [width - WALL_THICKNESS * 2, height, WALL_THICKNESS] },
-            { name: 'wall-front', position: [0, halfH, halfD - wt_half], size: [width - WALL_THICKNESS * 2, height, WALL_THICKNESS] },
-            { name: 'wall-left', position: [-halfW + wt_half, halfH, 0], size: [WALL_THICKNESS, height, depth] },
-            { name: 'wall-right', position: [halfW - wt_half, halfH, 0], size: [WALL_THICKNESS, height, depth] },
+            { name: 'wall-back', position: [0, halfH, -halfD + wt_half], size: [width - WALL_THICKNESS * 2, wallHeight, WALL_THICKNESS] },
+            { name: 'wall-front', position: [0, halfH, halfD - wt_half], size: [width - WALL_THICKNESS * 2, wallHeight, WALL_THICKNESS] },
+            { name: 'wall-left', position: [-halfW + wt_half, halfH, 0], size: [WALL_THICKNESS, wallHeight, depth] },
+            { name: 'wall-right', position: [halfW - wt_half, halfH, 0], size: [WALL_THICKNESS, wallHeight, depth] },
         ];
     }, [width, depth, height]);
+
+    const furnitureLayout = useMemo(
+        () => buildFurnitureLayout(roomType, width, depth),
+        [roomType, width, depth],
+    );
+    const furnitureCollisionBoxes = useMemo(
+        () => buildFurnitureCollisionBoxes(furnitureLayout, position),
+        [furnitureLayout, position],
+    );
+
+    useEffect(() => {
+        registerStaticBoxes?.(id, furnitureCollisionBoxes);
+        return () => unregisterStaticRoom?.(id);
+    }, [id, furnitureCollisionBoxes, registerStaticBoxes, unregisterStaticRoom]);
 
     const checkRoomOverlap = useCallback((testX, testZ, overrideW = width, overrideD = depth) => {
         const halfW = overrideW / 2;
@@ -443,34 +465,68 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
             {walls.map((wall) => {
                 const sideKey = wall.name.replace('wall-', ''); // 'back','front','left','right'
                 const neighborId = adjacentSides[sideKey];
+                const baseboardPos = [wall.position[0], BASEBOARD_HEIGHT / 2, wall.position[2]];
+                const baseboardSize = [wall.size[0] + 0.02, BASEBOARD_HEIGHT, wall.size[2] + 0.02];
+                const isLR = sideKey === 'left' || sideKey === 'right';
+                const dividerSize = isLR
+                    ? [DIVIDER_THICKNESS, wall.size[1], wall.size[2]]
+                    : [wall.size[0], wall.size[1], DIVIDER_THICKNESS];
+                const capPosition = [wall.position[0], wall.size[1] + WALL_CAP_HEIGHT / 2, wall.position[2]];
+                const capSize = [wall.size[0] + 0.025, WALL_CAP_HEIGHT, wall.size[2] + 0.025];
+                const upperBottom = wall.size[1] + WALL_CAP_HEIGHT;
+                const upperHeight = Math.max(0, height - upperBottom);
+                const upperPosition = [wall.position[0], upperBottom + upperHeight / 2, wall.position[2]];
+                const upperWallSize = [wall.size[0], upperHeight, wall.size[2]];
+                const upperDividerSize = [dividerSize[0], upperHeight, dividerSize[2]];
 
-                // Bitişik komşu varsa: ince saydam bölme duvar (her iki oda da çizmesin diye id kıyaslamasıyla tek seferde)
+                // Bitişik komşu varsa: paylaşılan ince bölme duvar (tek seferde çizilir).
                 if (neighborId) {
                     if (String(id) > String(neighborId)) return null;
-                    const isLR = sideKey === 'left' || sideKey === 'right';
-                    const dividerSize = isLR
-                        ? [DIVIDER_THICKNESS, wall.size[1], wall.size[2]]
-                        : [wall.size[0], wall.size[1], DIVIDER_THICKNESS];
                     return (
-                        <mesh key={wall.name} name={wall.name} position={wall.position} receiveShadow raycast={() => null}>
-                            <boxGeometry args={dividerSize} />
-                            <meshStandardMaterial {...dividerMaterialProps} />
-                        </mesh>
+                        <group key={wall.name}>
+                            <mesh name={wall.name} position={wall.position} receiveShadow raycast={() => null}>
+                                <boxGeometry args={dividerSize} />
+                                <meshStandardMaterial {...dividerMaterialProps} />
+                            </mesh>
+                            {upperHeight > 0 && (
+                                <mesh position={upperPosition} raycast={() => null}>
+                                    <boxGeometry args={upperDividerSize} />
+                                    <meshBasicMaterial {...ghostWallMat} />
+                                </mesh>
+                            )}
+                        </group>
                     );
                 }
 
                 return (
-                    <mesh key={wall.name} name={wall.name} position={wall.position} receiveShadow raycast={() => null}>
-                        <boxGeometry args={wall.size} />
-                        <meshStandardMaterial {...wallMaterialProps} />
-                    </mesh>
+                    <group key={wall.name}>
+                        <mesh name={wall.name} position={wall.position} receiveShadow raycast={() => null}>
+                            <boxGeometry args={wall.size} />
+                            <meshStandardMaterial {...wallMaterialProps} />
+                        </mesh>
+                        <mesh position={capPosition} receiveShadow raycast={() => null}>
+                            <boxGeometry args={capSize} />
+                            <meshStandardMaterial {...baseboardMat} />
+                        </mesh>
+                        {upperHeight > 0 && (
+                            <mesh position={upperPosition} raycast={() => null}>
+                                <boxGeometry args={upperWallSize} />
+                                <meshBasicMaterial {...ghostWallMat} />
+                            </mesh>
+                        )}
+                        {/* Süpürgelik (baseboard trim) — solid, grounds the wall */}
+                        <mesh position={baseboardPos} castShadow receiveShadow raycast={() => null}>
+                            <boxGeometry args={baseboardSize} />
+                            <meshStandardMaterial {...baseboardMat} />
+                        </mesh>
+                    </group>
                 );
             })}
 
             {/* Static decorative furniture — non-interactive so raycasts pass
                 through to the devices placed inside the room. */}
             <NonRaycastable>
-                <RoomFurnishings roomType={roomType} width={width} depth={depth} height={height} />
+                <RoomFurnishings roomType={roomType} width={width} depth={depth} height={height} layout={furnitureLayout} />
             </NonRaycastable>
 
             {/* Yüzen Oda Adı */}
@@ -509,16 +565,16 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
                     {/* Köşe Boyutlandırma Tutamaçları — köşeyi paylaşan iki duvarın
                         ikisi de komşuysa gizle (köşe başka odanın içinde kalır) */}
                     {!(adjacentSides.front && adjacentSides.right) && (
-                        <ResizeHandle position={[width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fr', pos)} onDragEnd={() => { }} />
+                        <ResizeHandle position={[width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fr', pos)} onDragEnd={() => persistRoomLayout(id)} />
                     )}
                     {!(adjacentSides.front && adjacentSides.left) && (
-                        <ResizeHandle position={[-width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fl', pos)} onDragEnd={() => { }} />
+                        <ResizeHandle position={[-width / 2, 0.25, depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('fl', pos)} onDragEnd={() => persistRoomLayout(id)} />
                     )}
                     {!(adjacentSides.back && adjacentSides.right) && (
-                        <ResizeHandle position={[width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('br', pos)} onDragEnd={() => { }} />
+                        <ResizeHandle position={[width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('br', pos)} onDragEnd={() => persistRoomLayout(id)} />
                     )}
                     {!(adjacentSides.back && adjacentSides.left) && (
-                        <ResizeHandle position={[-width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('bl', pos)} onDragEnd={() => { }} />
+                        <ResizeHandle position={[-width / 2, 0.25, -depth / 2]} onDragStart={() => { }} onDrag={(pos) => handleResizeDrag('bl', pos)} onDragEnd={() => persistRoomLayout(id)} />
                     )}
                 </group>
             )}

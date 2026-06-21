@@ -35,11 +35,11 @@ const GhostDevice = ({ ghost, onGhostClick, onGhostDismiss }) => {
             }}
         >
             {/* Ghost mesh — override all materials to be transparent + blue emissive */}
-            <GhostMesh type={ghost.type} size={ghost.size} />
+            <GhostMesh size={ghost.size} />
 
             {/* "Ekle?" chip always visible */}
             <Html
-                position={[0, (ghost.size?.[1] || 1) / 2 + 0.35, 0]}
+                position={[0, (ghost.size?.[1] || 1) + 0.35, 0]}
                 distanceFactor={8}
                 center
                 style={{ pointerEvents: 'none' }}
@@ -80,7 +80,7 @@ const GhostDevice = ({ ghost, onGhostClick, onGhostDismiss }) => {
             {/* Dismiss "×" button — only on hover */}
             {hovered && (
                 <Html
-                    position={[(ghost.size?.[0] || 0.6) / 2 + 0.05, (ghost.size?.[1] || 1) / 2 + 0.35, 0]}
+                    position={[(ghost.size?.[0] || 0.6) / 2 + 0.05, (ghost.size?.[1] || 1) + 0.35, 0]}
                     distanceFactor={8}
                     center
                 >
@@ -118,14 +118,15 @@ const GhostDevice = ({ ghost, onGhostClick, onGhostDismiss }) => {
  * Inner component that renders ProceduralDevices geometry with ghost materials.
  * We override all meshStandardMaterial via a transparent blue emissive wrapper.
  */
-const GhostMesh = ({ type, size }) => {
+const GhostMesh = ({ size }) => {
     // We wrap ProceduralDevices and use React Three Fiber's material override approach.
     // The simplest robust approach: render a transparent bounding box on top of the device mesh.
+    const dimensions = size || [0.6, 0.85, 0.6];
     return (
         <group>
             {/* Device silhouette box (bounding volume) */}
-            <mesh>
-                <boxGeometry args={size || [0.6, 0.85, 0.6]} />
+            <mesh position={[0, dimensions[1] / 2, 0]}>
+                <boxGeometry args={dimensions} />
                 <meshStandardMaterial
                     color="#3b82f6"
                     emissive="#3b82f6"
@@ -136,8 +137,8 @@ const GhostMesh = ({ type, size }) => {
                 />
             </mesh>
             {/* Wireframe edge highlight */}
-            <mesh>
-                <boxGeometry args={size || [0.6, 0.85, 0.6]} />
+            <mesh position={[0, dimensions[1] / 2, 0]}>
+                <boxGeometry args={dimensions} />
                 <meshBasicMaterial
                     color="#60a5fa"
                     wireframe

@@ -12,14 +12,12 @@ const tipByScore = (score) => {
 
 const EnergyBadge = ({ objectId, object, heightOffset = 0.3 }) => {
     const [x, y, z] = object.position;
-    const topY = y + (object.size?.[1] || 1) / 2 + heightOffset;
+    // Anchor to the TOP of the object (position is its base) so the badge floats
+    // above the item rather than sitting inside taller devices.
+    const topY = y + (object.size?.[1] || 1) + heightOffset;
     const validated = useSceneStore((s) => s.homeBillValidated);
     const energyData = useSceneStore(useCallback((s) => s.energyData[objectId], [objectId]));
-    const pinnedDeviceId = useSceneStore((s) => s.pinnedDeviceId);
     const billingScaleFactor = useSceneStore((s) => s.billingScaleFactor);
-
-    // Hide badge when device is pinned so the detail popup/panel is visible without overlap
-    if (pinnedDeviceId === objectId) return null;
 
     return (
         <Html

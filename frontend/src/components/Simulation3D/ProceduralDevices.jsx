@@ -211,23 +211,43 @@ export const Dishwasher = ({ size = [0.6, 0.85, 0.6] }) => {
     );
 };
 
-// 6. Fırın — sıcak cam turuncu nabız
-export const Oven = ({ size = [0.6, 0.6, 0.6] }) => {
+// 6. Fırın — sıcak cam turuncu nabız + üstte ocak (cooktop)
+export const Oven = ({ size = [0.6, 0.9, 0.6] }) => {
     const glassRef = useRef();
+    const burnerRef = useRef();
     useFrame((state) => {
-        const mat = glassRef.current;
-        if (!mat) return;
         const t = state.clock.elapsedTime;
-        mat.emissiveIntensity = 0.5 + 0.8 * (0.5 + 0.5 * Math.sin(t * 1.4));
+        if (glassRef.current) {
+            glassRef.current.emissiveIntensity = 0.5 + 0.8 * (0.5 + 0.5 * Math.sin(t * 1.4));
+        }
+        if (burnerRef.current) {
+            burnerRef.current.emissiveIntensity = 0.3 + 0.9 * (0.5 + 0.5 * Math.sin(t * 1.8 + 0.6));
+        }
     });
+
+    const [w, h, dp] = size;
+    const cooktopThickness = 0.04;
+    const bodyH = h - cooktopThickness;          // oven body sits below the cooktop
+    const cooktopY = bodyH + cooktopThickness / 2;
+    const burnerY = bodyH + cooktopThickness + 0.006;
+    // 2×2 burner grid on the cooktop surface
+    const burnerOffsets = [
+        [-w / 4,  dp / 4],
+        [ w / 4,  dp / 4],
+        [-w / 4, -dp / 4],
+        [ w / 4, -dp / 4],
+    ];
+
     return (
         <group>
-            <mesh position={[0, size[1] / 2, 0]} castShadow receiveShadow>
-                <boxGeometry args={size} />
+            {/* Gövde */}
+            <mesh position={[0, bodyH / 2, 0]} castShadow receiveShadow>
+                <boxGeometry args={[w, bodyH, dp]} />
                 <meshStandardMaterial color="#6b7280" metalness={0.4} roughness={0.5} />
             </mesh>
-            <mesh position={[0, size[1] / 2, size[2] / 2 + 0.005]}>
-                <boxGeometry args={[size[0] - 0.1, size[1] - 0.15, 0.01]} />
+            {/* Kapı camı */}
+            <mesh position={[0, (bodyH - 0.12) / 2, dp / 2 + 0.005]}>
+                <boxGeometry args={[w - 0.1, bodyH - 0.24, 0.01]} />
                 <meshStandardMaterial
                     ref={glassRef}
                     color="#1a1a1a"
@@ -237,16 +257,44 @@ export const Oven = ({ size = [0.6, 0.6, 0.6] }) => {
                     emissiveIntensity={0.5}
                 />
             </mesh>
+            {/* Yatay kapı kulpu */}
+            <mesh position={[0, bodyH - 0.09, dp / 2 + 0.025]}>
+                <boxGeometry args={[w - 0.16, 0.025, 0.025]} />
+                <meshStandardMaterial color="#374151" metalness={0.8} />
+            </mesh>
+            {/* Kontrol düğmeleri */}
             {[-0.1, 0, 0.1].map((x, i) => (
-                <mesh key={i} position={[x, size[1] - 0.05, size[2] / 2 + 0.008]}>
-                    <cylinderGeometry args={[0.025, 0.025, 0.02, 16]} />
+                <mesh key={i} position={[x, bodyH - 0.04, dp / 2 + 0.008]}>
+                    <cylinderGeometry args={[0.022, 0.022, 0.02, 16]} />
                     <meshStandardMaterial color="#374151" metalness={0.6} />
                 </mesh>
             ))}
-            <mesh position={[size[0] / 2 - 0.08, size[1] / 2, size[2] / 2 + 0.025]}>
-                <boxGeometry args={[0.02, 0.3, 0.02]} />
-                <meshStandardMaterial color="#374151" metalness={0.8} />
+
+            {/* ── Ocak tezgahı (cooktop) ── */}
+            <mesh position={[0, cooktopY, 0]} castShadow>
+                <boxGeometry args={[w + 0.02, cooktopThickness, dp + 0.02]} />
+                <meshStandardMaterial color="#1f2937" metalness={0.6} roughness={0.25} />
             </mesh>
+            {/* Ocak gözleri (burners) */}
+            {burnerOffsets.map(([bx, bz], i) => (
+                <group key={`burner-${i}`} position={[bx, burnerY, bz]}>
+                    <mesh>
+                        <cylinderGeometry args={[0.09, 0.09, 0.012, 24]} />
+                        <meshStandardMaterial color="#111827" metalness={0.5} roughness={0.4} />
+                    </mesh>
+                    <mesh position={[0, 0.008, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                        <torusGeometry args={[0.06, 0.008, 12, 24]} />
+                        <meshStandardMaterial
+                            ref={i === 0 ? burnerRef : undefined}
+                            color="#0a0a0a"
+                            metalness={0.6}
+                            roughness={0.3}
+                            emissive="#ff5500"
+                            emissiveIntensity={i === 0 ? 0.6 : 0}
+                        />
+                    </mesh>
+                </group>
+            ))}
         </group>
     );
 };

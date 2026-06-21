@@ -1,15 +1,24 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
+import { Edges } from '@react-three/drei';
 import * as THREE from 'three';
 import toast from 'react-hot-toast';
 import useSceneStore, { objectRefs, DEVICE_CONFIGS } from '../../store/useSceneStore';
 
 // Snap a position to the nearest wall of `room`, given the device's footprint.
 // Returns { x, z, rotation } so the device sits flush and faces inward.
+const WALL_THICKNESS = 0.1;
+const WALL_GAP = 0.015;
+
+const clampAlongWall = (value, min, max) => (
+    min > max ? (min + max) / 2 : Math.max(min, Math.min(max, value))
+);
+
 function snapToNearestWall(x, z, room, size) {
     const rx = room.position[0], rz = room.position[2];
     const hw = room.size.width / 2, hd = room.size.depth / 2;
-    const halfD = size[2] / 2;
+    const halfDepth = size[2] / 2;
+    const halfSpan = size[0] / 2;
 
     const dRight = Math.abs((rx + hw) - x);
     const dLeft  = Math.abs(x - (rx - hw));
@@ -17,10 +26,31 @@ function snapToNearestWall(x, z, room, size) {
     const dBack  = Math.abs(z - (rz - hd));
     const min = Math.min(dRight, dLeft, dFront, dBack);
 
-    if (min === dRight) return { x: rx + hw - halfD, z, rotation: -Math.PI / 2 };
-    if (min === dLeft)  return { x: rx - hw + halfD, z, rotation:  Math.PI / 2 };
-    if (min === dFront) return { x, z: rz + hd - halfD, rotation: Math.PI };
-    return { x, z: rz - hd + halfD, rotation: 0 };
+    const minX = rx - hw + WALL_THICKNESS + halfSpan + WALL_GAP;
+    const maxX = rx + hw - WALL_THICKNESS - halfSpan - WALL_GAP;
+    const minZ = rz - hd + WALL_THICKNESS + halfSpan + WALL_GAP;
+    const maxZ = rz + hd - WALL_THICKNESS - halfSpan - WALL_GAP;
+
+    if (min === dRight) return {
+        x: rx + hw - WALL_THICKNESS - halfDepth - WALL_GAP,
+        z: clampAlongWall(z, minZ, maxZ),
+        rotation: -Math.PI / 2,
+    };
+    if (min === dLeft) return {
+        x: rx - hw + WALL_THICKNESS + halfDepth + WALL_GAP,
+        z: clampAlongWall(z, minZ, maxZ),
+        rotation: Math.PI / 2,
+    };
+    if (min === dFront) return {
+        x: clampAlongWall(x, minX, maxX),
+        z: rz + hd - WALL_THICKNESS - halfDepth - WALL_GAP,
+        rotation: Math.PI,
+    };
+    return {
+        x: clampAlongWall(x, minX, maxX),
+        z: rz - hd + WALL_THICKNESS + halfDepth + WALL_GAP,
+        rotation: 0,
+    };
 }
 
 /**
@@ -77,8 +107,8 @@ const DraggableObject = ({
     children,
 }) => {
     const deviceCfg = DEVICE_CONFIGS[objectType];
-    // Every device except ceiling-mounted ones belongs against a wall.
-    const wallMounted = deviceCfg?.mount !== 'ceiling';
+    const wallMounted = deviceCfg?.mount === 'wall';
+    const surfaceMounted = !deviceCfg?.mount && (deviceCfg?.defaultY ?? 0) > 0;
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
     const [isColliding, setIsColliding] = useState(false);
@@ -104,6 +134,7 @@ const DraggableObject = ({
     // Click vs drag detection — pointer-down screen position + moved flag.
     const downScreen = useRef({ x: 0, y: 0 });
     const dragMoved = useRef(false);
+    const dragRotation = useRef(rotation);
 
     // Collision ve SceneStore Drag sistemine kayıt
     useEffect(() => {
@@ -116,6 +147,31 @@ const DraggableObject = ({
             };
         }
     }, [collision, objectId]);
+
+    // Migrate persisted devices from the old placement rules, which allowed
+    // their footprint to sit partly inside the wall.
+    useEffect(() => {
+        if (!room || !objectId || isDragging || deviceCfg?.mount === 'ceiling') return;
+
+        const clamped = collision?.checkWallCollision(position, objectSize, room) || position;
+        const snap = wallMounted
+            ? snapToNearestWall(clamped[0], clamped[2], room, objectSize)
+            : { x: clamped[0], z: clamped[2], rotation: rotation ?? 0 };
+        const moved = Math.abs(snap.x - position[0]) > 0.001 || Math.abs(snap.z - position[2]) > 0.001;
+        const rotated = wallMounted && Math.abs(snap.rotation - (rotation ?? 0)) > 0.001;
+        if (!moved && !rotated) return;
+
+        if (groupRef.current) {
+            groupRef.current.position.set(snap.x, position[1], snap.z);
+            groupRef.current.rotation.y = snap.rotation;
+        }
+        if (moved) updateObjectPosition(objectId, [snap.x, position[1], snap.z]);
+        if (rotated) {
+            useSceneStore.setState((s) => ({
+                objects: s.objects.map((o) => o.id === objectId ? { ...o, rotation: snap.rotation } : o),
+            }));
+        }
+    }, [wallMounted, room, objectId, isDragging, position, objectSize, rotation, updateObjectPosition, collision, deviceCfg?.mount]);
 
     // Pointer down — sürüklemeyi başlat
     const handlePointerDown = useCallback(
@@ -144,6 +200,7 @@ const DraggableObject = ({
 
             // Mevcut pozisyonu son geçerli pozisyon olarak kaydet
             lastValidPos.current.copy(groupRef.current.position);
+            dragRotation.current = groupRef.current.rotation.y;
         },
         [gl, raycaster, isCreationMode]
     );
@@ -166,6 +223,7 @@ const DraggableObject = ({
             if (groupRef.current) {
                 let newX = intersection.current.x + offset.current.x;
                 let newZ = intersection.current.z + offset.current.z;
+                let candidateRotation = rotation;
 
                 // Cross-room wall constraint: use whichever room the object is over
                 const allRooms = useSceneStore.getState().rooms;
@@ -188,13 +246,20 @@ const DraggableObject = ({
                         const snap = snapToNearestWall(newX, newZ, hoverRoom, objectSize);
                         newX = snap.x;
                         newZ = snap.z;
+                        candidateRotation = snap.rotation;
                     }
                 }
 
                 // Obje–obje çarpışma kontrolü
                 if (collision && objectId) {
                     const testPos = new THREE.Vector3(newX, floorY, newZ);
-                    const result = collision.checkCollision(objectId, testPos);
+                    const result = collision.checkCollision(
+                        objectId,
+                        testPos,
+                        candidateRotation,
+                        hoverRoom?.id ?? room?.id,
+                        surfaceMounted,
+                    );
 
                     if (result.collides) {
                         // Çarpışma var — pozisyonu güncelleme, kırmızı göster
@@ -207,13 +272,14 @@ const DraggableObject = ({
                 groupRef.current.position.x = newX;
                 groupRef.current.position.z = newZ;
                 groupRef.current.position.y = floorY;
+                dragRotation.current = candidateRotation;
                 // Only mark as a valid snap-back point when we are over a room.
                 // If the user drags outside, we still let them visually drag,
                 // but pointer-up will revert to the last in-room position.
                 if (hoverRoom) lastValidPos.current.set(newX, floorY, newZ);
             }
         },
-        [isDragging, raycaster, floorY, collision, objectId, objectSize, room]
+        [isDragging, raycaster, floorY, collision, objectId, objectSize, room, rotation, wallMounted, surfaceMounted]
     );
 
     // Pointer up — sürüklemeyi bitir ve grid'e hizala
@@ -271,7 +337,13 @@ const DraggableObject = ({
                 // Snap sonrası çarpışma kontrolü
                 if (collision && objectId) {
                     const testPos = new THREE.Vector3(snappedX, floorY, snappedZ);
-                    const result = collision.checkCollision(objectId, testPos);
+                    const result = collision.checkCollision(
+                        objectId,
+                        testPos,
+                        finalRotation ?? rotation,
+                        landedRoom.id,
+                        surfaceMounted,
+                    );
                     if (result.collides) {
                         // Çarpışma varsa son geçerli pozisyona geri dön
                         groupRef.current.position.copy(lastValidPos.current);
@@ -298,7 +370,7 @@ const DraggableObject = ({
                 }
             }
         },
-        [isDragging, gl, gridSnap, floorY, updateObjectPosition, updateObjectRoom, collision, objectId, objectSize, room]
+        [isDragging, gl, gridSnap, floorY, updateObjectPosition, updateObjectRoom, collision, objectId, objectSize, room, rotation, wallMounted, surfaceMounted]
     );
 
     /**
@@ -310,7 +382,7 @@ const DraggableObject = ({
         if (groupRef.current) {
             groupRef.current.rotation.y = THREE.MathUtils.lerp(
                 groupRef.current.rotation.y,
-                rotation,
+                isDragging ? dragRotation.current : rotation,
                 10 * delta
             );
         }
@@ -349,11 +421,12 @@ const DraggableObject = ({
                 if (!isDragging) gl.domElement.style.cursor = 'auto';
             }}
         >
-            {/* Seçim Vurgusu (Highlight Box) */}
-            {isSelected && (
+            {/* Clean edge-only feedback: blue when selected, red on collision. */}
+            {(isSelected || isColliding) && (
                 <mesh position={[0, objectSize[1] / 2, 0]}>
                     <boxGeometry args={[objectSize[0] + 0.05, objectSize[1] + 0.05, objectSize[2] + 0.05]} />
-                    <meshBasicMaterial color="#ef4444" wireframe transparent opacity={0.5} />
+                    <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+                    <Edges color={isColliding ? '#ef4444' : '#60a5fa'} />
                 </mesh>
             )}
 

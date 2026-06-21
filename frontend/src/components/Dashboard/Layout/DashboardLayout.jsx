@@ -780,40 +780,6 @@ const DashboardLayout = () => {
                                             </div>
                                         )}
 
-                                        {/* Home builder CTA — shown only when there are no rooms yet */}
-                                        {rooms.length === 0 && (
-                                            <motion.div
-                                                onClick={openBuilder}
-                                                className="rounded-2xl p-4 relative overflow-hidden cursor-pointer"
-                                                style={{ background: 'rgba(5,150,105,0.06)', border: '1px solid rgba(5,150,105,0.25)' }}
-                                                whileHover={{ scale: 1.025, y: -2, boxShadow: '0 8px 24px rgba(5,150,105,0.18)' }}
-                                                whileTap={{ scale: 0.98 }}
-                                                transition={{ duration: 0.18, ease: 'easeOut' }}
-                                            >
-                                                <div className="absolute top-0 left-0 w-full h-0.5"
-                                                    style={{ background: 'linear-gradient(to right, #059669, #047857)' }} />
-                                                <div className="flex items-start gap-3">
-                                                    <div className="p-2 rounded-xl mt-0.5"
-                                                        style={{ background: 'rgba(5,150,105,0.12)', color: '#10b981' }}>
-                                                        <Home size={18} />
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <h4 className="text-[10px] font-bold uppercase tracking-widest mb-1.5"
-                                                            style={{ color: '#10b981' }}>
-                                                            {t('describeHome')}
-                                                        </h4>
-                                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                                                            {t('describeHomeDesc')}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="mt-3 flex items-center justify-end text-xs font-semibold gap-1"
-                                                    style={{ color: '#10b981' }}>
-                                                    {t('start')} <ChevronRight size={13} />
-                                                </div>
-                                            </motion.div>
-                                        )}
-
                                     </div>
                                 )}
 

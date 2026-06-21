@@ -1,4 +1,4 @@
-import { useRef, useCallback, useMemo } from 'react';
+import { useRef, useCallback } from 'react';
 import * as THREE from 'three';
 
 /**
@@ -21,6 +21,7 @@ import * as THREE from 'three';
 const useCollision = () => {
     // Kayıtlı objelerin haritası: { id: { mesh, boundingBox } }
     const objectsRef = useRef(new Map());
+    const staticRoomsRef = useRef(new Map());
 
     /**
      * Bir mesh'in dünya koordinatlarındaki AABB'sini hesapla.
@@ -55,6 +56,21 @@ const useCollision = () => {
         objectsRef.current.delete(id);
     }, []);
 
+    // Register one stable collision proxy per furniture item. This avoids
+    // traversing every mesh in asynchronously loaded GLTF scenes.
+    const registerStaticBoxes = useCallback((roomId, proxies) => {
+        const boxes = proxies.map(({ center, size }) => {
+            const half = new THREE.Vector3(size[0] / 2, size[1] / 2, size[2] / 2);
+            const centerVector = new THREE.Vector3(center[0], center[1], center[2]);
+            return new THREE.Box3(centerVector.clone().sub(half), centerVector.clone().add(half));
+        });
+        staticRoomsRef.current.set(roomId, boxes);
+    }, []);
+
+    const unregisterStaticRoom = useCallback((roomId) => {
+        staticRoomsRef.current.delete(roomId);
+    }, []);
+
     /**
      * Belirli bir objenin yeni pozisyonunda diğer objelerle çarpışma kontrolü
      *
@@ -63,15 +79,17 @@ const useCollision = () => {
      * @returns {{ collides: boolean, collidingWith: string|null }}
      */
     const checkCollision = useCallback(
-        (id, newPos) => {
+        (id, newPos, newRotation = null, roomId = null, allowSurfaceContact = false) => {
             const entry = objectsRef.current.get(id);
             if (!entry || !entry.object) return { collides: false, collidingWith: null };
 
             // Objenin mevcut pozisyonunu kaydet
             const originalPos = entry.object.position.clone();
+            const originalRotation = entry.object.rotation.y;
 
             // Geçici olarak yeni pozisyona taşı
             entry.object.position.copy(newPos);
+            if (newRotation !== null) entry.object.rotation.y = newRotation;
             entry.object.updateMatrixWorld(true);
 
             // Bu objenin AABB'sini hesapla
@@ -91,8 +109,25 @@ const useCollision = () => {
                 }
             }
 
+            // Static furnishings are cached as individual boxes, rather than
+            // one room-sized union, so valid open floor space remains usable.
+            if (!result.collides && roomId) {
+                const furnitureBoxes = staticRoomsRef.current.get(roomId) || [];
+                const candidateBox = boxA.clone().expandByScalar(-0.01);
+                for (let i = 0; i < furnitureBoxes.length; i++) {
+                    // Tabletop devices may sit a few centimetres into a desk's
+                    // visual top without being treated as an intersection.
+                    if (allowSurfaceContact && candidateBox.min.y >= furnitureBoxes[i].max.y - 0.08) continue;
+                    if (candidateBox.intersectsBox(furnitureBoxes[i])) {
+                        result = { collides: true, collidingWith: `furniture:${roomId}:${i}` };
+                        break;
+                    }
+                }
+            }
+
             // Pozisyonu geri al
             entry.object.position.copy(originalPos);
+            entry.object.rotation.y = originalRotation;
             entry.object.updateMatrixWorld(true);
 
             return result;
@@ -133,7 +168,14 @@ const useCollision = () => {
         ];
     }, []);
 
-    return { register, unregister, checkCollision, checkWallCollision };
+    return {
+        register,
+        unregister,
+        registerStaticBoxes,
+        unregisterStaticRoom,
+        checkCollision,
+        checkWallCollision,
+    };
 };
 
 export default useCollision;
