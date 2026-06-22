@@ -81,6 +81,7 @@ export async function insertRoom(homeId, room) {
                 width:  room.size.width,
                 depth:  room.size.depth,
                 height: room.size.height,
+                rotation: room.rotation || 0,
             },
             position_x: room.position[0],
             position_z: room.position[2],
@@ -105,6 +106,7 @@ export async function updateRoom(roomId, room) {
                 width:  room.size.width,
                 depth:  room.size.depth,
                 height: room.size.height,
+                rotation: room.rotation || 0,
             },
             position_x: room.position[0],
             position_z: room.position[2],
@@ -135,8 +137,9 @@ export async function deleteRoom(roomId) {
  * @param {string} deviceId — same UUID already in Zustand
  * @param {object} spec — from DeviceCatalogModal: {name, type, nominal_power_watts, ...}
  * @param {number[]} position — [x, y, z] from Zustand object
+ * @param {number} rotation — Y-axis rotation in radians
  */
-export async function insertDevice(roomId, deviceId, spec, position) {
+export async function insertDevice(roomId, deviceId, spec, position, rotation = 0) {
     const { error } = await withTimeout(
         supabase.from('devices').insert({
             id:                   deviceId,
@@ -155,7 +158,7 @@ export async function insertDevice(roomId, deviceId, spec, position) {
                 x:        position[0],
                 y:        position[1],
                 z:        position[2],
-                rotation: 0,
+                rotation,
             },
         })
     );

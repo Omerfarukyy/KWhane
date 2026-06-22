@@ -1,6 +1,6 @@
 import { DEVICE_CONFIGS } from '../../store/useSceneStore';
 import { describe, expect, it } from 'vitest';
-import { buildFurnitureCollisionBoxes, buildFurnitureLayout } from '../../components/Simulation3D/FurnitureLayouts';
+import { buildFurnitureCollisionBoxes, buildFurnitureLayout, rotateFurnitureLayout } from '../../components/Simulation3D/FurnitureLayouts';
 
 const ROOM_CASES = [
     ['Mutfak', [4.8, 4], [3.2, 2.8]],
@@ -72,5 +72,16 @@ describe('furniture layouts', () => {
             'umbrellaStand',
         ]);
         expect(layout.decor.map((entry) => entry.type)).toEqual(['rug']);
+    });
+
+    it('keeps furniture attached to the room through a quarter-turn', () => {
+        const layout = buildFurnitureLayout('Ofis', 4, 3.8);
+        const rotated = rotateFurnitureLayout(layout, Math.PI / 2);
+
+        layout.items.forEach((entry, index) => {
+            expect(rotated.items[index].position[0]).toBeCloseTo(entry.position[2]);
+            expect(rotated.items[index].position[2]).toBeCloseTo(-entry.position[0]);
+            expect(rotated.items[index].rotation).toBeCloseTo(entry.rotation + Math.PI / 2);
+        });
     });
 });

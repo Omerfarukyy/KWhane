@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import useSceneStore, { objectRefs } from '../../store/useSceneStore';
 import { useLanguage } from '../../contexts/LanguageProvider';
 import RoomFurnishings from './RoomFurnishings';
-import { buildFurnitureCollisionBoxes, buildFurnitureLayout } from './FurnitureLayouts';
+import { buildFurnitureCollisionBoxes, buildFurnitureLayout, rotateFurnitureLayout } from './FurnitureLayouts';
 
 const WALL_THICKNESS = 0.1;
 const DIVIDER_THICKNESS = 0.08;
@@ -23,7 +23,7 @@ const dividerMatNormal = {
     envMapIntensity: 0.4,
 };
 const baseboardMat = { color: '#b6a892', roughness: 0.6, metalness: 0.02, envMapIntensity: 0.4 };
-const ghostWallMat = { color: '#dbe7ef', transparent: true, opacity: 0.045, depthWrite: false };
+const ghostWallMat = { color: '#dbe7ef', transparent: true, opacity: 0.1, depthWrite: false };
 const floorMatNormal = { color: '#e9e3d8', roughness: 0.68, metalness: 0.03, envMapIntensity: 0.5, side: THREE.DoubleSide };
 
 // Helper Components for UI
@@ -137,7 +137,7 @@ function heatColor(t) {
     return c;
 }
 
-const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0], adjacentSides = {}, heatLevel = 0, collision }) => {
+const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 4, height = 3, position = [0, 0, 0], rotation = 0, adjacentSides = {}, heatLevel = 0, collision }) => {
     const { t } = useLanguage();
     const groupRef = useRef();
     const [isDragging, setIsDragging] = useState(false);
@@ -189,8 +189,17 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     }, [width, depth, height]);
 
     const furnitureLayout = useMemo(
-        () => buildFurnitureLayout(roomType, width, depth),
-        [roomType, width, depth],
+        () => {
+            const quarterTurns = Math.round(rotation / (Math.PI / 2));
+            const swapsAxes = Math.abs(quarterTurns) % 2 === 1;
+            const baseLayout = buildFurnitureLayout(
+                roomType,
+                swapsAxes ? depth : width,
+                swapsAxes ? width : depth,
+            );
+            return rotateFurnitureLayout(baseLayout, rotation);
+        },
+        [roomType, width, depth, rotation],
     );
     const furnitureCollisionBoxes = useMemo(
         () => buildFurnitureCollisionBoxes(furnitureLayout, position),

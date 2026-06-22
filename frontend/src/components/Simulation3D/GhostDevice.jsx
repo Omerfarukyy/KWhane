@@ -27,6 +27,7 @@ const GhostDevice = ({ ghost, onGhostClick, onGhostDismiss }) => {
         <group
             ref={groupRef}
             position={[x, y, z]}
+            rotation={[0, ghost.rotation || 0, 0]}
             onPointerOver={() => setHovered(true)}
             onPointerOut={() => setHovered(false)}
             onClick={(e) => {

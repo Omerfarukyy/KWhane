@@ -49,7 +49,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: '#94a3b8' }}>
+            <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: 'var(--color-text)' }}>
                 <Loader2 size={28} className="animate-spin" />
                 <p className="text-sm">{t('analyzingBill')}</p>
             </div>
@@ -58,7 +58,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
 
     if (!diagnostic) {
         return (
-            <div className="flex flex-col items-center justify-center py-10 gap-3 text-center" style={{ color: '#94a3b8' }}>
+            <div className="flex flex-col items-center justify-center py-10 gap-3 text-center" style={{ color: 'var(--color-text)' }}>
                 <AlertCircle size={28} style={{ color: '#f59e0b' }} />
                 <p className="text-sm">
                     {t('billSavedNoAnalysis')}<br />
@@ -151,7 +151,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
             {/* ── Section 1: Tüketim Dağılımı ─────────────────────────────── */}
             {attribution.length > 0 && totalKwh > 0 && (
                 <div>
-                    <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>
+                    <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--color-text)' }}>
                         {t('consumptionBreakdown')}
                     </p>
 
@@ -178,16 +178,16 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                                 <li key={`${a.device_id || 'res'}-${i}`} className="flex items-center justify-between text-xs">
                                     <div className="flex items-center gap-2 min-w-0">
                                         <span className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: color }} />
-                                        <span className="truncate" style={{ color: a.type === 'residual' ? '#94a3b8' : '#e2e8f0' }}>
+                                        <span className="truncate" style={{ color: 'var(--color-text)' }}>
                                             {a.name}
                                         </span>
-                                        <span className="text-[10px]" style={{ color: '#64748b' }}>
+                                        <span className="text-[10px]" style={{ color: 'var(--color-text)' }}>
                                             %{a.share_pct.toFixed(0)}
                                         </span>
                                     </div>
-                                    <span className="flex-shrink-0 ml-2" style={{ color: a.type === 'residual' ? '#94a3b8' : '#cbd5e1' }}>
+                                    <span className="flex-shrink-0 ml-2" style={{ color: 'var(--color-text)' }}>
                                         ₺{a.cost_tl.toFixed(0)}
-                                        <span className="text-[10px] ml-1" style={{ color: '#64748b' }}>
+                                        <span className="text-[10px] ml-1" style={{ color: 'var(--color-text)' }}>
                                             ({a.kwh.toFixed(0)} kWh)
                                         </span>
                                     </span>
@@ -196,7 +196,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                         })}
                     </ul>
 
-                    <p className="text-[10px] mt-2 text-right" style={{ color: '#64748b' }}>
+                    <p className="text-[10px] mt-2 text-right" style={{ color: 'var(--color-text)' }}>
                         {t('total')} ₺{totalCost.toFixed(0)} · {totalKwh.toFixed(0)} kWh
                     </p>
                 </div>
@@ -205,7 +205,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
             {/* ── Section 2 + 3: Tespit Ettiklerimiz + Önerilerimiz ────── */}
             {diagnostics.length > 0 && (
                 <div>
-                    <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>
+                    <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--color-text)' }}>
                         {t('findings')}
                     </p>
                     <ul className="flex flex-col gap-2">
@@ -225,7 +225,7 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
                                 >
                                     <div className="flex items-start gap-2">
                                         <Icon size={14} style={{ color: sev.color, marginTop: 2, flexShrink: 0 }} />
-                                        <p className="text-xs leading-relaxed" style={{ color: '#e2e8f0' }}>
+                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
                                             {flag.message_tr}
                                         </p>
                                     </div>
@@ -253,9 +253,9 @@ const BillDiagnosticCard = ({ diagnostic, loading, onClose, onApplied }) => {
             )}
 
             {diagnostics.length === 0 && attribution.length === 0 && (
-                <div className="text-center py-6" style={{ color: '#94a3b8' }}>
+                <div className="text-center py-6" style={{ color: 'var(--color-text)' }}>
                     <p className="text-sm">{t('noDevicesAnalyzed')}</p>
-                    <p className="text-xs mt-1" style={{ color: '#64748b' }}>
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-text)' }}>
                         {t('noDevicesAnalyzedDesc')}
                     </p>
                 </div>

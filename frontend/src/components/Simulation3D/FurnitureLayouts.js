@@ -297,6 +297,44 @@ export function buildFurnitureLayout(roomType, width, depth) {
     return hallwayLayout(width, depth);
 }
 
+export function rotateFurnitureLayout(layout, rotation) {
+    if (!rotation) return layout;
+
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const rotatePosition = ([x, y, z]) => [
+        x * cos + z * sin,
+        y,
+        -x * sin + z * cos,
+    ];
+    const rotateSize = ([width, depth]) => [
+        Math.abs(cos) * width + Math.abs(sin) * depth,
+        Math.abs(sin) * width + Math.abs(cos) * depth,
+    ];
+
+    return {
+        ...layout,
+        items: layout.items.map((entry) => ({
+            ...entry,
+            position: rotatePosition(entry.position),
+            rotation: (entry.rotation || 0) + rotation,
+        })),
+        surfaces: layout.surfaces.map((entry) => {
+            const [width, depth] = rotateSize([entry.size[0], entry.size[2]]);
+            return {
+                ...entry,
+                position: rotatePosition(entry.position),
+                size: [width, entry.size[1], depth],
+            };
+        }),
+        decor: layout.decor.map((entry) => ({
+            ...entry,
+            position: rotatePosition(entry.position),
+            ...(entry.size ? { size: rotateSize(entry.size) } : {}),
+        })),
+    };
+}
+
 export function buildFurnitureCollisionBoxes(layout, roomPosition = [0, 0, 0]) {
     const itemBoxes = layout.items.flatMap((entry) => {
         const asset = getFurnitureAsset(entry.asset);

@@ -249,7 +249,7 @@ const DashboardLayout = () => {
             ? useSceneStore.getState().ghostObjects.find((g) => g.id === pendingGhostId)
             : null;
         const spawnOptions = ghost
-            ? { position: ghost.position, roomId: ghost.roomId }
+            ? { position: ghost.position, rotation: ghost.rotation, roomId: ghost.roomId }
             : null;
 
         if (pendingGhostId) {

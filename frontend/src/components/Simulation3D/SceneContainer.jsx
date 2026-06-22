@@ -311,6 +311,7 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
                     width={r.size.width}
                     depth={r.size.depth}
                     height={r.size.height}
+                    rotation={r.rotation}
                     adjacentSides={adjacencies.get(r.id) || {}}
                     heatLevel={roomHeatLevels[r.id] ?? 0}
                     collision={collision}

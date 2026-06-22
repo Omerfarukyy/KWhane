@@ -134,7 +134,7 @@ function computeGhosts(room, roomType) {
             gz = rz - depth / 2 + sd / 2 + margin;
         }
 
-        return { id: uuidv4(), roomId: room.id, type, size: cfg.size, position: [gx, yPos, gz] };
+        return { id: uuidv4(), roomId: room.id, type, size: cfg.size, position: [gx, yPos, gz], rotation: 0 };
     });
 }
 
@@ -151,6 +151,7 @@ function dbRoomToZustand(row) {
             depth:  dim.depth  ?? 5,
             height: dim.height ?? 3,
         },
+        rotation: dim.rotation ?? 0,
     };
 }
 
@@ -371,6 +372,7 @@ const useSceneStore = create((set, get) => ({
             roomType,
             position: [newX, 0, newZ],
             size:     { width: newWidth, depth: newDepth, height: newHeight },
+            rotation: 0,
         };
 
         const ghosts = computeGhosts(newRoom, roomType);
@@ -421,6 +423,7 @@ const useSceneStore = create((set, get) => ({
         const yPos = cfg.defaultY !== null ? cfg.defaultY : 0;
         const position = spawnOptions?.position
             || [targetRoom.position[0], yPos, targetRoom.position[2]];
+        const rotation = spawnOptions?.rotation || 0;
 
         const newId = uuidv4();
 
@@ -435,7 +438,7 @@ const useSceneStore = create((set, get) => ({
                 color:    cfg.color,
                 size:     cfg.size,
                 position,
-                rotation: 0,
+                rotation,
             }],
             deviceSpecs: { ...s.deviceSpecs, [newId]: enrichedSpec },
             selectedId:  newId,
@@ -444,7 +447,7 @@ const useSceneStore = create((set, get) => ({
         // Background persist — triggers n8n on INSERT!
         const { homeId } = get();
         if (homeId) {
-            houseService.insertDevice(targetRoom.id, newId, enrichedSpec, position).catch((err) => {
+            houseService.insertDevice(targetRoom.id, newId, enrichedSpec, position, rotation).catch((err) => {
                 console.error('[store] insertDevice failed:', err.message);
                 if (!get().suppressPersistToasts) toast.error('Cihaz kaydedilemedi. İnternet bağlantınızı kontrol edin.');
             });
@@ -700,8 +703,8 @@ const useSceneStore = create((set, get) => ({
     },
 
     // Rotate a whole room 90° (+1 = CW, -1 = CCW). Rooms stay axis-aligned, so a
-    // quarter-turn swaps width/depth and rotates every child device + ghost
-    // around the room center. Procedural furniture re-fits the new footprint.
+    // quarter-turn swaps width/depth and rotates every child device, ghost,
+    // and static furniture around the room center.
     rotateRoom: (id, direction = 1) => {
         const s = get();
         const room = s.rooms.find((r) => r.id === id);
@@ -738,11 +741,13 @@ const useSceneStore = create((set, get) => ({
         const updatedGhosts = s.ghostObjects.map((g) => {
             if (g.roomId !== id) return g;
             const [nx, nz] = rot(g.position[0], g.position[2]);
-            return { ...g, position: [nx, g.position[1], nz] };
+            return { ...g, position: [nx, g.position[1], nz], rotation: (g.rotation || 0) + theta };
         });
 
         set({
-            rooms:        s.rooms.map((r) => (r.id === id ? { ...r, size: newSize } : r)),
+            rooms:        s.rooms.map((r) => (
+                r.id === id ? { ...r, size: newSize, rotation: (r.rotation || 0) + theta } : r
+            )),
             objects:      updatedObjects,
             ghostObjects: updatedGhosts,
         });
