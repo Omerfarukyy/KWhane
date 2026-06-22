@@ -1,6 +1,6 @@
 import { Suspense, useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { Grid, Sky, Stars, ContactShadows, Instances, Instance } from '@react-three/drei';
+import { Grid, Sky, Stars, Instances, Instance } from '@react-three/drei';
 import * as THREE from 'three';
 import { Home, Loader2 } from 'lucide-react';
 import Lights, { SUN_POSITION } from './Lights';
@@ -16,7 +16,6 @@ import EnergyBadge from './EnergyBadge';
 import SelectionRotateControl from './SelectionRotateControl';
 import GardenProps from './GardenProps';
 import SceneEnvironment from './SceneEnvironment';
-import PostProcessing from './PostProcessing';
 import ElectricHub from './ElectricHub';
 import ElectricWiring from './ElectricWiring';
 import useCollision from './useCollision';
@@ -89,19 +88,28 @@ function SceneWarmup({ onReady }) {
 // Active interaction → 60 fps, idle > 3 s → 24 fps (saves GPU while
 // keeping LED animations visually smooth).
 function SceneAnimationLoop() {
-    const { invalidate, setDpr } = useThree();
+    const { gl, invalidate } = useThree();
     const isDragging = useSceneStore((s) => s.isDragging);
-    const setQualityTier = useSceneStore((s) => s.setQualityTier);
-    const lastActive = useRef(performance.now());
+    const lastActive = useRef(0);
 
-    // Adaptive-quality probe state
-    const emaMs = useRef(16);
-    const sampleCount = useRef(0);
-    const tierRef = useRef('high');
+    useEffect(() => {
+        lastActive.current = performance.now();
+    }, []);
 
     useEffect(() => {
         if (isDragging) lastActive.current = performance.now();
     }, [isDragging]);
+
+    useEffect(() => {
+        const dom = gl.domElement;
+        const bump = () => { lastActive.current = performance.now(); };
+        dom.addEventListener('pointerdown', bump, { passive: true });
+        dom.addEventListener('wheel', bump, { passive: true });
+        return () => {
+            dom.removeEventListener('pointerdown', bump);
+            dom.removeEventListener('wheel', bump);
+        };
+    }, [gl]);
 
     useEffect(() => {
         let rafId;
@@ -119,43 +127,6 @@ function SceneAnimationLoop() {
         rafId = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(rafId);
     }, [invalidate]);
-
-    // Switch render quality tier: clamp pixel ratio + flag the store so
-    // PostProcessing scales (or unmounts) its effects.
-    const applyTier = useCallback((tier) => {
-        tierRef.current = tier;
-        const maxDpr = tier === 'high' ? 2 : tier === 'medium' ? 1.5 : 1;
-        setDpr(Math.min(window.devicePixelRatio || 1, maxDpr));
-        setQualityTier(tier);
-        invalidate();
-    }, [setDpr, setQualityTier, invalidate]);
-
-    useFrame((state, delta) => {
-        const dom = state.gl.domElement;
-        if (!dom._kwhaneListeners) {
-            const bump = () => { lastActive.current = performance.now(); };
-            dom.addEventListener('pointerdown', bump, { passive: true });
-            dom.addEventListener('wheel', bump, { passive: true });
-            dom._kwhaneListeners = bump;
-        }
-
-        // Only sample real frame cost while actively rendering toward 60 fps —
-        // idle frames are deliberately throttled and would skew the average.
-        if (performance.now() - lastActive.current > 2500) return;
-        const ms = Math.min(delta * 1000, 100); // clamp tab-switch/pause spikes
-        emaMs.current = emaMs.current * 0.9 + ms * 0.1;
-        if (++sampleCount.current < 45) return;  // ~0.75 s before each decision
-        sampleCount.current = 0;
-
-        const e = emaMs.current;
-        const tier = tierRef.current;
-        // Degrade quickly when slow, upgrade conservatively (hysteresis gap).
-        if (e > 30 && tier !== 'low') {
-            applyTier(tier === 'high' ? 'medium' : 'low');
-        } else if (e < 17 && tier !== 'high') {
-            applyTier(tier === 'medium' ? 'high' : 'medium');
-        }
-    });
 
     return null;
 }
@@ -200,9 +171,8 @@ const SceneContainer = ({ children, onGhostClick, onGhostDismiss }) => {
             </div>
 
             <Canvas
-                shadows="soft"
                 frameloop="demand"
-                dpr={[1, 2]}
+                dpr={1}
                 gl={{
                     toneMapping: THREE.ACESFilmicToneMapping,
                     toneMappingExposure: 1.1,
@@ -241,28 +211,10 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
     const objects      = useSceneStore((state) => state.objects);
     const ghostObjects = useSceneStore((state) => state.ghostObjects);
     const energyData   = useSceneStore((state) => state.energyData);
-    const isDragging   = useSceneStore((state) => state.isDragging);
-    const qualityTier  = useSceneStore((state) => state.qualityTier);
     const setSelectedId     = useSceneStore((state) => state.setSelectedId);
     const setPinnedDeviceId = useSceneStore((state) => state.setPinnedDeviceId);
 
     const adjacencies = useMemo(() => computeAdjacencies(rooms), [rooms]);
-
-    // Footprint of all rooms → where contact shadows are anchored & sized.
-    const footprint = useMemo(() => {
-        if (rooms.length === 0) return null;
-        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-        rooms.forEach((r) => {
-            minX = Math.min(minX, r.position[0] - r.size.width / 2);
-            maxX = Math.max(maxX, r.position[0] + r.size.width / 2);
-            minZ = Math.min(minZ, r.position[2] - r.size.depth / 2);
-            maxZ = Math.max(maxZ, r.position[2] + r.size.depth / 2);
-        });
-        return {
-            center: [(minX + maxX) / 2, (minZ + maxZ) / 2],
-            scale: Math.max(maxX - minX, maxZ - minZ) + 3,
-        };
-    }, [rooms]);
 
     const roomHeatLevels = useMemo(() => {
         const roomKwh = {};
@@ -330,23 +282,6 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
             </mesh>
 
             <GardenProps />
-
-            {/* Soft contact shadows anchor furniture/devices to the floor.
-                Live while dragging; re-baked once on layout change (key) under
-                demand mode so idle frames stay cheap. */}
-            {footprint && (
-                <ContactShadows
-                    key={`cs-${rooms.length}-${objects.length}-${isDragging}`}
-                    position={[footprint.center[0], 0.015, footprint.center[1]]}
-                    scale={footprint.scale}
-                    resolution={1024}
-                    blur={2.6}
-                    opacity={0.45}
-                    far={3.2}
-                    frames={isDragging ? Infinity : 1}
-                    color="#1a1205"
-                />
-            )}
 
             <Grid
                 args={[100, 100]}
@@ -431,7 +366,6 @@ const SceneContent = ({ children, onGhostClick, onGhostDismiss }) => {
 
             {children}
 
-            <PostProcessing tier={qualityTier || 'high'} />
         </group>
     );
 };

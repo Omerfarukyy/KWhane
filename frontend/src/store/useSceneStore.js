@@ -217,12 +217,6 @@ const useSceneStore = create((set, get) => ({
     isDragging:  false,
     setIsDragging: (v) => set({ isDragging: v }),
 
-    // Adaptive render quality — 'high' | 'medium' | 'low'. Driven by the
-    // frame-time probe in SceneAnimationLoop; gates post-processing (N8AO,
-    // bloom) and pixel ratio so weak devices stay smooth.
-    qualityTier: 'high',
-    setQualityTier: (t) => { if (get().qualityTier !== t) set({ qualityTier: t }); },
-
     selectedId:  null,
     setSelectedId: (id) => set({ selectedId: id }),
 

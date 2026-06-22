@@ -29,16 +29,6 @@ const Lights = () => {
                 position={SUN_POSITION}
                 intensity={isDark ? 0.7 : 2.0}
                 color={isDark ? '#cdd9ff' : '#fff2d6'}
-                castShadow
-                shadow-mapSize-width={2048}
-                shadow-mapSize-height={2048}
-                shadow-camera-near={0.5}
-                shadow-camera-far={260}
-                shadow-camera-left={-105}
-                shadow-camera-right={105}
-                shadow-camera-top={105}
-                shadow-camera-bottom={-105}
-                shadow-bias={-0.0005}
             />
         </>
     );

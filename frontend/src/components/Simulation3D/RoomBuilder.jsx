@@ -18,24 +18,13 @@ const wallMatNormal = {
     color: '#e9e3d6', roughness: 0.9, metalness: 0,
     envMapIntensity: 0.4,
 };
-const wallMatSelected = {
-    color: '#cfe0fb', roughness: 0.8, metalness: 0,
-    emissive: '#3b82f6', emissiveIntensity: 0.16,
-    envMapIntensity: 0.4,
-};
 const dividerMatNormal = {
     color: '#e2dccf', roughness: 0.9, metalness: 0,
-    envMapIntensity: 0.4,
-};
-const dividerMatSelected = {
-    color: '#cfe0fb', roughness: 0.8, metalness: 0,
-    emissive: '#3b82f6', emissiveIntensity: 0.14,
     envMapIntensity: 0.4,
 };
 const baseboardMat = { color: '#b6a892', roughness: 0.6, metalness: 0.02, envMapIntensity: 0.4 };
 const ghostWallMat = { color: '#dbe7ef', transparent: true, opacity: 0.045, depthWrite: false };
 const floorMatNormal = { color: '#e9e3d8', roughness: 0.68, metalness: 0.03, envMapIntensity: 0.5, side: THREE.DoubleSide };
-const floorMatSelected = { color: '#d7e2f0', roughness: 0.6, metalness: 0.03, envMapIntensity: 0.5, side: THREE.DoubleSide };
 
 // Helper Components for UI
 const WallAddBtn = ({ position, onClick }) => {
@@ -165,9 +154,9 @@ const RoomBuilder = ({ id, name = 'Oda', roomType = 'Genel', width = 5, depth = 
     const resizeRoom = useSceneStore((state) => state.resizeRoom);
     const persistRoomLayout = useSceneStore((state) => state.persistRoomLayout);
     const moveRoomGhosts = useSceneStore((state) => state.moveRoomGhosts);
-    const wallMaterialProps = isSelected ? wallMatSelected : wallMatNormal;
-    const dividerMaterialProps = isSelected ? dividerMatSelected : dividerMatNormal;
-    const floorMaterialProps = isSelected ? floorMatSelected : floorMatNormal;
+    const wallMaterialProps = wallMatNormal;
+    const dividerMaterialProps = dividerMatNormal;
+    const floorMaterialProps = floorMatNormal;
 
     const { gl, raycaster, controls } = useThree();
 
